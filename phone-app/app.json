@@ -70,7 +70,8 @@
             "image": "./assets/splash-icon.png"
           }
         }
-      ]
+      ],
+      "expo-speech-recognition"
     ]
   }
 }

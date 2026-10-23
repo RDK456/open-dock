@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { Platform } from 'react-native';
 import { ConnectionProvider } from '../connection';
+import { HandsFreeProvider } from '../hands-free';
 import { setLyricsUserAgent } from '../lyrics';
 import { useTheme } from '../theme';
 
@@ -23,10 +24,12 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={navigationTheme}>
       <ConnectionProvider>
-        <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-          <Stack.Screen name="(tabs)" />
-        </Stack>
+        <HandsFreeProvider>
+          <StatusBar style="auto" />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </HandsFreeProvider>
       </ConnectionProvider>
     </ThemeProvider>
   );

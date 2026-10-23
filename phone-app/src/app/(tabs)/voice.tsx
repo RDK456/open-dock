@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { startActivityAsync } from 'expo-intent-launcher';
 import * as Haptics from 'expo-haptics';
 import { Mic, Send } from 'lucide-react-native';
 import { Wallpaper } from '../../wallpaper';
 import { usePcConnection } from '../../connection';
+import { useHandsFree, type Heard } from '../../hands-free';
 import { useStyles, useTheme, type Colors } from '../../theme';
 import { useTabBarClearance } from '../../tab-inset';
 
@@ -28,15 +29,18 @@ export default function VoiceScreen() {
   const connected = status === 'connected';
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
-  const [last, setLast] = useState<{ said: string; ok: boolean; text: string } | null>(null);
+  const handsFree = useHandsFree();
+  const { last, report: reveal } = handsFree;
+  // What is being typed into the wake phrase field; null shows the saved phrase.
+  const [phraseDraft, setPhraseDraft] = useState<string | null>(null);
   const [ring] = useState(() => new Animated.Value(0));
   const [shown] = useState(() => new Animated.Value(0));
-
-  const reveal = (next: { said: string; ok: boolean; text: string }) => {
-    setLast(next);
+  // Every new result (spoken hands-free, said into the dialog, typed or tapped) slides in.
+  useEffect(() => {
+    if (!last) return;
     shown.setValue(0);
     Animated.spring(shown, { toValue: 1, damping: 16, stiffness: 180, useNativeDriver: true }).start();
-  };
+  }, [last, shown]);
 
   const run = async (said: string) => {
     const text = said.trim();
@@ -45,7 +49,7 @@ export default function VoiceScreen() {
     const result = await sendVoice(text);
     setBusy(false);
     void Haptics.notificationAsync(result.ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
-    reveal({ said: text, ...result });
+    reveal({ said: text, ...result } satisfies Heard);
   };
 
   const submitTyped = () => {
@@ -57,6 +61,11 @@ export default function VoiceScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     ring.setValue(0);
     Animated.timing(ring, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    // Hands-free is already listening: skip the wake phrase for the next sentence.
+    if (handsFree.enabled) {
+      handsFree.arm();
+      return;
+    }
     try {
       const said = await listen();
       if (said) await run(said);
@@ -70,12 +79,12 @@ export default function VoiceScreen() {
       <Wallpaper />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Voice</Text>
-        <Text style={styles.subtitle}>{connected ? 'Tap the mic and say what the PC should do.' : 'Connect to your PC to use voice commands.'}</Text>
+        <Text style={styles.subtitle}>{!connected ? 'Connect to your PC to use voice commands.' : handsFree.armed ? 'Listening. Say the command.' : handsFree.enabled ? `Say “${handsFree.phrase}” and a command, or tap the mic.` : 'Tap the mic and say what the PC should do.'}</Text>
 
         <View style={styles.micArea}>
           <Animated.View pointerEvents="none" style={[styles.ring, { opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }), transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] }) }] }]} />
           <Pressable
-            style={({ pressed }) => [styles.mic, !connected && styles.disabled, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.mic, handsFree.armed && styles.micArmed, !connected && styles.disabled, pressed && styles.pressed]}
             disabled={!connected || busy || Platform.OS !== 'android'}
             onPress={() => void speak()}
             accessibilityRole="button"
@@ -109,6 +118,33 @@ export default function VoiceScreen() {
           </Pressable>
         </View>
 
+        {Platform.OS === 'android' ? (
+          <View style={styles.handsFree}>
+            <View style={styles.handsFreeRow}>
+              <View style={styles.handsFreeText}>
+                <Text style={styles.handsFreeTitle}>Hands-free</Text>
+                <Text style={styles.handsFreeHint}>Listens for your wake phrase, also while you use other apps. A notification shows while it runs.</Text>
+              </View>
+              <Switch value={handsFree.enabled} onValueChange={(on) => void handsFree.setEnabled(on)} trackColor={{ true: colors.accent, false: colors.border }} accessibilityLabel="Hands-free" />
+            </View>
+            <Text style={styles.phraseLabel}>Wake phrase</Text>
+            <TextInput
+              style={styles.input}
+              value={phraseDraft ?? handsFree.phrase}
+              onChangeText={setPhraseDraft}
+              onEndEditing={() => { if (phraseDraft !== null) handsFree.setPhrase(phraseDraft); setPhraseDraft(null); }}
+              placeholder="hey dock"
+              placeholderTextColor={colors.faint}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={40}
+              returnKeyType="done"
+              accessibilityLabel="Wake phrase"
+            />
+            {handsFree.error ? <Text style={styles.resultErrorText}>{handsFree.error}</Text> : null}
+          </View>
+        ) : null}
+
         <Text style={styles.heading}>Try saying</Text>
         <View style={styles.examples}>
           {EXAMPLES.map((example) => (
@@ -129,6 +165,13 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   subtitle: { color: colors.muted, fontSize: 13, lineHeight: 17, marginTop: 5 },
   micArea: { alignItems: 'center', justifyContent: 'center', height: 220 },
   ring: { position: 'absolute', width: 132, height: 132, borderRadius: 66, backgroundColor: colors.accent },
+  micArmed: { borderWidth: 4, borderColor: colors.text },
+  handsFree: { marginTop: 18, padding: 14, gap: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass },
+  handsFreeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  handsFreeText: { flex: 1 },
+  handsFreeTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  handsFreeHint: { color: colors.muted, fontSize: 12, lineHeight: 16, marginTop: 3 },
+  phraseLabel: { color: colors.muted, fontSize: 12, fontWeight: '600', marginTop: 4 },
   mic: { width: 132, height: 132, borderRadius: 66, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
   pressed: { transform: [{ scale: 0.95 }] },
   disabled: { opacity: 0.45 },
