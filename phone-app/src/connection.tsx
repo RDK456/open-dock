@@ -62,6 +62,8 @@ type ConnectionContextValue = {
   sendSignature: (strokes: [number, number][][]) => Promise<string | null>;
   /** Adds or replaces `button` and/or removes `removeId` on a page (or a folder in it). Resolves to an error, or null when saved. */
   editButton: (edit: { pageId: string; folderId?: string; button?: DeckButton; removeId?: string }) => Promise<string | null>;
+  /** Sends a spoken sentence ("open spotify"); resolves with what the PC did, or why it could not. */
+  sendVoice: (text: string) => Promise<{ ok: boolean; text: string }>;
 };
 
 const STORAGE_KEY = 'opendock.pc-connection';
@@ -221,6 +223,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   const pendingRequestsRef = useRef(new Set<string>());
   const signatureReplyRef = useRef<((error: string | null) => void) | null>(null);
   const editRepliesRef = useRef(new Map<string, (error: string | null) => void>());
+  const voiceRepliesRef = useRef(new Map<string, (result: { ok: boolean; text: string }) => void>());
   const openConnectionRef = useRef<((next: PcConnection, retrying: boolean) => void) | null>(null);
   // Resolves once the saved pairings are loaded. A pairing link can open the app before that, and `connect` must not run first.
   const [restored] = useState(() => {
@@ -368,7 +371,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       socket.onmessage = async (event) => {
         if (socketRef.current !== socket || typeof event.data !== 'string') return;
         try {
-          const message = JSON.parse(event.data) as { type?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown };
+          const message = JSON.parse(event.data) as { type?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown };
           countMessage(message.type ?? 'unknown');
           if (message.type === 'ready') {
             reconnectAttemptRef.current = 0;
@@ -438,6 +441,10 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           if (message.type === 'signature_result') {
             signatureReplyRef.current?.(message.ok ? null : typeof message.error === 'string' ? message.error : 'Could not paste the signature');
             signatureReplyRef.current = null;
+          }
+          if (message.type === 'voice_result' && message.requestId) {
+            const text = message.ok ? typeof message.done === 'string' ? message.done : 'Done' : typeof message.error === 'string' ? message.error : 'The PC could not do that';
+            voiceRepliesRef.current.get(message.requestId)?.({ ok: Boolean(message.ok), text });
           }
           if (message.type === 'edit_result' && message.requestId) {
             const error = message.ok ? null : message.error === 'stale_revision' ? 'The deck changed on the PC. Try again.' : typeof message.error === 'string' ? message.error : 'The PC could not save that button';
@@ -734,8 +741,24 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     }
   }), [deckConfig, status]);
 
+  const sendVoice = useCallback((text: string) => new Promise<{ ok: boolean; text: string }>((resolve) => {
+    const socket = socketRef.current;
+    if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return resolve({ ok: false, text: 'Connect to your PC first' });
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const replies = voiceRepliesRef.current;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const reply = (result: { ok: boolean; text: string }) => { clearTimeout(timer); replies.delete(requestId); resolve(result); };
+    timer = setTimeout(() => reply({ ok: false, text: 'The PC did not answer' }), 10_000);
+    replies.set(requestId, reply);
+    try {
+      socket.send(JSON.stringify({ type: 'voice_command', requestId, text }));
+    } catch {
+      reply({ ok: false, text: 'Could not reach the PC' });
+    }
+  }), [status]);
+
   return (
-    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton }}>
+    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice }}>
       {children}
     </ConnectionContext.Provider>
   );

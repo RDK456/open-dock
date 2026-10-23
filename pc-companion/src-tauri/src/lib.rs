@@ -36,6 +36,7 @@ mod pc_stats;
 mod remote;
 mod system_media;
 mod usb_pair;
+mod voice;
 #[cfg(windows)]
 mod win_apps;
 #[cfg(windows)]
@@ -1930,6 +1931,12 @@ enum ClientMessage {
     Pointer {
         event: remote::PointerEvent,
     },
+    /// A sentence said into the phone's mic, such as "open spotify" or "volume up".
+    VoiceCommand {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        text: String,
+    },
     /// A signature drawn on the phone, to paste into the app that has focus on the PC.
     Signature {
         strokes: remote::Strokes,
@@ -3769,6 +3776,19 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     remote::send_pointer(event);
                 }
             }
+            ClientMessage::VoiceCommand { request_id, text } if authenticated => {
+                let result = if valid_id(&request_id) && text.len() <= 500 { run_voice(&text).await } else { Err("That was too long".to_owned()) };
+                if result.is_ok() {
+                    state.media_refresh.notify_one();
+                }
+                let reply = match result {
+                    Ok(done) => serde_json::json!({ "type": "voice_result", "requestId": request_id, "ok": true, "done": done }),
+                    Err(error) => serde_json::json!({ "type": "voice_result", "requestId": request_id, "ok": false, "error": error }),
+                };
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
             ClientMessage::Signature { strokes } if authenticated => {
                 let result = if remote::signature_is_valid(&strokes) {
                     tauri::async_runtime::spawn_blocking(move || remote::insert_signature(&strokes))
@@ -4339,6 +4359,31 @@ fn run_action(action: ClientAction) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Runs one spoken command and says what it did.
+async fn run_voice(text: &str) -> Result<String, String> {
+    let intent = voice::parse(text).ok_or_else(|| format!("Didn't understand \"{}\". Try \"open Spotify\" or \"volume up\".", text.trim()))?;
+    let (action, done) = match intent {
+        voice::Intent::Media(command) => (ClientAction::Media { command }, format!("{command:?}")),
+        voice::Intent::System(command) => {
+            tauri::async_runtime::spawn_blocking(move || remote::run_system_command(command)).await.map_err(|_| "Could not run that".to_owned())??;
+            return Ok(format!("{command:?}"));
+        }
+        voice::Intent::Type(words) => (ClientAction::TypeText { text: words.clone() }, format!("Typed \"{words}\"")),
+        voice::Intent::Search(query) => (ClientAction::OpenUrl { url: voice::search_url(&query) }, format!("Searched for \"{query}\"")),
+        voice::Intent::Url(url) => (ClientAction::OpenUrl { url: url.clone() }, format!("Opened {url}")),
+        voice::Intent::Open(name) => {
+            let apps = list_installed_apps().await?;
+            let path = voice::best_app(&name, apps.iter().map(|app| (app.name.as_str(), app.path.as_str())))
+                .ok_or_else(|| format!("No app called \"{name}\" on this PC"))?
+                .to_owned();
+            let label = apps.iter().find(|app| app.path == path).map_or(name, |app| app.name.clone());
+            (ClientAction::LaunchApp { app: path }, format!("Opened {label}"))
+        }
+    };
+    tauri::async_runtime::spawn_blocking(move || run_action(action)).await.map_err(|_| "Could not run that".to_owned())??;
+    Ok(done)
 }
 
 fn run_script(path: &str, args: &[String]) -> Result<(), String> {

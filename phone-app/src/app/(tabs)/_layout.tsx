@@ -39,6 +39,10 @@ export default function TabLayout() {
             <NativeTabs.Trigger.Icon sf="hand.point.up.left" md="touch_app" />
             <NativeTabs.Trigger.Label>Touch</NativeTabs.Trigger.Label>
           </NativeTabs.Trigger>
+          <NativeTabs.Trigger name="voice">
+            <NativeTabs.Trigger.Icon sf="mic" md="mic" />
+            <NativeTabs.Trigger.Label>Voice</NativeTabs.Trigger.Label>
+          </NativeTabs.Trigger>
           <NativeTabs.Trigger name="connect">
             <NativeTabs.Trigger.Icon sf="wifi" md="wifi" />
             <NativeTabs.Trigger.Label>Connect</NativeTabs.Trigger.Label>
