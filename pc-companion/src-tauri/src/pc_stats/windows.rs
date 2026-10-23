@@ -5,10 +5,11 @@
 //!   load    GPU Engine counter (what Task Manager shows), else D3DKMT node statistics, else vendor
 //!   memory  GPU Adapter Memory counter, else vendor
 //!   temp, hotspot, power, fan   vendor library (NVML / ADLX / ADL / IGCL), else D3DKMT perf data
-//! CPU temperature: the ACPI Thermal Zone counter, which needs no admin rights. It's approximate,
-//! and ignored when it never moves (see parse::StuckSensor).
+//! CPU temperature: the package sensor through PawnIO when it's installed and Open Dock runs as admin
+//! (see pawnio.rs), else the ACPI Thermal Zone counter, which needs no admin rights. That one is
+//! approximate, and ignored when it never moves (see parse::StuckSensor).
 use super::{
-    amd, fill, intel, nvidia, parse, round, CpuTemp, GpuKind, GpuState, GpuStats, MemKind, Vendor,
+    amd, fill, intel, nvidia, parse, pawnio, round, CpuTemp, GpuKind, GpuState, GpuStats, MemKind, Vendor,
     GB,
 };
 use std::{
@@ -70,6 +71,7 @@ pub(super) struct Sensors {
     active: HashMap<String, Instant>,
     counters: Option<Counters>,
     thermal: parse::StuckSensor,
+    pawnio: Option<pawnio::PawnIo>,
     started: Instant,
     nvidia: nvidia::Nvidia,
     amd: amd::Amd,
@@ -86,6 +88,7 @@ impl Sensors {
             active: HashMap::new(),
             counters: Counters::open(),
             thermal: parse::StuckSensor::new(),
+            pawnio: pawnio::PawnIo::open(),
             started: Instant::now(),
             nvidia: nvidia::Nvidia::new(),
             amd: amd::Amd::new(),
@@ -98,6 +101,13 @@ impl Sensors {
     pub(super) fn cpu_temp(&mut self, cpu_load: f32) -> Option<CpuTemp> {
         let counters = self.counters.as_ref()?;
         counters.collect();
+        if let Some(celsius) = self.pawnio.as_ref().and_then(pawnio::PawnIo::package_celsius) {
+            return Some(CpuTemp {
+                celsius,
+                approx: false,
+                source: "pawnio-msr",
+            });
+        }
         let (counter, tenths) = counters.thermal?;
         let raw = counters
             .values(counter)

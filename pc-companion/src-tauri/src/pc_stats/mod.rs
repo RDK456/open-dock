@@ -16,6 +16,8 @@ mod macos;
 #[cfg(windows)]
 mod nvidia;
 #[cfg(windows)]
+mod pawnio;
+#[cfg(windows)]
 mod windows;
 
 #[cfg(target_os = "macos")]
