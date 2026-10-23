@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
+import * as Haptics from 'expo-haptics';
 import { useStyles, type Colors } from './theme';
 
 const PEEK = 12;
@@ -32,6 +33,7 @@ export function DeckStack({ pages, index, onChange, children }: { pages: { id: s
   const cycle = () => {
     const next = STYLES[(STYLES.indexOf(swipe) + 1) % STYLES.length];
     setSwipe(next);
+    void Haptics.selectionAsync();
     void Storage.setItem('opendock.swipe', next);
   };
 
@@ -64,6 +66,7 @@ export function DeckStack({ pages, index, onChange, children }: { pages: { id: s
       }
       const deal = () => {
         state.current.dealing = true;
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         change(next);
         x.setValue(0);
         enterFrom.setValue(direction * width.current);

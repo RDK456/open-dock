@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
+import * as Haptics from 'expo-haptics';
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react-native';
 import type { DeckButton, DeckMediaCommand } from './connection';
 import { useStyles, useTheme, type Colors } from './theme';
@@ -35,16 +36,22 @@ export function usePins(profileId: string | undefined) {
   return [pins, toggle] as const;
 }
 
-function Puck({ size, accent, onPress, label, disabled, children }: { size: number; accent?: boolean; onPress: () => void; label: string; disabled?: boolean; children: ReactNode }) {
+function Puck({ size, accent, morph, onPress, label, disabled, children }: { size: number; accent?: boolean; morph?: boolean; onPress: () => void; label: string; disabled?: boolean; children: ReactNode }) {
   const styles = useStyles(makeStyles);
   const [scale] = useState(() => new Animated.Value(1));
+  // The play puck morphs from a circle into a soft square while music plays (JS-driven: radius can't run natively).
+  const [shape] = useState(() => new Animated.Value(morph ? 1 : 0));
+  useEffect(() => {
+    Animated.spring(shape, { toValue: morph ? 1 : 0, useNativeDriver: false, speed: 12, bounciness: 9 }).start();
+  }, [morph, shape]);
   const to = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 9 }).start();
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable onPress={onPress} onPressIn={() => to(0.88)} onPressOut={() => to(1)} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}
-        style={[styles.puck, accent && styles.accent, disabled && styles.off, { width: size, height: size, borderRadius: size / 2 }]}>
-        {children}
-      </Pressable>
+      <Animated.View style={[styles.puck, accent && styles.accent, disabled && styles.off, { width: size, height: size, borderRadius: shape.interpolate({ inputRange: [0, 1], outputRange: [size / 2, size * 0.3] }) }]}>
+        <Pressable style={styles.hit} onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }} onPressIn={() => to(0.88)} onPressOut={() => to(1)} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}>
+          {children}
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -73,7 +80,7 @@ export function PuckRail({ pinned, playing, connected, renderIcon, onPress, send
     <View style={[styles.rail, vertical && styles.vertical]}>
       {left.map(pin)}
       <Puck size={small} onPress={() => sendMedia('previous_track')} label="Previous track" disabled={!connected}><SkipBack size={20} color={colors.text} /></Puck>
-      <Puck size={vertical ? 48 : 66} accent onPress={() => sendMedia('play_pause')} label={playing ? 'Pause' : 'Play'} disabled={!connected}>
+      <Puck size={vertical ? 48 : 66} accent morph={playing} onPress={() => sendMedia('play_pause')} label={playing ? 'Pause' : 'Play'} disabled={!connected}>
         {playing ? <Pause size={26} color={colors.onAccent} fill={colors.onAccent} /> : <Play size={26} color={colors.onAccent} fill={colors.onAccent} style={{ marginLeft: 3 }} />}
       </Puck>
       <Puck size={small} onPress={() => sendMedia('next_track')} label="Next track" disabled={!connected}><SkipForward size={20} color={colors.text} /></Puck>
@@ -86,6 +93,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   rail: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass },
   puck: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.panelRaised },
   vertical: { flexDirection: 'column', flexWrap: 'wrap', maxHeight: '100%', gap: 6, paddingHorizontal: 6, paddingVertical: 6 },
+  hit: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   accent: { backgroundColor: colors.accent, borderColor: colors.accent },
   off: { opacity: 0.45 },
 });

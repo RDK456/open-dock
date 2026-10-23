@@ -9,6 +9,7 @@
     "expo-camera": "~57.0.6",
     "expo-constants": "~57.0.19",
     "expo-file-system": "~57.0.7",
+    "expo-haptics": "~57.0.3",
     "expo-intent-launcher": "~57.0.1",
     "expo-keep-awake": "~57.0.2",
     "expo-linking": "~57.0.11",

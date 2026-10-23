@@ -839,3 +839,30 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 .deck-canvas.enter-page { animation: deck-deal 280ms cubic-bezier(.2, .8, .2, 1); }
 .deck-canvas.enter-folder { animation: deck-open 260ms cubic-bezier(.2, .8, .2, 1); transform-origin: 50% 30%; }
 @media (prefers-reduced-motion: reduce) { .deck-canvas.enter-page, .deck-canvas.enter-folder { animation: none; } }
+
+/* Motion pass: springy easing, cards and keys dealt in one after another, a living nav indicator. */
+:root { --spring: cubic-bezier(.34, 1.56, .64, 1); --glide: cubic-bezier(.2, .8, .2, 1); }
+@keyframes rise-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+@keyframes key-in { from { opacity: 0; transform: translateY(10px) scale(.9); } }
+.content > * { animation: rise-in 420ms var(--glide) backwards; }
+.content > *:nth-child(2) { animation-delay: 50ms; }
+.content > *:nth-child(3) { animation-delay: 100ms; }
+.content > *:nth-child(4) { animation-delay: 150ms; }
+.content > *:nth-child(n+5) { animation-delay: 200ms; }
+.deck-canvas > * { animation: key-in 380ms var(--spring) backwards; }
+.deck-canvas > *:nth-child(2) { animation-delay: 25ms; } .deck-canvas > *:nth-child(3) { animation-delay: 50ms; }
+.deck-canvas > *:nth-child(4) { animation-delay: 75ms; } .deck-canvas > *:nth-child(5) { animation-delay: 100ms; }
+.deck-canvas > *:nth-child(6) { animation-delay: 125ms; } .deck-canvas > *:nth-child(7) { animation-delay: 150ms; }
+.deck-canvas > *:nth-child(8) { animation-delay: 175ms; } .deck-canvas > *:nth-child(n+9) { animation-delay: 200ms; }
+.deck-button, .deck-ghost, .panel-tile { transition-timing-function: var(--spring); }
+.deck-button:active { transform: scale(.96); transition-duration: 90ms; }
+.sidebar .nav-item { position: relative; transition-property: background-color, color; transition-duration: 160ms; }
+.sidebar .nav-item::before { content: ""; position: absolute; left: 0; top: 50%; width: 3px; height: 0; border-radius: 3px; background: var(--accent); transform: translateY(-50%); transition: height 260ms var(--spring); }
+.sidebar .nav-item.selected::before { height: 18px; }
+.sidebar .nav-item svg { transition: transform 260ms var(--spring); }
+.sidebar .nav-item:hover svg { transform: translateX(2px) scale(1.08); }
+.deck-page-tabs button.active { animation: key-in 260ms var(--spring); }
+@media (prefers-reduced-motion: reduce) {
+  .content > *, .deck-canvas > *, .deck-page-tabs button.active { animation: none; }
+  .sidebar .nav-item::before, .sidebar .nav-item svg { transition: none; }
+}

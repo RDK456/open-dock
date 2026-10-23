@@ -4,6 +4,7 @@ import { Animated, BackHandler, Easing, Image, PanResponder, Platform, Pressable
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { NavigationBar } from 'expo-navigation-bar';
 import { SvgXml } from 'react-native-svg';
@@ -38,10 +39,15 @@ const shortcutIcons: Record<string, typeof Command> = {
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** A deck key that sinks under the finger and springs back, animated on the native thread. */
-function SpringKey({ style, launch, onPress, children, ...props }: Omit<ComponentProps<typeof Pressable>, 'style' | 'children'> & { style: StyleProp<ViewStyle>; launch?: boolean; children?: ReactNode }) {
+function SpringKey({ style, launch, order = 0, onPress, children, ...props }: Omit<ComponentProps<typeof Pressable>, 'style' | 'children'> & { style: StyleProp<ViewStyle>; launch?: boolean; order?: number; children?: ReactNode }) {
   const { colors } = useTheme();
   const [scale] = useState(() => new Animated.Value(1));
   const [bloom] = useState(() => new Animated.Value(1));
+  // Keys arrive one after another when a page appears, like cards dealt onto the table.
+  const [appear] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    Animated.spring(appear, { toValue: 1, delay: Math.min(order, 12) * 28, useNativeDriver: true, speed: 14, bounciness: 7 }).start();
+  }, [appear, order]);
   const to = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 7 }).start();
   const fire: typeof onPress = (event) => {
     // Opening an app, file, folder or site: a ripple blooms from the key while the PC opens it.
@@ -49,9 +55,10 @@ function SpringKey({ style, launch, onPress, children, ...props }: Omit<Componen
       bloom.setValue(0);
       Animated.timing(bloom, { toValue: 1, duration: 560, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     }
+    void Haptics.selectionAsync();
     onPress?.(event);
   };
-  return <AnimatedPressable {...props} onPress={fire} style={[style, { transform: [{ scale }] }]} onPressIn={() => to(0.93)} onPressOut={() => to(1)}>
+  return <AnimatedPressable {...props} onPress={fire} style={[style, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }, { scale: Animated.multiply(scale, appear.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] })) }] }]} onPressIn={() => to(0.93)} onPressOut={() => to(1)}>
     {launch ? <Animated.View pointerEvents="none" style={{ position: 'absolute', alignSelf: 'center', top: '50%', width: 160, height: 160, marginTop: -80, borderRadius: 80, backgroundColor: colors.accent, opacity: bloom.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] }), transform: [{ scale: bloom.interpolate({ inputRange: [0, 1], outputRange: [0.1, 1.6] }) }] }} /> : null}
     {children}
   </AnimatedPressable>;
@@ -602,7 +609,7 @@ export default function DeckScreen() {
       const dynamicPlay = button.icon === 'auto' && button.action.type === 'media' && button.action.command === 'play_pause';
       const label = dynamicPlay ? (isPlaying ? 'Pause' : 'Play') : button.label;
       const Icon = controlIcon(button, playbackState);
-      return <SpringKey key={button.id} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => togglePin(button.id) : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
+      return <SpringKey key={button.id} order={placement.row * columns + placement.column} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {editing && !big && pins.includes(button.id) ? <View pointerEvents="none" style={styles.pinDot} /> : null}
         {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={inkIcon(button.iconSvg, scheme)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={colors.text} strokeWidth={1.7} />}
