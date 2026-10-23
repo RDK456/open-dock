@@ -4,7 +4,7 @@ import { loadDeckPages } from './deck';
 import { validSurfaceLayout } from './deck-layout';
 import { expire, parsePlayers, settle, type PlayersState } from './media-players';
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import type { WidgetSurface } from './now-playing-layout';
 import { clearPcStats, receivePcStats, setPcStatsSender } from './pc-stats-feed';
 import { countMessage } from './perf-overlay';
@@ -70,6 +70,7 @@ const LEGACY_STORAGE_KEY = 'decklink.pc-connection';
 const MAX_RECONNECT_ATTEMPTS = 3;
 // Some phones (iPhones especially) let a connection to an address nobody answers hang for over a minute.
 const CONNECT_TIMEOUT_MS = 8000;
+const USB_PROBE_MS = 10_000;
 const DECK_CACHE_KEY = 'opendock.deck-snapshot';
 const DEVICE_SELECTION_KEY = 'opendock.device-navigation';
 const LEGACY_SOURCE_KEY = 'opendock.legacy-import-source';
@@ -78,6 +79,10 @@ const ConnectionContext = createContext<ConnectionContextValue | null>(null);
 const EMPTY_MEDIA_STATE: SystemMediaState = { playbackState: 'unavailable' };
 // The PC's playback speed: 0 while a browser buffers; missing means normal speed.
 const playbackRate = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 16 ? value : undefined;
+
+function isLoopback(host: string) {
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+}
 
 export function connectionId(connection: PcConnection) {
   return `${connection.host.toLowerCase()}:${connection.port}`;
@@ -304,18 +309,22 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       const attempt = reconnectAttemptRef.current;
       // Keep trying in the background so the deck comes back by itself when the PC does; show it as offline meanwhile.
       setStatus(attempt >= MAX_RECONNECT_ATTEMPTS ? 'disconnected' : 'connecting');
-      // A PC that is not answering may have a new address on this Wi-Fi: look for it by name and follow it there.
-      if (attempt >= 1 && next.transport !== 'usb' && next.deviceName) {
+      // A PC that is not answering may have a new address on this Wi-Fi (or the cable came out): look for it by name and follow it there.
+      if (attempt >= 1 && next.deviceName) {
         void findPcs().then((pcs) => {
-          const moved = pcs.find((pc) => pc.name === next.deviceName && (pc.host !== next.host || pc.port !== next.port));
-          if (moved && shouldReconnectRef.current && reconnectAttemptRef.current === attempt + 1) openConnectionRef.current?.({ ...next, host: moved.host, port: moved.port }, false);
+          const moved = pcs.find((pc) => pc.name === next.deviceName && (next.transport === 'usb' || pc.host !== next.host || pc.port !== next.port));
+          if (moved && shouldReconnectRef.current && reconnectAttemptRef.current === attempt + 1) openConnectionRef.current?.({ ...next, host: moved.host, port: moved.port, transport: 'wifi' }, true);
         }).catch(() => undefined);
       }
+      // Alternate between Wi-Fi and the USB cable, so whichever link is up takes over by itself.
+      const other: PcConnection | null = Platform.OS !== 'android' ? null
+        : next.transport === 'usb' ? (isLoopback(next.host) ? null : { ...next, transport: 'wifi' })
+          : { ...next, transport: 'usb' };
       const delay = Math.min(30_000, 1000 * 2 ** attempt);
       reconnectAttemptRef.current += 1;
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null;
-        if (shouldReconnectRef.current) openConnectionRef.current?.(next, true);
+        if (shouldReconnectRef.current) openConnectionRef.current?.(other ?? next, true);
       }, delay);
     };
 
@@ -508,6 +517,23 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     openConnectionRef.current = openConnection;
     return () => { openConnectionRef.current = null; };
   }, [openConnection]);
+
+  // On Wi-Fi, check now and then whether a USB cable is in (the PC keeps an adb reverse tunnel up while it is) and move to it.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || status !== 'connected' || !connection || connection.transport === 'usb') return;
+    const target = connection;
+    const timer = setInterval(() => {
+      const probe = new WebSocket(websocketUrl({ ...target, transport: 'usb' }));
+      const done = setTimeout(() => probe.close(), 2000);
+      probe.onopen = () => {
+        clearTimeout(done);
+        probe.close();
+        if (shouldReconnectRef.current) openConnectionRef.current?.({ ...target, transport: 'usb' }, true);
+      };
+      probe.onerror = () => clearTimeout(done);
+    }, USB_PROBE_MS);
+    return () => clearInterval(timer);
+  }, [status, connection]);
 
   useEffect(() => {
     let active = true;
