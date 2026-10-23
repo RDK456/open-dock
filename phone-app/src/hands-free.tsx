@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { askToRunUnrestricted, askToShowIsland, canShowIsland, moveToBack, runsUnrestricted, setIsland, startKeepAlive, stopKeepAlive, type IslandState } from '../modules/keep-alive';
 import { usePcConnection } from './connection';
+import { afterWakePhrase } from './wake-phrase';
 
 const PHRASE_KEY = 'opendock.wake-phrase';
 const ENABLED_KEY = 'opendock.hands-free';
@@ -41,38 +42,6 @@ type HandsFree = {
 };
 
 const HandsFreeContext = createContext<HandsFree | null>(null);
-
-const GREETINGS = new Set(['hey', 'hi', 'hay', 'a', 'ok', 'okay', 'hello', 'yo', 'he']);
-
-const words = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
-
-function distance(a: string, b: string) {
-  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i += 1) {
-    let previous = row[0];
-    row[0] = i;
-    for (let j = 1; j <= b.length; j += 1) {
-      const kept = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
-      previous = kept;
-    }
-  }
-  return row[b.length];
-}
-
-const sameWord = (heard: string, wanted: string) =>
-  heard === wanted || (GREETINGS.has(heard) && GREETINGS.has(wanted)) || (wanted.length >= 3 && distance(heard, wanted) <= 1);
-
-/** The words after the wake phrase ("" when it was said alone), or null when the phrase is not in `text`. */
-export function afterWakePhrase(text: string, phrase: string): string | null {
-  const heard = words(text);
-  const wanted = words(phrase);
-  if (!wanted.length) return null;
-  for (let start = 0; start + wanted.length <= heard.length; start += 1) {
-    if (wanted.every((word, index) => sameWord(heard[start + index], word))) return heard.slice(start + wanted.length).join(' ');
-  }
-  return null;
-}
 
 export function HandsFreeProvider({ children }: PropsWithChildren) {
   const { status, connection, sendVoice, sendVoiceState } = usePcConnection();
@@ -201,7 +170,8 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
         if (mode.current !== 'once' && !latest.current.armedAt) quietIsland();
         // Android stops after each sentence (or a silence); start again. After a tap that is a conversation: the
         // next command, and the next, until the mic is tapped again.
-        if (mode.current === 'wake' || mode.current === 'once') restart = setTimeout(begin, 250);
+        // Quickly: the phrase is short, and words said in the gap are lost.
+        if (mode.current === 'wake' || mode.current === 'once') restart = setTimeout(begin, 50);
       }),
       ExpoSpeechRecognitionModule.addListener('error', (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
