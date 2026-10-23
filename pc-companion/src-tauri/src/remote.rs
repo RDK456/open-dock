@@ -198,27 +198,65 @@ const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 #[cfg(windows)]
 const RUN_VALUE: &str = "Open Dock";
 
+/// Run as administrator, Open Dock starts through a logon task with highest privileges instead, so it
+/// keeps admin rights (the CPU temperature needs them) without a UAC prompt at every sign-in.
+#[cfg(windows)]
+const TASK_NAME: &str = "Open Dock";
+
+#[cfg(windows)]
+fn run_quiet(program: &str, args: &[&str]) -> bool {
+    let mut command = Command::new(program);
+    quiet(&mut command);
+    command.args(args).output().is_ok_and(|output| output.status.success())
+}
+
+#[cfg(windows)]
+pub(super) fn is_elevated() -> bool {
+    // SAFETY: no arguments; reports whether this process holds an administrator token.
+    unsafe { windows::Win32::UI::Shell::IsUserAnAdmin() }.as_bool()
+}
+
+/// Starts this program again as administrator (one UAC prompt). Returns false when the user declines.
+#[cfg(windows)]
+pub(super) fn relaunch_elevated() -> bool {
+    use windows::{core::HSTRING, Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL}};
+    let Ok(exe) = std::env::current_exe() else { return false };
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // SAFETY: every string outlives the call; ShellExecuteW returns a value above 32 on success.
+    let result = unsafe { ShellExecuteW(None, &HSTRING::from("runas"), &HSTRING::from(exe.as_os_str()), &HSTRING::from(args.join(" ")), None, SW_SHOWNORMAL) };
+    result.0 as usize > 32
+}
+
 #[cfg(windows)]
 pub(super) fn set_autostart(on: bool) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|_| "Could not find the Open Dock program file".to_owned())?;
     let launch = format!("\"{}\" --autostart", exe.display());
-    let mut command = Command::new("reg.exe");
-    quiet(&mut command);
-    if on {
-        command.args(["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", &launch, "/f"]);
-    } else {
-        command.args(["delete", RUN_KEY, "/v", RUN_VALUE, "/f"]);
+    // Clear both ways of starting, then add the one this process can make. Removing what's already gone
+    // fails, and that is the state asked for.
+    run_quiet("reg.exe", &["delete", RUN_KEY, "/v", RUN_VALUE, "/f"]);
+    if is_elevated() {
+        run_quiet("schtasks.exe", &["/Delete", "/TN", TASK_NAME, "/F"]);
     }
-    let status = command.status().map_err(|_| "Could not change the startup setting".to_owned())?;
-    // Deleting a value that is already gone fails, and that is the state asked for.
-    if status.success() || !on { Ok(()) } else { Err("Windows did not save the startup setting".into()) }
+    if !on {
+        return Ok(());
+    }
+    let saved = if is_elevated() {
+        run_quiet("schtasks.exe", &["/Create", "/TN", TASK_NAME, "/TR", &launch, "/SC", "ONLOGON", "/RL", "HIGHEST", "/F"])
+    } else {
+        run_quiet("reg.exe", &["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", &launch, "/f"])
+    };
+    if saved { Ok(()) } else { Err("Windows did not save the startup setting".into()) }
 }
 
 #[cfg(windows)]
 pub(super) fn autostart_enabled() -> bool {
-    let mut command = Command::new("reg.exe");
-    quiet(&mut command);
-    command.args(["query", RUN_KEY, "/v", RUN_VALUE]).output().is_ok_and(|output| output.status.success())
+    run_quiet("schtasks.exe", &["/Query", "/TN", TASK_NAME]) || run_quiet("reg.exe", &["query", RUN_KEY, "/v", RUN_VALUE])
+}
+
+/// Whether autostart still goes through the Run key, which starts Open Dock without admin rights.
+#[cfg(windows)]
+pub(super) fn autostart_needs_task() -> bool {
+    !run_quiet("schtasks.exe", &["/Query", "/TN", TASK_NAME]) && run_quiet("reg.exe", &["query", RUN_KEY, "/v", RUN_VALUE])
 }
 
 #[cfg(not(windows))]
@@ -228,6 +266,21 @@ pub(super) fn set_autostart(_on: bool) -> Result<(), String> {
 
 #[cfg(not(windows))]
 pub(super) fn autostart_enabled() -> bool {
+    false
+}
+
+#[cfg(not(windows))]
+pub(super) fn is_elevated() -> bool {
+    true
+}
+
+#[cfg(not(windows))]
+pub(super) fn relaunch_elevated() -> bool {
+    false
+}
+
+#[cfg(not(windows))]
+pub(super) fn autostart_needs_task() -> bool {
     false
 }
 

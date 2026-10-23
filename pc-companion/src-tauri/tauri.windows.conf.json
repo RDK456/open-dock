@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "resources": {
+      "resources/PawnIO_setup.exe": "PawnIO_setup.exe"
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
+  }
+}

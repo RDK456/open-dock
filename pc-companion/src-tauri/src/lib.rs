@@ -4795,6 +4795,12 @@ fn restart_app(app: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Open Dock runs as administrator so it can read the CPU temperature: a manual launch asks once,
+    // before anything else starts. Declining keeps it running without admin rights.
+    let quiet_start = std::env::args().any(|arg| arg == "--autostart" || arg == "--no-elevate");
+    if !quiet_start && !remote::is_elevated() && remote::relaunch_elevated() {
+        return;
+    }
     let host = local_ip_address::local_ip()
         .map(|address| address.to_string())
         .unwrap_or_else(|_| "127.0.0.1".to_owned());
@@ -4924,9 +4930,14 @@ pub fn run() {
             if !autostart_marker.exists() && remote::set_autostart(true).is_ok() {
                 let _ = fs::write(&autostart_marker, "true");
             }
+            // The first run with admin rights moves autostart onto the elevated logon task.
+            if remote::is_elevated() && remote::autostart_needs_task() {
+                let _ = remote::set_autostart(true);
+            }
+            // Started with Windows, the window waits minimized on the taskbar.
             if std::env::args().any(|arg| arg == "--autostart") {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.hide();
+                    let _ = window.minimize();
                 }
             }
 
