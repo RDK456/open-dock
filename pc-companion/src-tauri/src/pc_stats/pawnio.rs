@@ -30,11 +30,23 @@ fn is_intel() -> bool {
     [id.ebx, id.edx, id.ecx].map(u32::to_le_bytes).concat() == b"GenuineIntel"
 }
 
+/// Each step of opening PawnIO goes to %APPDATA%\app.opendock.pc\pawnio.log, so a missing CPU
+/// temperature can be traced to the driver, admin rights or the module.
+fn note(step: &str) {
+    use std::io::Write;
+    let Some(dir) = std::env::var_os("APPDATA") else { return };
+    let path = std::path::Path::new(&dir).join("app.opendock.pc").join("pawnio.log");
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{:?} {step}", std::time::SystemTime::now());
+    }
+}
+
 fn open_device() -> Option<File> {
-    let open = || OpenOptions::new().read(true).write(true).open(DEVICE).ok();
+    let open = || OpenOptions::new().read(true).write(true).open(DEVICE).map_err(|error| note(&format!("open {DEVICE}: {error}"))).ok();
     open().or_else(|| {
         // PawnIO installs as a demand-start driver; starting it needs admin, like reading MSRs does.
-        let _ = Command::new("sc.exe").args(["start", "PawnIO"]).creation_flags(0x0800_0000).status();
+        let started = Command::new("sc.exe").args(["start", "PawnIO"]).creation_flags(0x0800_0000).output();
+        note(&format!("sc start PawnIO: {:?}", started.map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())));
         open()
     })
 }
@@ -42,11 +54,19 @@ fn open_device() -> Option<File> {
 impl PawnIo {
     pub(super) fn open() -> Option<Self> {
         if !is_intel() {
+            note("not an Intel CPU");
             return None;
         }
         let mut pawn = Self { device: open_device()?, tj_max: 100.0 };
-        pawn.ioctl(IOCTL_LOAD_BINARY, INTEL_MSR, &mut [])?;
-        let target = (pawn.read_msr(IA32_TEMPERATURE_TARGET)? >> 16) & 0xff;
+        if pawn.ioctl(IOCTL_LOAD_BINARY, INTEL_MSR, &mut []).is_none() {
+            note(&format!("load IntelMSR module: {:?}", std::io::Error::last_os_error()));
+            return None;
+        }
+        let Some(target) = pawn.read_msr(IA32_TEMPERATURE_TARGET).map(|value| (value >> 16) & 0xff) else {
+            note(&format!("read TjMax MSR: {:?}", std::io::Error::last_os_error()));
+            return None;
+        };
+        note(&format!("ready, TjMax {target}"));
         if target > 0 {
             pawn.tj_max = target as f32;
         }

@@ -408,9 +408,8 @@ export default function DeckScreen() {
     let alive = true;
     const setOrientation = async () => {
       try {
-        await ScreenOrientation.lockAsync(immersive
-          ? ScreenOrientation.OrientationLock.LANDSCAPE
-          : ScreenOrientation.OrientationLock.DEFAULT);
+        // Full screen follows the phone too: portrait gives a tall deck, landscape a wide one.
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
       } catch {
         if (alive && immersive) {
           setImmersive(false);
@@ -543,18 +542,7 @@ export default function DeckScreen() {
     }
   };
 
-  const enterImmersive = async () => {
-    try {
-      const supported = await ScreenOrientation.supportsOrientationLockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-      if (!supported) {
-        setFeedback('Landscape mode is unavailable on this device');
-        return;
-      }
-      setImmersive(true);
-    } catch {
-      setFeedback('Could not switch to landscape mode');
-    }
-  };
+  const enterImmersive = () => setImmersive(true);
 
   const cellFrame = (row: number, column: number, rowSpan = 1, columnSpan = 1, cellWidth = regularCellWidth, cellHeight = regularCellHeight, gap = regularGap, inset = 0, offsetY = 0) => ({
     position: 'absolute' as const,
@@ -659,7 +647,7 @@ export default function DeckScreen() {
           <View style={styles.brand}><Image source={appIcon} style={styles.brandIcon} accessibilityIgnoresInvertColors /><Text style={styles.brandName}>Open Dock</Text></View>
           <View style={styles.headerActions}>
           {connected && activePage ? <Pressable style={[styles.immersiveToggle, editing && styles.editToggleOn]} onPress={() => setEditing((on) => !on)} accessibilityRole="button" accessibilityLabel={editing ? 'Done editing' : 'Edit deck'}>{editing ? <Check size={17} color={colors.onAccent} /> : <Pencil size={16} color={colors.muted} />}</Pressable> : null}
-          <Pressable style={styles.immersiveToggle} onPress={() => void enterImmersive()} accessibilityRole="button" accessibilityLabel="Enter immersive landscape deck"><Maximize2 size={17} color={colors.muted} /></Pressable>
+          <Pressable style={styles.immersiveToggle} onPress={enterImmersive} accessibilityRole="button" accessibilityLabel="Enter full-screen deck"><Maximize2 size={17} color={colors.muted} /></Pressable>
           <Pressable style={styles.connectionPill} onPress={() => router.push('/connect')} accessibilityRole="button" accessibilityLabel={`PC ${connected ? 'connected' : 'disconnected'}. Open connection settings`}>
             <View style={[styles.dot, connected ? styles.dotOnline : styles.dotOffline]} />
             <Text style={styles.connectionText} numberOfLines={1}>{connected ? (connection?.deviceName ?? 'Connected') : 'Connect PC'}</Text>
