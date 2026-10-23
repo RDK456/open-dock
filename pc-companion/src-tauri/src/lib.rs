@@ -31,8 +31,11 @@ use tokio::sync::broadcast;
 
 mod adb;
 mod icon_png;
+mod island;
 mod media_players;
 mod pc_stats;
+#[cfg(windows)]
+mod pc_voice;
 mod remote;
 mod system_media;
 mod usb_pair;
@@ -1931,6 +1934,12 @@ enum ClientMessage {
     Pointer {
         event: remote::PointerEvent,
     },
+    /// The phone's mic started or stopped listening for a command; `text` is what it has heard so far.
+    VoiceState {
+        listening: bool,
+        #[serde(default)]
+        text: String,
+    },
     /// A sentence said into the phone's mic, such as "open spotify" or "volume up".
     VoiceCommand {
         #[serde(rename = "requestId")]
@@ -3776,10 +3785,18 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     remote::send_pointer(event);
                 }
             }
+            ClientMessage::VoiceState { listening, text } if authenticated => {
+                island::show(if listening { "listening" } else { "idle" }, &text);
+            }
             ClientMessage::VoiceCommand { request_id, text } if authenticated => {
+                island::show("working", &text);
                 let result = if valid_id(&request_id) && text.len() <= 500 { run_voice(&text, &state, state.independent_navigation.load(Ordering::Relaxed), &mut selected_profile_id, &mut selected_page_id).await } else { Err("That was too long".to_owned()) };
                 if result.is_ok() {
                     state.media_refresh.notify_one();
+                }
+                match &result {
+                    Ok(done) => island::show("done", done),
+                    Err(error) => island::show("failed", error),
                 }
                 let reply = match result {
                     Ok(done) => serde_json::json!({ "type": "voice_result", "requestId": request_id, "ok": true, "done": done }),
@@ -4429,6 +4446,56 @@ async fn run_voice(
     Ok(done.join(", then "))
 }
 
+static VOICE_ON: AtomicBool = AtomicBool::new(false);
+
+/// Voice commands said into the PC's own mic, one after another until `stop_voice`: each sentence runs like one
+/// from the phone, and the voice island shows each step. Ends with an error only when the PC cannot listen.
+#[tauri::command]
+async fn listen_voice(state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+    if VOICE_ON.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
+    while VOICE_ON.load(Ordering::SeqCst) {
+        island::show("listening", "");
+        #[cfg(windows)]
+        let heard = tauri::async_runtime::spawn_blocking(pc_voice::listen_once).await.map_err(|_| "Could not listen".to_owned()).and_then(|heard| heard);
+        #[cfg(not(windows))]
+        let heard: Result<String, String> = Err("Voice on this PC needs Windows".into());
+        let heard = match heard {
+            Ok(text) if text.trim().is_empty() => continue,
+            Ok(text) => text,
+            Err(error) => {
+                VOICE_ON.store(false, Ordering::SeqCst);
+                island::show("failed", &error);
+                return Err(error);
+            }
+        };
+        if !VOICE_ON.load(Ordering::SeqCst) {
+            break;
+        }
+        island::show("working", &heard);
+        let (mut profile_id, mut page_id) = (String::new(), String::new());
+        match run_voice(&heard, &state, false, &mut profile_id, &mut page_id).await {
+            Ok(done) => {
+                state.media_refresh.notify_one();
+                island::show("done", &done);
+            }
+            Err(error) => island::show("failed", &error),
+        }
+        // Long enough to read what happened before the island listens again.
+        tokio::time::sleep(Duration::from_millis(1600)).await;
+    }
+    island::show("idle", "");
+    Ok(())
+}
+
+/// Stops `listen_voice` after the sentence it is hearing now.
+#[tauri::command]
+fn stop_voice() {
+    VOICE_ON.store(false, Ordering::SeqCst);
+    island::show("idle", "");
+}
+
 /// The deck button on the phone's current profile whose label matches `name`: (id, label).
 fn deck_button_named(state: &AppState, name: &str, independent: bool, selected_profile_id: &str) -> Option<(String, String)> {
     let config = state.deck_config.read().ok()?;
@@ -4984,7 +5051,9 @@ pub fn run() {
             adb_status,
             install_adb,
             rotate_pairing_key,
-            restart_app
+            restart_app,
+            listen_voice,
+            stop_voice
         ])
         .setup(move |app| {
             let config_dir = app.path().app_config_dir()?;
@@ -5070,6 +5139,10 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
                 apply_appearance(&window, clean_appearance(&saved));
+            }
+
+            if let Err(error) = island::init(app.handle()) {
+                eprintln!("Open Dock: no voice island ({error})");
             }
 
             tauri::async_runtime::spawn(serve(state));

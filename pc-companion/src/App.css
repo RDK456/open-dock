@@ -1072,3 +1072,9 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 [data-look="glass"] body { background: radial-gradient(60% 50% at 15% 10%, var(--aurora-1), transparent 70%) fixed, radial-gradient(50% 50% at 85% 35%, var(--aurora-2), transparent 70%) fixed, radial-gradient(60% 60% at 50% 100%, var(--aurora-3), transparent 70%) fixed, var(--background); }
 [data-look="glass"] .deck-canvas-wrap { background: var(--key-bg); }
 [data-look="glass"] .deck-canvas-wrap, [data-look="glass"] .deck-button:not(.deck-slot):not(.clock-widget) { backdrop-filter: blur(18px) saturate(1.4); }
+
+/* The widget shelf under the grid: every widget in reach, laid out as tiles across the free space. */
+.deck-widget-shelf { flex: none; padding: 4px 2px 0; }
+.deck-widget-shelf .deck-library-group { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.deck-widget-shelf .deck-library-group h3 { grid-column: 1 / -1; margin: 0 4px 2px; }
+.deck-widget-shelf .deck-library-item { padding: 12px; border-color: var(--border); border-radius: 12px; background: var(--card); }

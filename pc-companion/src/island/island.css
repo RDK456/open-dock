@@ -1,0 +1,20 @@
+/* The voice island is black in every theme, like the cutout it imitates. */
+html.island-window, html.island-window body, html.island-window #root { min-width: 0; min-height: 0; overflow: hidden; background: transparent !important; }
+.island { position: fixed; top: 8px; left: 50%; max-width: 404px; height: 50px; padding: 0 22px 0 18px; display: flex; align-items: center; gap: 14px; border-radius: 25px; background: #000; color: #fff; font: 600 14px Inter, "Segoe UI", sans-serif; white-space: nowrap; box-shadow: 0 8px 22px rgb(0 0 0 / 35%); opacity: 0; transform: translateX(-50%) scale(.55, .4); transition: transform 380ms cubic-bezier(.34, 1.56, .64, 1), opacity 180ms ease-out; }
+.island.open { opacity: 1; transform: translateX(-50%) scale(1); }
+.island-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.island-wave { height: 24px; display: flex; align-items: center; gap: 3px; }
+.island-wave span { width: 4px; height: 100%; border-radius: 2px; background: #5ef0b8; transform: scaleY(.3); transition: background-color 200ms; }
+.island-wave span:nth-child(2) { background: #6fd6ff; animation-delay: -.6s !important; }
+.island-wave span:nth-child(3) { background: #8fb4ff; animation-delay: -.25s !important; }
+.island-wave span:nth-child(4) { background: #b59bff; animation-delay: -.8s !important; }
+.island-wave span:nth-child(5) { background: #ff8ad8; animation-delay: -.4s !important; }
+.island.listening .island-wave span { animation: island-wave 900ms ease-in-out infinite; }
+.island.working .island-wave span { animation: island-wave 1600ms ease-in-out infinite; opacity: .7; }
+.island.done .island-wave span { background: #5ef0b8; transform: scaleY(.55); }
+.island.failed .island-wave span { background: #ff7a90; transform: scaleY(.55); }
+@keyframes island-wave { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .island { transition: opacity 180ms; }
+  .island-wave span { animation: none !important; transform: scaleY(.6); }
+}

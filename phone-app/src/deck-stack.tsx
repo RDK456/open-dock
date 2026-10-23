@@ -51,16 +51,16 @@ export function DeckStack({ pages, index, onChange, children }: { pages: { id: s
   const [responder] = useState(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.4,
     onPanResponderMove: (_, g) => {
-      const { index: at, count } = state.current;
-      const blocked = (g.dx > 0 && at === 0) || (g.dx < 0 && at === count - 1);
-      x.setValue(blocked ? g.dx * 0.25 : g.dx);
+      const { count } = state.current;
+      // Pages loop: past the last comes the first again, so only a single page resists the swipe.
+      x.setValue(count < 2 ? g.dx * 0.25 : g.dx);
     },
     onPanResponderRelease: (_, g) => {
       const { index: at, count, onChange: change, reduce } = state.current;
       const direction = g.dx < 0 ? 1 : -1;
-      const next = at + direction;
+      const next = (at + direction + count) % count;
       const flung = Math.abs(g.dx) > width.current * 0.22 || Math.abs(g.vx) > 0.55;
-      if (!flung || next < 0 || next >= count) {
+      if (!flung || count < 2) {
         Animated.spring(x, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 8 }).start();
         return;
       }
@@ -79,7 +79,8 @@ export function DeckStack({ pages, index, onChange, children }: { pages: { id: s
     onPanResponderTerminate: () => Animated.spring(x, { toValue: 0, useNativeDriver: true }).start(),
   }));
 
-  const behind = pages.slice(index + 1, index + 3);
+  // The cards stacked behind are the next pages round the loop.
+  const behind = pages.length > 1 ? [1, 2].filter((step) => step < pages.length).map((step) => pages[(index + step) % pages.length]) : [];
   const span = Math.max(1, cardWidth);
   const leaving = x.interpolate({ inputRange: [-span, 0, span], outputRange: [1, 0, 1], extrapolate: 'clamp' });
   const zoomScale = zoomIn.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] });

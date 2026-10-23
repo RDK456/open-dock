@@ -64,6 +64,8 @@ type ConnectionContextValue = {
   editButton: (edit: { pageId: string; folderId?: string; button?: DeckButton; removeId?: string }) => Promise<string | null>;
   /** Sends a spoken sentence ("open spotify"); resolves with what the PC did, or why it could not. */
   sendVoice: (text: string) => Promise<{ ok: boolean; text: string }>;
+  /** Tells the PC the mic is (or stopped) listening for a command, for its voice island. */
+  sendVoiceState: (listening: boolean, text: string) => void;
 };
 
 const STORAGE_KEY = 'opendock.pc-connection';
@@ -741,6 +743,12 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     }
   }), [deckConfig, status]);
 
+  const sendVoiceState = useCallback((listening: boolean, text: string) => {
+    const socket = socketRef.current;
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    try { socket.send(JSON.stringify({ type: 'voice_state', listening, text })); } catch { /* the island is a nicety */ }
+  }, []);
+
   const sendVoice = useCallback((text: string) => new Promise<{ ok: boolean; text: string }>((resolve) => {
     const socket = socketRef.current;
     if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return resolve({ ok: false, text: 'Connect to your PC first' });
@@ -758,7 +766,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   }), [status]);
 
   return (
-    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice }}>
+    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice, sendVoiceState }}>
       {children}
     </ConnectionContext.Provider>
   );

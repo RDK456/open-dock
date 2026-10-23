@@ -7,8 +7,10 @@ export type LibraryChoice = WidgetChoice | { kind: 'button'; preset: ButtonPrese
 
 type Entry = { key: string; icon: React.ReactNode; title: string; detail: string; choice: LibraryChoice; disabled?: string };
 
-// What the right-hand panel shows when nothing is selected: every kind of button and widget in one searchable list.
-export function DeckLibrary({ pluginActions, pluginWidgets, targetLabel, inFolder, canSwitchPage, canSwitchProfile, busy, drag, onKeyPick, onClearTarget }: {
+// What the right-hand panel shows when nothing is selected: every kind of button in one searchable list. The
+// widgets are a shelf under the grid (`shelf`), in reach without scrolling.
+export function DeckLibrary({ shelf = false, pluginActions, pluginWidgets, targetLabel, inFolder, canSwitchPage, canSwitchProfile, busy, drag, onKeyPick, onClearTarget }: {
+  shelf?: boolean;
   pluginActions: { pluginId: string; actionId: string; label: string }[];
   pluginWidgets: { pluginId: string; widgetId: string; label: string }[];
   targetLabel: string | null;
@@ -57,10 +59,11 @@ export function DeckLibrary({ pluginActions, pluginWidgets, targetLabel, inFolde
       </button>)}
     </div>;
   };
-  const groups = [group('Buttons', buttons), group('Widgets', widgets)].filter(Boolean);
+  if (shelf) return <section className="deck-library deck-widget-shelf" aria-label="Widgets">{group('Widgets', widgets)}</section>;
+  const groups = [group('Buttons', buttons)].filter(Boolean);
   return <div className="deck-library">
-    <div className="properties-heading"><div><h2>Add to {inFolder ? 'folder' : 'page'}</h2><p>{targetLabel ? `Placing in ${targetLabel}` : 'Drag an item onto a cell, or click it to use the first free cell.'}</p></div>{targetLabel ? <button type="button" className="secondary-button" onClick={onClearTarget}>Clear</button> : null}</div>
-    <label className="deck-library-search"><Search size={14} /><input value={query} placeholder="Search buttons and widgets" aria-label="Search buttons and widgets" onChange={(event) => setQuery(event.target.value)} /></label>
+    <div className="properties-heading"><div><h2>Add to {inFolder ? 'folder' : 'page'}</h2><p>{targetLabel ? `Placing in ${targetLabel}` : 'Drag an item onto a cell, or click it to use the first free cell. Widgets are under the grid.'}</p></div>{targetLabel ? <button type="button" className="secondary-button" onClick={onClearTarget}>Clear</button> : null}</div>
+    <label className="deck-library-search"><Search size={14} /><input value={query} placeholder="Search buttons" aria-label="Search buttons" onChange={(event) => setQuery(event.target.value)} /></label>
     <div className="deck-library-list">
       {groups.length ? groups : <p className="deck-library-empty">Nothing matches “{query}”.</p>}
     </div>

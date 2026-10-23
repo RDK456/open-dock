@@ -133,6 +133,12 @@ export default function VoiceScreen() {
                 <Pressable style={({ pressed }) => [styles.noticeButton, pressed && styles.chipPressed]} onPress={handsFree.openSettings} accessibilityRole="button"><Text style={styles.chipText}>Open Settings</Text></Pressable>
               </View>
             ) : null}
+            {!handsFree.islandAllowed ? (
+              <View style={styles.notice}>
+                <Text style={styles.noticeText}>Show a listening bar at the top of the screen, over other apps, while a command is heard.</Text>
+                <Pressable style={({ pressed }) => [styles.noticeButton, pressed && styles.chipPressed]} onPress={handsFree.allowIsland} accessibilityRole="button"><Text style={styles.chipText}>Allow</Text></Pressable>
+              </View>
+            ) : null}
             {!handsFree.unrestricted ? (
               <View style={styles.notice}>
                 <Text style={styles.noticeText}>Your phone may stop Open Dock in the background to save battery.</Text>

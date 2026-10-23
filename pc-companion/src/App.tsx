@@ -184,6 +184,17 @@ function App() {
   const [adbProgress, setAdbProgress] = useState('');
   const [pairingError, setPairingError] = useState('');
   const [screen, setScreen] = useState<'overview' | 'deck' | 'settings'>('overview');
+  // Voice commands into this PC's mic, one after another until clicked again; the voice island at the top of the
+  // screen shows how each goes.
+  const [listening, setListening] = useState(false);
+  const listenVoice = () => {
+    if (listening) {
+      void invoke('stop_voice');
+      return;
+    }
+    setListening(true);
+    invoke('listen_voice').catch(() => { /* the island already said why */ }).finally(() => setListening(false));
+  };
   // Switching pages glides the sidebar's selected pill to its new item (a view transition), where the browser can.
   const go = (next: typeof screen) => {
     if (next === screen) return;
@@ -423,6 +434,9 @@ function App() {
           </button>
           <button className={`nav-item ${screen === 'settings' ? 'selected' : ''}`} title="Settings" aria-label="Settings" aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => go('settings')}>
             <Settings size={16} strokeWidth={1.8} /><span>Settings</span>
+          </button>
+          <button className={`nav-item ${listening ? 'selected' : ''}`} title="Say a command" aria-label={listening ? 'Listening' : 'Say a command'} aria-pressed={listening} onClick={listenVoice}>
+            <Mic size={16} strokeWidth={1.8} /><span>{listening ? 'Listening…' : 'Voice'}</span>
           </button>
         </nav>
 
@@ -1858,7 +1872,7 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
       {error ? <p className="usb-error deck-error" role="alert">{error}<button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setError('')}>✕</button></p> : null}
       <div className="deck-main-scroll">
         {/* The next pages peek out behind this one, like the phone's card stack; click one to deal it. */}
-        {folder ? null : profile.pages.slice(profile.pages.indexOf(page) + 1, profile.pages.indexOf(page) + 3).reverse().map((entry, at, list) => <button type="button" key={entry.id} className="deck-ghost" style={{ marginInline: (list.length - at) * 16 }} disabled={busy} onClick={() => selectPage(profile, entry)}>{entry.name}</button>)}
+        {folder || profile.pages.length < 2 ? null : [1, 2].filter((step) => step < profile.pages.length).map((step) => profile.pages[(profile.pages.indexOf(page) + step) % profile.pages.length]).reverse().map((entry, at, list) => <button type="button" key={entry.id} className="deck-ghost" style={{ marginInline: (list.length - at) * 16 }} disabled={busy} onClick={() => selectPage(profile, entry)}>{entry.name}</button>)}
         <div className="deck-canvas-wrap" onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
           <div className="deck-canvas-heading">
             <div><h2>{folder ? folder.name : page.name}</h2><p>{widgetScreen.buttons.length + widgetScreen.widgets.length} items · {widgetOccupied.size} of {widgetScreen.rows * widgetScreen.columns} cells · Drag to move or resize{folder ? ' · Drop on Back to move out' : ''}</p></div>
@@ -1894,6 +1908,19 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
           </div>
         </div>
       </div>
+        {showSettings ? null : <DeckLibrary
+          shelf
+          pluginActions={plugins.flatMap((plugin) => plugin.actions.map((action) => ({ pluginId: plugin.id, actionId: action.id, label: `${plugin.name} / ${action.name}` })))}
+          pluginWidgets={pluginWidgetOptions.map((option) => ({ pluginId: option.plugin.id, widgetId: option.widget.id, label: option.label }))}
+          targetLabel={pendingCell ? `row ${pendingCell.row + 1}, column ${pendingCell.column + 1}` : null}
+          inFolder={Boolean(folder)}
+          canSwitchPage={profile.pages.length > 1}
+          canSwitchProfile={deck.profiles.length > 1}
+          busy={busy}
+          drag={{ start: startLibraryDrag, move: moveLibraryDrag, end: finishLibraryDrag, cancel: cancelLibraryDrag }}
+          onKeyPick={(choice) => void addItem(choice)}
+          onClearTarget={() => setPendingCell(null)}
+        />}
     </div>
       <div className="button-properties" role="region" aria-label="Add or edit">
         <div className="deck-panel-bar">

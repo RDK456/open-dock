@@ -3,7 +3,7 @@ import { AppState, BackHandler, Linking, PermissionsAndroid, Platform } from 're
 import Storage from 'expo-sqlite/kv-store';
 import * as Haptics from 'expo-haptics';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
-import { askToRunUnrestricted, moveToBack, runsUnrestricted, startKeepAlive, stopKeepAlive } from '../modules/keep-alive';
+import { askToRunUnrestricted, askToShowIsland, canShowIsland, moveToBack, runsUnrestricted, setIsland, startKeepAlive, stopKeepAlive, type IslandState } from '../modules/keep-alive';
 import { usePcConnection } from './connection';
 
 const PHRASE_KEY = 'opendock.wake-phrase';
@@ -11,6 +11,8 @@ const ENABLED_KEY = 'opendock.hands-free';
 export const DEFAULT_PHRASE = 'hey dock';
 // After the wake phrase alone, the next sentence is the command if it comes this soon.
 const ARMED_MS = 8000;
+// How long the island shows what a command did.
+const RESULT_MS = 2600;
 
 export type Heard = { said: string; ok: boolean; text: string };
 
@@ -24,12 +26,16 @@ type HandsFree = {
   /** False while Android may stop Open Dock in the background to save battery. */
   unrestricted: boolean;
   allowBackground: () => void;
+  /** False until Android lets the voice island show over other apps. */
+  islandAllowed: boolean;
+  allowIsland: () => void;
   openSettings: () => void;
   setEnabled: (on: boolean) => Promise<void>;
   setPhrase: (phrase: string) => void;
-  /** A tap on the mic: listens for one sentence (or, with hands-free on, takes the next one without the wake phrase). */
+  /** A tap on the mic: takes commands one after another until tapped again (or, with hands-free on, takes the next
+   * one without the wake phrase). */
   listenOnce: () => Promise<void>;
-  /** Listening for that one sentence. */
+  /** In that conversation. */
   hearing: boolean;
   report: (heard: Heard) => void;
 };
@@ -69,15 +75,27 @@ export function afterWakePhrase(text: string, phrase: string): string | null {
 }
 
 export function HandsFreeProvider({ children }: PropsWithChildren) {
-  const { status, connection, sendVoice } = usePcConnection();
+  const { status, connection, sendVoice, sendVoiceState } = usePcConnection();
   const [enabled, setEnabledState] = useState(false);
   const [phrase, setPhraseState] = useState(DEFAULT_PHRASE);
   const [armedAt, setArmedAt] = useState(0);
   const [last, setLast] = useState<Heard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const connected = status === 'connected';
-  const latest = useRef({ phrase, armedAt, sendVoice });
-  useEffect(() => { latest.current = { ...latest.current, phrase, armedAt, sendVoice }; });
+  const latest = useRef({ phrase, armedAt, sendVoice, sendVoiceState });
+  useEffect(() => { latest.current = { ...latest.current, phrase, armedAt, sendVoice, sendVoiceState }; });
+
+  // The voice island, on this phone (over every app) and on the PC: up from the moment a command is being heard
+  // until a moment after it ran. The PC is only told about listening; it sees the command and its result itself.
+  const island = useRef<{ state: IslandState; text: string }>({ state: 'idle', text: '' });
+  const showIsland = useCallback((state: IslandState, text = '') => {
+    const was = island.current;
+    if (was.state === state && was.text === text) return;
+    island.current = { state, text };
+    setIsland(state, text);
+    if (state === 'listening' || (state === 'idle' && was.state === 'listening')) latest.current.sendVoiceState(state === 'listening', text);
+  }, []);
+  const quietIsland = useCallback(() => { if (island.current.state === 'listening') showIsland('idle'); }, [showIsland]);
 
   useEffect(() => {
     void Promise.all([Storage.getItem(PHRASE_KEY), Storage.getItem(ENABLED_KEY)]).then(([savedPhrase, savedEnabled]) => {
@@ -88,16 +106,23 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
 
   const report = useCallback((heard: Heard) => setLast(heard), []);
 
+  // One recognizer serves both modes: "wake" listens all the time for the wake phrase (hands-free, also in the
+  // background, where the keep-alive service holds the mic); "once" takes command after command after a tap on the
+  // mic, until it is tapped again.
+  const mode = useRef<'off' | 'wake' | 'once'>('off');
+
   const run = useCallback(async (command: string) => {
     setArmedAt(0);
+    showIsland('working', command);
     const result = await latest.current.sendVoice(command);
     void Haptics.notificationAsync(result.ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
     setLast({ said: command, ...result });
-  }, []);
+    showIsland(result.ok ? 'done' : 'failed', result.text);
+    setTimeout(() => {
+      if (island.current.state === 'done' || island.current.state === 'failed') showIsland(mode.current === 'once' ? 'listening' : 'idle');
+    }, RESULT_MS);
+  }, [showIsland]);
 
-  // One recognizer serves both modes: "wake" listens all the time for the wake phrase (hands-free, also in the
-  // background, where the keep-alive service holds the mic); "once" takes one sentence after a tap on the mic.
-  const mode = useRef<'off' | 'wake' | 'once'>('off');
   const listening = useRef(false);
   // The latest partial transcript; some recognizers end the session without ever sending it as final.
   const pending = useRef('');
@@ -127,8 +152,6 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     let restart: ReturnType<typeof setTimeout> | undefined;
     const heard = (text: string) => {
       if (mode.current === 'once') {
-        mode.current = wakeWantedRef.current ? 'wake' : 'off';
-        setHearing(false);
         void run(afterWakePhrase(text, latest.current.phrase) || text);
         return;
       }
@@ -136,20 +159,33 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
       if (rest === null) {
         const armed = latest.current.armedAt;
         if (armed && Date.now() - armed < ARMED_MS) void run(text);
+        else quietIsland();
         return;
       }
       if (rest) {
         void run(rest);
       } else {
         setArmedAt(Date.now());
+        showIsland('listening');
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
+    };
+    // The island follows the words as they come, once they are a command (after a tap, or after the wake phrase).
+    const follow = (text: string) => {
+      if (mode.current === 'once') return showIsland('listening', text);
+      const rest = afterWakePhrase(text, latest.current.phrase);
+      const armed = latest.current.armedAt;
+      if (rest !== null) showIsland('listening', rest);
+      else if (armed && Date.now() - armed < ARMED_MS) showIsland('listening', text);
     };
     const subscriptions = [
       ExpoSpeechRecognitionModule.addListener('result', (event) => {
         const text = (event.results[0]?.transcript ?? '').trim();
         if (!event.isFinal) {
-          if (text) pending.current = text;
+          if (text) {
+            pending.current = text;
+            follow(text);
+          }
           return;
         }
         // Google's offline recognizer on Android 11 sends an empty final result after real partial ones.
@@ -162,13 +198,10 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
         const unfinished = pending.current;
         pending.current = '';
         if (unfinished) heard(unfinished);
-        if (mode.current === 'once') {
-          // The tap's sentence never came (silence); go back to waiting for the wake phrase, if that is on.
-          mode.current = wakeWantedRef.current ? 'wake' : 'off';
-          setHearing(false);
-        }
-        // Android stops after each sentence (or a silence) on older versions; start again.
-        if (mode.current === 'wake') restart = setTimeout(begin, 250);
+        if (mode.current !== 'once' && !latest.current.armedAt) quietIsland();
+        // Android stops after each sentence (or a silence); start again. After a tap that is a conversation: the
+        // next command, and the next, until the mic is tapped again.
+        if (mode.current === 'wake' || mode.current === 'once') restart = setTimeout(begin, 250);
       }),
       ExpoSpeechRecognitionModule.addListener('error', (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -184,7 +217,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
       clearTimeout(restart);
       subscriptions.forEach((subscription) => subscription.remove());
     };
-  }, [begin, run]);
+  }, [begin, run, showIsland, quietIsland]);
 
   useEffect(() => {
     if (wakeWanted && mode.current === 'off') {
@@ -203,8 +236,16 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
   /** A tap on the mic: the next sentence is the command. */
   const listenOnce = useCallback(async () => {
     setError(null);
+    if (mode.current === 'once') {
+      mode.current = wakeWantedRef.current ? 'wake' : 'off';
+      setHearing(false);
+      showIsland('idle');
+      if (listening.current) ExpoSpeechRecognitionModule.abort();
+      return;
+    }
     if (mode.current === 'wake') {
       setArmedAt(Date.now());
+      showIsland('listening');
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       return;
     }
@@ -216,16 +257,17 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     mode.current = 'once';
     setHearing(true);
+    showIsland('listening');
     if (listening.current) ExpoSpeechRecognitionModule.abort();
     else begin();
-  }, [begin]);
+  }, [begin, showIsland]);
 
   // The armed state wears off by itself.
   useEffect(() => {
     if (!armedAt) return;
-    const timer = setTimeout(() => setArmedAt(0), ARMED_MS);
+    const timer = setTimeout(() => { setArmedAt(0); quietIsland(); }, ARMED_MS);
     return () => clearTimeout(timer);
-  }, [armedAt]);
+  }, [armedAt, quietIsland]);
 
   // The notification keeps the connection (and the mic) alive in the background; it goes when the PC is forgotten.
   const deviceName = connection?.deviceName ?? connection?.host;
@@ -251,8 +293,13 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
 
   // Phone makers' battery savers stop background apps unless Open Dock is let off battery limits.
   const [unrestricted, setUnrestricted] = useState(runsUnrestricted);
+  const [islandAllowed, setIslandAllowed] = useState(canShowIsland);
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') setUnrestricted(runsUnrestricted()); });
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      setUnrestricted(runsUnrestricted());
+      setIslandAllowed(canShowIsland());
+    });
     return () => subscription.remove();
   }, []);
 
@@ -281,7 +328,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
 
 
   return (
-    <HandsFreeContext.Provider value={{ enabled, phrase, armed: armedAt > 0, last, error, unrestricted, allowBackground: askToRunUnrestricted, openSettings: () => void Linking.openSettings(), setEnabled, setPhrase, listenOnce, hearing, report }}>
+    <HandsFreeContext.Provider value={{ enabled, phrase, armed: armedAt > 0, last, error, unrestricted, allowBackground: askToRunUnrestricted, islandAllowed, allowIsland: askToShowIsland, openSettings: () => void Linking.openSettings(), setEnabled, setPhrase, listenOnce, hearing, report }}>
       {children}
     </HandsFreeContext.Provider>
   );

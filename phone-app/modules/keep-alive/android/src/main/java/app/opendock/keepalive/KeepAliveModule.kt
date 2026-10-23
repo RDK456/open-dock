@@ -39,6 +39,27 @@ class KeepAliveModule : Module() {
       Unit
     }
 
+    Function("canDrawOverlays") {
+      appContext.reactContext?.let { Settings.canDrawOverlays(it) } ?: false
+    }
+
+    // Android's screen for "Display over other apps", which the voice island needs.
+    Function("requestOverlayPermission") {
+      val activity = appContext.currentActivity
+      activity?.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${activity.packageName}")))
+      Unit
+    }
+
+    Function("showIsland") { state: String, text: String ->
+      appContext.reactContext?.let { IslandOverlay.show(it, state, text) }
+      Unit
+    }
+
+    Function("hideIsland") {
+      appContext.reactContext?.let { IslandOverlay.hide(it) }
+      Unit
+    }
+
     Function("stop") {
       appContext.reactContext?.let { context -> context.stopService(Intent(context, KeepAliveService::class.java)) }
       Unit
