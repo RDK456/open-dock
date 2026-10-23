@@ -68,6 +68,9 @@ export function Wallpaper() {
     loop.start();
     return () => loop.stop();
   }, [drift, moving]);
+  // react-native-svg keeps the size its "100%" first resolved to; remount the drawings when the screen
+  // changes size (the tab bar hiding, rotation) so the light reaches the bottom edge.
+  const [size, setSize] = useState('');
 
   if (wallpaper === 'none') return null;
   const glows = wallpaperGlows[wallpaper];
@@ -75,10 +78,10 @@ export function Wallpaper() {
   const shift = (amount: number) => drift.interpolate({ inputRange: [0, 1], outputRange: [-amount, amount] });
 
   return (
-    <View pointerEvents="none" style={styles.fill}>
+    <View pointerEvents="none" style={styles.fill} onLayout={({ nativeEvent: { layout } }) => setSize(`${layout.width}x${layout.height}`)}>
       {glows.map(([color, x, y], index) => (
         <Animated.View key={index} style={[styles.fill, { transform: [{ translateX: shift(index % 2 ? 36 : -28) }, { translateY: shift(index === 1 ? -30 : 24) }, { scale: 1.2 }] }]}>
-          <Svg width="100%" height="100%">
+          <Svg key={size} width="100%" height="100%">
             <Defs>
               <RadialGradient id={`glow${index}`} cx={`${x * 100}%`} cy={`${y * 100}%`} r="55%">
                 <Stop offset="0" stopColor={color} stopOpacity={strength} />

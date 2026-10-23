@@ -99,6 +99,8 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
   // background, where the keep-alive service holds the mic); "once" takes one sentence after a tap on the mic.
   const mode = useRef<'off' | 'wake' | 'once'>('off');
   const listening = useRef(false);
+  // The latest partial transcript; some recognizers end the session without ever sending it as final.
+  const pending = useRef('');
   const [hearing, setHearing] = useState(false);
   const wakeWanted = enabled && connected && Platform.OS === 'android';
   const wakeWantedRef = useRef(wakeWanted);
@@ -108,9 +110,13 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     if (listening.current || mode.current === 'off') return;
     listening.current = true;
     const once = mode.current === 'once';
+    pending.current = '';
     ExpoSpeechRecognitionModule.start({
-      interimResults: false,
-      continuous: !once,
+      // Partial results are what Android 12 and older send; see `pending`.
+      interimResults: true,
+      // Before Android 13 "continuous" only stretches the silence timeout, and the session then ends in a
+      // no-speech error without a final result; plain one-sentence sessions, restarted on `end`, work there.
+      continuous: !once && Platform.OS === 'android' && Number(Platform.Version) >= 33,
       addsPunctuation: false,
       androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: once ? 1500 : 1200 },
     });
@@ -118,32 +124,43 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let restart: ReturnType<typeof setTimeout> | undefined;
+    const heard = (text: string) => {
+      if (mode.current === 'once') {
+        mode.current = wakeWantedRef.current ? 'wake' : 'off';
+        setHearing(false);
+        void run(afterWakePhrase(text, latest.current.phrase) || text);
+        return;
+      }
+      const rest = afterWakePhrase(text, latest.current.phrase);
+      if (rest === null) {
+        const armed = latest.current.armedAt;
+        if (armed && Date.now() - armed < ARMED_MS) void run(text);
+        return;
+      }
+      if (rest) {
+        void run(rest);
+      } else {
+        setArmedAt(Date.now());
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+    };
     const subscriptions = [
       ExpoSpeechRecognitionModule.addListener('result', (event) => {
-        if (!event.isFinal) return;
         const text = (event.results[0]?.transcript ?? '').trim();
-        if (!text) return;
-        if (mode.current === 'once') {
-          mode.current = wakeWantedRef.current ? 'wake' : 'off';
-          setHearing(false);
-          void run(afterWakePhrase(text, latest.current.phrase) || text);
+        if (!event.isFinal) {
+          if (text) pending.current = text;
           return;
         }
-        const rest = afterWakePhrase(text, latest.current.phrase);
-        if (rest === null) {
-          const armed = latest.current.armedAt;
-          if (armed && Date.now() - armed < ARMED_MS) void run(text);
-          return;
-        }
-        if (rest) {
-          void run(rest);
-        } else {
-          setArmedAt(Date.now());
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
+        // Google's offline recognizer on Android 11 sends an empty final result after real partial ones.
+        const final = text || pending.current;
+        pending.current = '';
+        if (final) heard(final);
       }),
       ExpoSpeechRecognitionModule.addListener('end', () => {
         listening.current = false;
+        const unfinished = pending.current;
+        pending.current = '';
+        if (unfinished) heard(unfinished);
         if (mode.current === 'once') {
           // The tap's sentence never came (silence); go back to waiting for the wake phrase, if that is on.
           mode.current = wakeWantedRef.current ? 'wake' : 'off';
