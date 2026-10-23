@@ -8,19 +8,23 @@ import { invoke } from '@tauri-apps/api/core';
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Theme = 'light' | 'dark';
 /** Classic is the plain light or dark design. The others are complete designs, each light or dark by nature. */
-export type Look = 'classic' | 'console' | 'bento' | 'desk' | 'glass' | 'funk';
+export type Look = 'classic' | 'studio' | 'atelier' | 'signal' | 'glass' | 'funk';
 
 const KEY = 'opendock.appearance';
 const LOOK_KEY = 'opendock.look';
 const THEME_COLOR = { light: '#ffffff', dark: '#09090b' } as const;
-const LOOK_SCHEME: Record<Exclude<Look, 'classic'>, Theme> = { console: 'dark', bento: 'light', desk: 'light', glass: 'dark', funk: 'dark' };
+const LOOK_SCHEME: Record<Exclude<Look, 'classic'>, Theme> = { studio: 'dark', atelier: 'light', signal: 'dark', glass: 'dark', funk: 'dark' };
 
 export function parseMode(value: unknown): ThemeMode {
   return value === 'light' || value === 'dark' ? value : 'system';
 }
 
+// Looks that were retired move to the nearest design that replaced them.
+const RETIRED: Record<string, Look> = { console: 'signal', bento: 'studio', desk: 'atelier' };
+
 export function parseLook(value: unknown): Look {
-  return value === 'console' || value === 'bento' || value === 'desk' || value === 'glass' || value === 'funk' ? value : 'classic';
+  if (typeof value === 'string' && value in RETIRED) return RETIRED[value];
+  return value === 'studio' || value === 'atelier' || value === 'signal' || value === 'glass' || value === 'funk' ? value : 'classic';
 }
 
 const systemIsLight = () => window.matchMedia('(prefers-color-scheme: light)').matches;
@@ -84,9 +88,9 @@ export const useTheme = (): Theme => useSyncExternalStore(subscribe, themeNow);
 const CHOICES: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
 const LOOKS: [Look, string, string][] = [
   ['classic', 'Classic', 'Plain keys in light or dark.'],
-  ['console', 'Console', 'Dark metal with amber-lit keys and green LCD labels.'],
-  ['bento', 'Bento', 'Bright color blocks with big, bold labels.'],
-  ['desk', 'Desk', 'The Open Dock desk: yellow, blue and red, drawn with thick outlines.'],
+  ['studio', 'Studio', 'A precise dark tool: an icon rail, hairlines, one violet accent and quick, quiet motion.'],
+  ['atelier', 'Atelier', 'Editorial and warm: navigation across the top, serif headings, wide margins and slow fades.'],
+  ['signal', 'Signal', 'Black and white like a device: a floating dock, monospace capitals, a dot grid and one red dot.'],
   ['glass', 'Glass', 'Frosted glass over an aurora.'],
   ['funk', 'Funk', 'Neon keys with thick outlines and a hard shadow, on deep purple.'],
 ];

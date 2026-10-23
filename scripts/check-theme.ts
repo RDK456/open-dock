@@ -44,10 +44,10 @@ assert.deepEqual(Object.keys(pcLight).sort(), Object.keys(pcDark).sort(), 'PC ap
 assert.ok(Object.keys(pcDark).length >= 30, 'PC app: tokens not read');
 
 // The designed looks: each replaces some of its base theme's tokens.
-const LOOK_BASE = { console: 'dark', bento: 'light', desk: 'light', glass: 'dark', funk: 'dark' } as const;
+const LOOK_BASE = { studio: 'dark', atelier: 'light', signal: 'dark', glass: 'dark', funk: 'dark' } as const;
 const pcLooks = Object.entries(LOOK_BASE).map(([look, base]) => {
   const own = tokens(`:root[data-look="${look}"]`);
-  const unknown = Object.keys(own).filter((name) => !(name in pcDark) && !/^--(key|tile|lcd|metal|desk|aurora)-/.test(name));
+  const unknown = Object.keys(own).filter((name) => !(name in pcDark) && !/^--(key|tile|aurora|look)-/.test(name));
   assert.deepEqual(unknown, [], `PC ${look}: tokens the base themes do not have`);
   return [`PC ${look} (${base})`, { ...(base === 'dark' ? pcDark : pcLight), ...own }] as const;
 });

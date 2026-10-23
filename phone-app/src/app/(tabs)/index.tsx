@@ -40,6 +40,16 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const TOUCH_LIGHT = 130;
 
+// How each look's keys move. arrive: ms to deal a key in (0 is a spring), stagger: ms between keys, rise: px they
+// travel up, grow: the scale they start at, depth: how far a press sinks, press: ms to sink (0 is instant or a spring).
+const KEY_MOTION = {
+  spring: { arrive: 0, stagger: 28, rise: 14, grow: 0.92, depth: 0.93, press: 0, easing: Easing.linear },
+  glide: { arrive: 220, stagger: 18, rise: 6, grow: 1, depth: 0.97, press: 110, easing: Easing.out(Easing.cubic) },
+  slow: { arrive: 720, stagger: 60, rise: 16, grow: 0.99, depth: 0.985, press: 280, easing: Easing.bezier(0.16, 1, 0.3, 1) },
+  // A display redrawing: keys blink in over four hard steps.
+  step: { arrive: 300, stagger: 40, rise: 0, grow: 1, depth: 0.95, press: 0, easing: (t: number) => Math.floor(t * 4) / 4 },
+};
+
 /** A deck key that sinks under the finger and springs back, animated on the native thread. */
 function SpringKey({ style, launch, order = 0, onPress, children, ...props }: Omit<ComponentProps<typeof Pressable>, 'style' | 'children'> & { style: StyleProp<ViewStyle>; launch?: boolean; order?: number; children?: ReactNode }) {
   const { colors, key: design } = useTheme();
@@ -52,10 +62,14 @@ function SpringKey({ style, launch, order = 0, onPress, children, ...props }: Om
   const light = (on: boolean) => Animated.timing(lit, { toValue: on ? 1 : 0, duration: on ? 120 : 420, useNativeDriver: true }).start();
   // Keys arrive one after another when a page appears, like cards dealt onto the table.
   const [appear] = useState(() => new Animated.Value(0));
+  const motion = KEY_MOTION[design.motion];
   useEffect(() => {
-    Animated.spring(appear, { toValue: 1, delay: Math.min(order, 12) * 28, useNativeDriver: true, speed: 14, bounciness: 7 }).start();
-  }, [appear, order]);
-  const to = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 7 }).start();
+    const delay = Math.min(order, 12) * motion.stagger;
+    (motion.arrive ? Animated.timing(appear, { toValue: 1, delay, duration: motion.arrive, easing: motion.easing, useNativeDriver: true })
+      : Animated.spring(appear, { toValue: 1, delay, useNativeDriver: true, speed: 14, bounciness: 7 })).start();
+  }, [appear, order, motion]);
+  const to = (toValue: number) => (design.motion === 'spring' ? Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 7 })
+    : Animated.timing(scale, { toValue, duration: motion.press, easing: Easing.out(Easing.cubic), useNativeDriver: true })).start();
   const fire: typeof onPress = (event) => {
     // Opening an app, file, folder or site: a ripple blooms from the key while the PC opens it.
     if (launch) {
@@ -65,8 +79,8 @@ function SpringKey({ style, launch, order = 0, onPress, children, ...props }: Om
     void Haptics.selectionAsync();
     onPress?.(event);
   };
-  return <AnimatedPressable {...props} onPress={fire} style={[style, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }, { scale: Animated.multiply(scale, appear.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] })) }] }]}
-    onPressIn={(event) => { to(0.93); if (design.touchLight) { follow(event.nativeEvent.locationX, event.nativeEvent.locationY); light(true); } }}
+  return <AnimatedPressable {...props} onPress={fire} style={[style, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [motion.rise, 0] }) }, { scale: Animated.multiply(scale, appear.interpolate({ inputRange: [0, 1], outputRange: [motion.grow, 1] })) }] }]}
+    onPressIn={(event) => { to(motion.depth); if (design.touchLight) { follow(event.nativeEvent.locationX, event.nativeEvent.locationY); light(true); } }}
     onPressOut={() => { to(1); if (design.touchLight) light(false); }}
     onTouchMove={design.touchLight ? (event) => follow(event.nativeEvent.locationX, event.nativeEvent.locationY) : undefined}>
     {design.touchLight ? <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: TOUCH_LIGHT, height: TOUCH_LIGHT, borderRadius: TOUCH_LIGHT / 2, backgroundColor: design.touchLight, boxShadow: `0px 0px 40px 24px ${design.touchLight}`, opacity: lit.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }), transform: lightAt.getTranslateTransform() }} /> : null}
@@ -623,10 +637,8 @@ export default function DeckScreen() {
       return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {editing && !big && pins.includes(button.id) ? <View pointerEvents="none" style={styles.pinDot} /> : null}
-        {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.tiles ? 2.2 : 1.7} />}
-        {big ? null : design.lcd
-          ? <View style={[styles.lcd, { backgroundColor: design.lcd.bg, borderColor: design.lcd.edge }]}><Text style={[styles.lcdText, { color: design.lcd.ink, textShadowColor: design.lcd.halo, fontSize: design.labelSize }]} numberOfLines={1}>{label.toUpperCase()}</Text></View>
-          : <Text style={[styles.keyLabel, { color: surfaceLook.ink, fontSize: design.labelSize, fontWeight: design.labelWeight, lineHeight: Math.round(design.labelSize * 1.08), letterSpacing: design.tiles ? -0.4 : 0 }]} numberOfLines={2}>{label}</Text>}
+        {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.iconStroke} />}
+        {big ? null : <Text style={[styles.keyLabel, { color: surfaceLook.ink, fontFamily: design.font, fontSize: design.labelSize, fontWeight: design.labelWeight, lineHeight: Math.round(design.labelSize * 1.2), letterSpacing: design.tracking ?? (design.tiles ? -0.4 : 0) }]} numberOfLines={2}>{design.caps ? label.toUpperCase() : label}</Text>}
       </SpringKey>;
     });
   };
@@ -829,8 +841,6 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   editToggleOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   editHint: { color: colors.muted, fontSize: 13, marginBottom: 10 },
   keyLabel: { color: colors.text, fontSize: 13, fontWeight: '500', lineHeight: 14 },
-  lcd: { alignSelf: 'stretch', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 3, borderWidth: 1 },
-  lcdText: { fontFamily: 'monospace', letterSpacing: 0.8, includeFontPadding: false, textShadowRadius: 4 },
   shortcutHint: { color: colors.faint, fontSize: 11, marginTop: -4 },
   addKey: { alignItems: 'flex-start', justifyContent: 'space-between', borderStyle: 'dashed', backgroundColor: 'transparent' },
   addLabel: { color: colors.muted, fontSize: 13, fontWeight: '500' },

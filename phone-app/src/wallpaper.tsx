@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Defs, LinearGradient, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Storage from 'expo-sqlite/kv-store';
 import { useTheme } from './theme';
 import { backdrops, wallpaperGlows } from './theme-colors';
@@ -75,8 +75,7 @@ export function Wallpaper() {
   // changes size (the tab bar hiding, rotation) so the light reaches the bottom edge.
   const [size, setSize] = useState('');
 
-  if (look === 'console') return <MetalBackdrop key={size} onSize={setSize} />;
-  if (look === 'desk') return <DeskBackdrop key={size} onSize={setSize} />;
+  if (look === 'signal') return <DotBackdrop key={size} onSize={setSize} />;
   if (wallpaper === 'none') return null;
   const glows = wallpaperGlows[wallpaper];
   const strength = look === 'glass' ? 0.75 : scheme === 'light' ? 0.32 : 0.5;
@@ -104,37 +103,16 @@ export function Wallpaper() {
 type BackdropProps = { onSize: (size: string) => void };
 const measure = (onSize: BackdropProps['onSize']) => ({ nativeEvent: { layout } }: LayoutChangeEvent) => onSize(`${layout.width}x${layout.height}`);
 
-/** Console: anodised metal, lighter at the top, with fine brushed lines. */
-function MetalBackdrop({ onSize }: BackdropProps) {
+/** Signal: a fine dot grid, like the dots of a matrix display. */
+function DotBackdrop({ onSize }: BackdropProps) {
   return <View pointerEvents="none" style={styles.fill} onLayout={measure(onSize)}>
     <Svg width="100%" height="100%">
       <Defs>
-        <LinearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={backdrops.metal.top} />
-          <Stop offset="1" stopColor={backdrops.metal.bottom} />
-        </LinearGradient>
-        <Pattern id="brushed" width="4" height="3" patternUnits="userSpaceOnUse">
-          <Rect width="4" height="1" fill={backdrops.metal.line} opacity={0.025} />
+        <Pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
+          <Circle cx="9" cy="9" r="1" fill={backdrops.signalDot} opacity={0.13} />
         </Pattern>
       </Defs>
-      <Rect width="100%" height="100%" fill="url(#metal)" />
-      <Rect width="100%" height="100%" fill="url(#brushed)" />
-    </Svg>
-  </View>;
-}
-
-/** Desk: the app icon's red-and-cream striped desk along the bottom, edged in ink. */
-function DeskBackdrop({ onSize }: BackdropProps) {
-  return <View pointerEvents="none" style={styles.fill} onLayout={measure(onSize)}>
-    <Svg width="100%" height="100%">
-      <Defs>
-        <Pattern id="stripes" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <Rect width="26" height="26" fill={backdrops.desk.cream} />
-          <Rect width="13" height="26" fill={backdrops.desk.red} />
-        </Pattern>
-      </Defs>
-      <Rect y="84%" width="100%" height="16%" fill="url(#stripes)" />
-      <Rect y="84%" width="100%" height="4" fill={backdrops.desk.ink} />
+      <Rect width="100%" height="100%" fill="url(#dots)" />
     </Svg>
   </View>;
 }

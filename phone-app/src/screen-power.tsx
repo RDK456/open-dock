@@ -8,9 +8,9 @@ import { setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpa
 
 const LOOK_HINTS: Record<Look, string> = {
   classic: 'Plain keys in light or dark, with a wallpaper of your choice.',
-  console: 'Dark metal with amber-lit keys and green LCD labels.',
-  bento: 'Bright color blocks with big, bold labels.',
-  desk: 'The Open Dock desk: yellow, blue and red, drawn with thick outlines.',
+  studio: 'A precise dark tool: hairline keys, one violet accent and quick, quiet motion.',
+  atelier: 'Editorial and warm: paper and ink, serif labels and slow fades.',
+  signal: 'Black and white like a device: a dot grid, monospace capitals and stepped motion.',
   glass: 'Frosted glass over a moving aurora that lights up where you touch.',
   funk: 'Neon keys with thick outlines and a hard shadow, on deep purple.',
 };
