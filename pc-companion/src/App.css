@@ -137,6 +137,191 @@
   --hairline: #ffffffb3;
 }
 
+/* Designed looks. Each sits on its light or dark base (theme.tsx sets data-theme to match) and replaces what differs.
+   The --key-* tokens draw the deck's keys; tiled looks deal --tile-N blocks out to the keys in turn. The phone has
+   the same looks in phone-app/src/theme-colors.ts. */
+:root[data-look="console"] {
+  --background: #141619;
+  --sidebar: #1c1f23;
+  --card: #1c1f23;
+  --card-raised: #24282d;
+  --border: #2c3136;
+  --foreground: #e9edf0;
+  --muted: #9ba4ac;
+  --subtle: #8a939b;
+  --green: #5cf2b0;
+  --z850: #2a2f35;
+  --z900: #24282d;
+  --z950: #1f2327;
+  --rail: #1c1f23;
+  --rail-text: #e9edf0;
+  --rail-muted: #9ba4ac;
+  --rail-hover: #2a2f35;
+  --rail-selected: #ffb547;
+  --rail-selected-text: #1a1206;
+  --brand: #ffb547;
+  --accent: #ffb547;
+  --accent-hover: #ffc76e;
+  --accent-text: #1a1206;
+  --key-bg: #22262b;
+  --key-border: #ffb547;
+  --key-border-width: 1px;
+  --key-radius: 7px;
+  --key-shadow: 0 0 9px rgb(255 181 71 / 45%);
+  --key-shadow-hover: 0 0 16px rgb(255 181 71 / 65%);
+  --key-ink: #e9edf0;
+  --key-label-size: 11px;
+  --key-label-weight: 600;
+  --lcd-bg: #10221a;
+  --lcd-ink: #7dffb6;
+  --metal-top: #23272c;
+  --metal-line: rgb(255 255 255 / 2.5%);
+}
+:root[data-look="bento"] {
+  --background: #ececf0;
+  --sidebar: #ffffff;
+  --card: #ffffff;
+  --card-raised: #f6f6f8;
+  --border: #d9d9e1;
+  --foreground: #111114;
+  --muted: #474752;
+  --subtle: #5d5d69;
+  --blue: #2f5bff;
+  --rail: #ffffff;
+  --rail-text: #111114;
+  --rail-muted: #474752;
+  --rail-hover: #ececf0;
+  --rail-selected: #111114;
+  --rail-selected-text: #ffffff;
+  --accent: #2f5bff;
+  --accent-hover: #2449d6;
+  --accent-text: #ffffff;
+  --key-bg: #ffffff;
+  --key-border: transparent;
+  --key-border-width: 0px;
+  --key-radius: 22px;
+  --key-shadow: none;
+  --key-shadow-hover: 0 10px 22px rgb(17 17 20 / 18%);
+  --key-ink: #111114;
+  --key-label-size: 16px;
+  --key-label-weight: 800;
+  --tile-1: #ff5a36; --tile-ink-1: #1a0700;
+  --tile-2: #2f5bff; --tile-ink-2: #ffffff;
+  --tile-3: #ffd23f; --tile-ink-3: #1d1600;
+  --tile-4: #00b37a; --tile-ink-4: #00170f;
+  --tile-5: #ff7ad9; --tile-ink-5: #2b0020;
+  --tile-6: #7b4dff; --tile-ink-6: #ffffff;
+}
+:root[data-look="desk"] {
+  --background: #ffd24a;
+  --sidebar: #1d4ed8;
+  --card: #fff6d6;
+  --card-raised: #ffefbd;
+  --border: #1b1b1b;
+  --foreground: #1b1b1b;
+  --muted: #4a3d14;
+  --subtle: #5a4a19;
+  --blue: #1d4ed8;
+  --red: #a82615;
+  --star: #d8341e;
+  --z850: #ffe9a8;
+  --rail: #1d4ed8;
+  --rail-text: #ffffff;
+  --rail-muted: #dbe4ff;
+  --rail-hover: #1a44bd;
+  --rail-selected: #ffd24a;
+  --rail-selected-text: #1b1b1b;
+  --accent: #1d4ed8;
+  --accent-hover: #1a44bd;
+  --accent-text: #ffffff;
+  --key-bg: #ffffff;
+  --key-border: #1b1b1b;
+  --key-border-width: 3px;
+  --key-radius: 14px;
+  --key-shadow: 4px 5px 0 #1b1b1b;
+  --key-shadow-hover: 6px 8px 0 #1b1b1b;
+  --key-ink: #1b1b1b;
+  --key-label-size: 13px;
+  --key-label-weight: 700;
+  --desk-red: #d8341e;
+  --desk-cream: #fff6d6;
+  --desk-ink: #1b1b1b;
+}
+:root[data-look="glass"] {
+  --background: #05060b;
+  --sidebar: #0a0c14;
+  --card: #0e1019;
+  --card-raised: #151826;
+  --border: #252a3e;
+  --foreground: #f4f6ff;
+  --muted: #aab1cd;
+  --subtle: #8a91ae;
+  --z850: #1a1e2e;
+  --z950: #0e1019;
+  --rail: #0a0c14;
+  --rail-text: #f4f6ff;
+  --rail-muted: #aab1cd;
+  --rail-hover: #151826;
+  --rail-selected: #cdd5ff;
+  --rail-selected-text: #0a0b12;
+  --accent: #cdd5ff;
+  --accent-hover: #e0e5ff;
+  --accent-text: #0a0b12;
+  --key-bg: rgb(255 255 255 / 8%);
+  --key-border: rgb(255 255 255 / 20%);
+  --key-border-width: 1px;
+  --key-radius: 20px;
+  --key-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  --key-shadow-hover: 0 12px 32px rgb(0 0 0 / 45%), inset 0 0 24px rgb(205 215 255 / 18%);
+  --key-ink: #f4f6ff;
+  --key-label-size: 13px;
+  --key-label-weight: 600;
+  --aurora-1: rgb(94 240 184 / 30%);
+  --aurora-2: rgb(143 180 255 / 32%);
+  --aurora-3: rgb(255 122 200 / 24%);
+}
+:root[data-look="funk"] {
+  --background: #1a1033;
+  --sidebar: #140c28;
+  --card: #251845;
+  --card-raised: #2f2056;
+  --border: #3d2d6b;
+  --foreground: #fbf6ea;
+  --muted: #c4b8e6;
+  --subtle: #a597cf;
+  --blue: #4fd8ff;
+  --red: #ff7a9a;
+  --green: #5cf2b0;
+  --star: #ffb84d;
+  --z850: #3a2a66;
+  --z900: #2f2056;
+  --z950: #251845;
+  --rail: #140c28;
+  --rail-text: #fbf6ea;
+  --rail-muted: #c4b8e6;
+  --rail-hover: #251845;
+  --rail-selected: #c6ff3d;
+  --rail-selected-text: #16200a;
+  --brand: #c6ff3d;
+  --accent: #c6ff3d;
+  --accent-hover: #d6ff70;
+  --accent-text: #16200a;
+  --key-bg: #251845;
+  --key-border: #0b0618;
+  --key-border-width: 3px;
+  --key-radius: 16px;
+  --key-shadow: 0 5px 0 #0b0618;
+  --key-shadow-hover: 0 8px 0 #0b0618;
+  --key-ink: #fbf6ea;
+  --key-label-size: 13px;
+  --key-label-weight: 800;
+  --tile-1: #c6ff3d; --tile-ink-1: #16200a;
+  --tile-2: #3fd9ff; --tile-ink-2: #04202b;
+  --tile-3: #ff4fd8; --tile-ink-3: #2b0024;
+  --tile-4: #ffa53d; --tile-ink-4: #2a1500;
+  --tile-5: #d9ccff; --tile-ink-5: #1a1033;
+}
+
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--z700) transparent; }
 body { margin: 0; min-width: 760px; min-height: 100vh; background: var(--background); }
 button { font: inherit; }
@@ -866,3 +1051,24 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
   .content > *, .deck-canvas > *, .deck-page-tabs button.active { animation: none; }
   .sidebar .nav-item::before, .sidebar .nav-item svg { transition: none; }
 }
+
+/* Designed looks: the keys take the look's shape (empty cells and widgets keep theirs), and each look has its backdrop. */
+[data-look] .deck-button:not(.deck-slot):not(.clock-widget) { border: var(--key-border-width) solid var(--key-border); border-radius: var(--key-radius); background: var(--key-bg); box-shadow: var(--key-shadow); color: var(--key-ink); }
+[data-look] .deck-button:not(.deck-slot):not(.clock-widget):hover { box-shadow: var(--key-shadow-hover); }
+[data-look] .deck-button:not(.deck-slot):not(.clock-widget).selected { outline: 2px solid var(--accent); outline-offset: 3px; }
+[data-look] .deck-button:not(.deck-slot):not(.clock-widget).drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+[data-look] .deck-button:not(.deck-slot):not(.clock-widget) strong { color: var(--key-ink); font-size: var(--key-label-size); font-weight: var(--key-label-weight); }
+[data-look] .deck-button:not(.deck-slot):not(.clock-widget) small { color: var(--key-ink); opacity: .75; }
+[data-look="bento"] .deck-button:not(.deck-slot):not(.clock-widget) strong { letter-spacing: -.02em; line-height: 1.05; white-space: normal; }
+[data-look="bento"] .deck-canvas > .deck-button:nth-child(6n+1), [data-look="funk"] .deck-canvas > .deck-button:nth-child(5n+1) { --key-bg: var(--tile-1); --key-ink: var(--tile-ink-1); }
+[data-look="bento"] .deck-canvas > .deck-button:nth-child(6n+2), [data-look="funk"] .deck-canvas > .deck-button:nth-child(5n+2) { --key-bg: var(--tile-2); --key-ink: var(--tile-ink-2); }
+[data-look="bento"] .deck-canvas > .deck-button:nth-child(6n+3), [data-look="funk"] .deck-canvas > .deck-button:nth-child(5n+3) { --key-bg: var(--tile-3); --key-ink: var(--tile-ink-3); }
+[data-look="bento"] .deck-canvas > .deck-button:nth-child(6n+4), [data-look="funk"] .deck-canvas > .deck-button:nth-child(5n+4) { --key-bg: var(--tile-4); --key-ink: var(--tile-ink-4); }
+[data-look="bento"] .deck-canvas > .deck-button:nth-child(6n+5), [data-look="funk"] .deck-canvas > .deck-button:nth-child(5n+5) { --key-bg: var(--tile-5); --key-ink: var(--tile-ink-5); }
+[data-look="bento"] .deck-canvas > .deck-button:nth-child(6n+6) { --key-bg: var(--tile-6); --key-ink: var(--tile-ink-6); }
+[data-look="console"] .deck-button:not(.deck-slot):not(.clock-widget) strong { align-self: stretch; padding: 3px 6px; border-radius: 3px; background: var(--lcd-bg); color: var(--lcd-ink); font-family: ui-monospace, Consolas, monospace; text-transform: uppercase; letter-spacing: .06em; text-shadow: 0 0 4px var(--lcd-ink); }
+[data-look="console"] body { background: repeating-linear-gradient(0deg, var(--metal-line) 0 1px, transparent 1px 3px) fixed, linear-gradient(var(--metal-top), var(--background)) fixed; }
+[data-look="desk"] body { background: linear-gradient(var(--desk-ink) 0 0) left 0 bottom 16vh / 100% 4px no-repeat fixed, repeating-linear-gradient(45deg, var(--desk-red) 0 13px, var(--desk-cream) 13px 26px) left 0 bottom 0 / 100% 16vh no-repeat fixed, var(--background); }
+[data-look="glass"] body { background: radial-gradient(60% 50% at 15% 10%, var(--aurora-1), transparent 70%) fixed, radial-gradient(50% 50% at 85% 35%, var(--aurora-2), transparent 70%) fixed, radial-gradient(60% 60% at 50% 100%, var(--aurora-3), transparent 70%) fixed, var(--background); }
+[data-look="glass"] .deck-canvas-wrap { background: var(--key-bg); }
+[data-look="glass"] .deck-canvas-wrap, [data-look="glass"] .deck-button:not(.deck-slot):not(.clock-widget) { backdrop-filter: blur(18px) saturate(1.4); }

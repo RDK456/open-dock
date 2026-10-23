@@ -20,7 +20,7 @@ import { DeckStack } from '../../deck-stack';
 import { PuckRail, usePins } from '../../puck-rail';
 import { buttonPlacement, surfaceOccupancy, type SurfaceItem } from '../../deck-layout';
 import { useStyles, useTheme, type Colors } from '../../theme';
-import { inkIcon } from '../../theme-colors';
+import { inkIcon, inkIconAs } from '../../theme-colors';
 import { TabBarHiddenContext } from '../../navigation/tab-bar-context';
 import { useTabBarClearance } from '../../tab-inset';
 import { MediaToastView, PlayerSheet, SourceChip, useMediaSource } from '../../media-source';
@@ -38,11 +38,18 @@ const shortcutIcons: Record<string, typeof Command> = {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+const TOUCH_LIGHT = 130;
+
 /** A deck key that sinks under the finger and springs back, animated on the native thread. */
 function SpringKey({ style, launch, order = 0, onPress, children, ...props }: Omit<ComponentProps<typeof Pressable>, 'style' | 'children'> & { style: StyleProp<ViewStyle>; launch?: boolean; order?: number; children?: ReactNode }) {
-  const { colors } = useTheme();
+  const { colors, key: design } = useTheme();
   const [scale] = useState(() => new Animated.Value(1));
   const [bloom] = useState(() => new Animated.Value(1));
+  // Glass: a soft light sits under the finger and follows it across the key.
+  const [lightAt] = useState(() => new Animated.ValueXY());
+  const [lit] = useState(() => new Animated.Value(0));
+  const follow = (x: number, y: number) => lightAt.setValue({ x: x - TOUCH_LIGHT / 2, y: y - TOUCH_LIGHT / 2 });
+  const light = (on: boolean) => Animated.timing(lit, { toValue: on ? 1 : 0, duration: on ? 120 : 420, useNativeDriver: true }).start();
   // Keys arrive one after another when a page appears, like cards dealt onto the table.
   const [appear] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -58,7 +65,11 @@ function SpringKey({ style, launch, order = 0, onPress, children, ...props }: Om
     void Haptics.selectionAsync();
     onPress?.(event);
   };
-  return <AnimatedPressable {...props} onPress={fire} style={[style, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }, { scale: Animated.multiply(scale, appear.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] })) }] }]} onPressIn={() => to(0.93)} onPressOut={() => to(1)}>
+  return <AnimatedPressable {...props} onPress={fire} style={[style, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }, { scale: Animated.multiply(scale, appear.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] })) }] }]}
+    onPressIn={(event) => { to(0.93); if (design.touchLight) { follow(event.nativeEvent.locationX, event.nativeEvent.locationY); light(true); } }}
+    onPressOut={() => { to(1); if (design.touchLight) light(false); }}
+    onTouchMove={design.touchLight ? (event) => follow(event.nativeEvent.locationX, event.nativeEvent.locationY) : undefined}>
+    {design.touchLight ? <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: TOUCH_LIGHT, height: TOUCH_LIGHT, borderRadius: TOUCH_LIGHT / 2, backgroundColor: design.touchLight, boxShadow: `0px 0px 40px 24px ${design.touchLight}`, opacity: lit.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }), transform: lightAt.getTranslateTransform() }} /> : null}
     {launch ? <Animated.View pointerEvents="none" style={{ position: 'absolute', alignSelf: 'center', top: '50%', width: 160, height: 160, marginTop: -80, borderRadius: 80, backgroundColor: colors.accent, opacity: bloom.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] }), transform: [{ scale: bloom.interpolate({ inputRange: [0, 1], outputRange: [0.1, 1.6] }) }] }} /> : null}
     {children}
   </AnimatedPressable>;
@@ -362,7 +373,17 @@ function ChipRow({ label, items, selectedId, onSelect }: { label: string; items:
 }
 
 export default function DeckScreen() {
-  const { colors, scheme } = useTheme();
+  const { colors, scheme, look, key: design } = useTheme();
+  // A key's surface in the chosen look; Bento deals its saturated blocks out to the keys in turn.
+  const keySurface = (order: number) => {
+    const tile = design.tiles?.[order % design.tiles.length];
+    return {
+      ink: tile?.[1] ?? design.ink,
+      style: { borderRadius: design.radius, borderWidth: design.borderWidth, borderColor: design.border, backgroundColor: tile?.[0] ?? design.bg, boxShadow: design.shadow, overflow: design.touchLight ? 'hidden' as const : undefined },
+    };
+  };
+  // Icons the PC saved as SVG are drawn in the dark deck's light ink; give them the key's ink.
+  const svgInk = (svg: string, ink: string) => (look === 'classic' ? inkIcon(svg, scheme) : inkIconAs(svg, ink));
   const styles = useStyles(makeStyles);
   countRender('deck');
   const power = useDeckScreenPower();
@@ -587,7 +608,7 @@ export default function DeckScreen() {
       if (item.type === 'widget') {
         const placement = item.widget.placement;
         if (placement.row !== row || placement.column !== column) return null;
-        return <View key={item.widget.id} style={[big ? styles.immersiveKey : styles.key, styles.clockWidgetKey, frame(placement)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' ? null : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
+        return <View key={item.widget.id} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' ? null : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
       }
       const button = item.button;
       const placement = buttonPlacement(columns, button, surface?.buttons.indexOf(button) ?? 0);
@@ -597,11 +618,15 @@ export default function DeckScreen() {
       const dynamicPlay = button.icon === 'auto' && button.action.type === 'media' && button.action.command === 'play_pause';
       const label = dynamicPlay ? (isPlaying ? 'Pause' : 'Play') : button.label;
       const Icon = controlIcon(button, playbackState);
-      return <SpringKey key={button.id} order={placement.row * columns + placement.column} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
+      const order = placement.row * columns + placement.column;
+      const surfaceLook = keySurface(order);
+      return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {editing && !big && pins.includes(button.id) ? <View pointerEvents="none" style={styles.pinDot} /> : null}
-        {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={inkIcon(button.iconSvg, scheme)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={colors.text} strokeWidth={1.7} />}
-        {big ? null : <Text style={styles.keyLabel} numberOfLines={2}>{label}</Text>}
+        {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.tiles ? 2.2 : 1.7} />}
+        {big ? null : design.lcd
+          ? <View style={[styles.lcd, { backgroundColor: design.lcd.bg, borderColor: design.lcd.edge }]}><Text style={[styles.lcdText, { color: design.lcd.ink, textShadowColor: design.lcd.halo, fontSize: design.labelSize }]} numberOfLines={1}>{label.toUpperCase()}</Text></View>
+          : <Text style={[styles.keyLabel, { color: surfaceLook.ink, fontSize: design.labelSize, fontWeight: design.labelWeight, lineHeight: Math.round(design.labelSize * 1.08), letterSpacing: design.tiles ? -0.4 : 0 }]} numberOfLines={2}>{label}</Text>}
       </SpringKey>;
     });
   };
@@ -804,6 +829,8 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   editToggleOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   editHint: { color: colors.muted, fontSize: 13, marginBottom: 10 },
   keyLabel: { color: colors.text, fontSize: 13, fontWeight: '500', lineHeight: 14 },
+  lcd: { alignSelf: 'stretch', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 3, borderWidth: 1 },
+  lcdText: { fontFamily: 'monospace', letterSpacing: 0.8, includeFontPadding: false, textShadowRadius: 4 },
   shortcutHint: { color: colors.faint, fontSize: 11, marginTop: -4 },
   addKey: { alignItems: 'flex-start', justifyContent: 'space-between', borderStyle: 'dashed', backgroundColor: 'transparent' },
   addLabel: { color: colors.muted, fontSize: 13, fontWeight: '500' },

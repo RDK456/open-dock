@@ -3,8 +3,17 @@ import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
 import * as Brightness from 'expo-brightness';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { setThemeMode, useStyles, useThemeMode, type Colors, type ThemeMode } from './theme';
+import { LOOKS, setLook, setThemeMode, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
 import { setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
+
+const LOOK_HINTS: Record<Look, string> = {
+  classic: 'Plain keys in light or dark, with a wallpaper of your choice.',
+  console: 'Dark metal with amber-lit keys and green LCD labels.',
+  bento: 'Bright color blocks with big, bold labels.',
+  desk: 'The Open Dock desk: yellow, blue and red, drawn with thick outlines.',
+  glass: 'Frosted glass over a moving aurora that lights up where you touch.',
+  funk: 'Neon keys with thick outlines and a hard shadow, on deep purple.',
+};
 
 // The screen is a deck's biggest power draw. These settings decide whether the deck keeps it on and
 // whether it dims when nobody is touching it. (Expo Go keeps the screen on while developing anyway.)
@@ -99,10 +108,16 @@ function Choice<T extends string | number | boolean>({ options, value, onChange 
 export function AppearanceSection() {
   const styles = useStyles(makeStyles);
   const mode = useThemeMode();
+  const look = useLook();
   const { wallpaper, motion } = useWallpaperSettings();
   const options: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
   return <View style={styles.card}>
     <Text style={styles.title}>Appearance</Text>
+    <Text style={styles.label}>Look</Text>
+    <Choice options={LOOKS} value={look} onChange={setLook} />
+    <Text style={styles.hint}>{LOOK_HINTS[look]}</Text>
+    {look === 'classic' ? <>
+    <Text style={styles.label}>Light or dark</Text>
     <Choice options={options} value={mode} onChange={setThemeMode} />
     <Text style={styles.hint}>{"System follows this phone's setting. Your PC has its own."}</Text>
     <Text style={styles.label}>Wallpaper</Text>
@@ -110,6 +125,7 @@ export function AppearanceSection() {
     <Text style={styles.label}>Wallpaper motion</Text>
     <Choice options={[[false, 'Still'], [true, 'Drift']]} value={motion} onChange={(value) => setWallpaperSettings({ motion: value })} />
     <Text style={styles.hint}>Shows behind the Deck and Touch screens. Drift pauses when the phone asks for reduced motion.</Text>
+    </> : null}
   </View>;
 }
 

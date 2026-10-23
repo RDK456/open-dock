@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { darkColors, lightColors } from '../phone-app/src/theme-colors.ts';
+import { darkColors, lightColors, LOOK_THEMES } from '../phone-app/src/theme-colors.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8').replace(/\r\n/g, '\n');
@@ -43,7 +43,15 @@ const pcLight = tokens(':root[data-theme="light"]');
 assert.deepEqual(Object.keys(pcLight).sort(), Object.keys(pcDark).sort(), 'PC app: a token is missing from one theme');
 assert.ok(Object.keys(pcDark).length >= 30, 'PC app: tokens not read');
 
-for (const [theme, t] of [['PC dark', pcDark], ['PC light', pcLight]] as const) {
+// The designed looks: each replaces some of its base theme's tokens.
+const LOOK_BASE = { console: 'dark', bento: 'light', desk: 'light', glass: 'dark', funk: 'dark' } as const;
+const pcLooks = Object.entries(LOOK_BASE).map(([look, base]) => {
+  const own = tokens(`:root[data-look="${look}"]`);
+  const unknown = Object.keys(own).filter((name) => !(name in pcDark) && !/^--(key|tile|lcd|metal|desk|aurora)-/.test(name));
+  assert.deepEqual(unknown, [], `PC ${look}: tokens the base themes do not have`);
+  return [`PC ${look} (${base})`, { ...(base === 'dark' ? pcDark : pcLight), ...own }] as const;
+});
+for (const [theme, t] of [['PC dark', pcDark], ['PC light', pcLight], ...pcLooks] as const) {
   for (const surface of ['--background', '--card', '--card-raised', '--z850']) {
     need(theme, `foreground on ${surface}`, t['--foreground'], t[surface], 7);
     need(theme, `muted on ${surface}`, t['--muted'], t[surface], 4.5);
@@ -65,7 +73,7 @@ for (const [theme, t] of [['PC dark', pcDark], ['PC light', pcLight]] as const) 
 
 // Every color in the rest of the stylesheet is a token. These two are fixed on purpose: the QR code's white, and
 // white text on the red button.
-const rest = css.slice(css.indexOf(':root[data-theme="light"]'));
+const rest = css.slice(css.lastIndexOf(':root[data-look='));
 const afterTokens = rest.slice(rest.indexOf('\n}') + 2);
 const strays = afterTokens.split('\n').filter((line) => /#[0-9a-f]{3,8}\b|rgba?\(/i.test(line))
   .filter((line) => !(line.startsWith('.qr-frame') || line.startsWith('.primary-button.danger {') || line.startsWith('.clock-swatch {')));
@@ -73,7 +81,8 @@ assert.deepEqual(strays, [], `App.css: colors written out instead of tokens:\n${
 
 // --- The phone app
 assert.deepEqual(Object.keys(lightColors).sort(), Object.keys(darkColors).sort(), 'phone: a token is missing from one theme');
-for (const [theme, c] of [['phone dark', darkColors], ['phone light', lightColors]] as const) {
+const phoneLooks = Object.entries(LOOK_THEMES).map(([look, { colors, scheme }]) => [`phone ${look} (${scheme})`, colors] as const);
+for (const [theme, c] of [['phone dark', darkColors], ['phone light', lightColors], ...phoneLooks] as const) {
   for (const surface of ['bg', 'panel', 'panelRaised'] as const) {
     need(theme, `text on ${surface}`, c.text, c[surface], 7);
     need(theme, `muted on ${surface}`, c.muted, c[surface], 4.5);
