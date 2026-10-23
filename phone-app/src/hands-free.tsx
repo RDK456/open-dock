@@ -118,7 +118,8 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
       // no-speech error without a final result; plain one-sentence sessions, restarted on `end`, work there.
       continuous: !once && Platform.OS === 'android' && Number(Platform.Version) >= 33,
       addsPunctuation: false,
-      androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: once ? 1500 : 1200 },
+      // No silence limit: Google's offline recognizer counts it from the start of the session, so a short
+      // one closed the mic before anyone spoke. Its own default waits several seconds for speech.
     });
   }, []);
 
