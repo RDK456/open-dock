@@ -4379,17 +4379,17 @@ async fn run_voice(
             tokio::time::sleep(Duration::from_millis(if done.last().is_some_and(|d: &String| d.starts_with("Opened")) { 1200 } else { 150 })).await;
         }
         let (action, said) = match intent {
-            voice::Intent::Media(command) => (ClientAction::Media { command }, format!("{command:?}")),
+            voice::Intent::Media(command) => (ClientAction::Media { command }, voice::spoken_name(&format!("{command:?}"))),
             voice::Intent::Keys(keys) if keys.len() == 1 => {
                 let key = keys[0].clone();
                 tauri::async_runtime::spawn_blocking(move || press_key(&key)).await.map_err(|_| "Could not run that".to_owned())??;
-                done.push(format!("Pressed {}", keys[0]));
+                done.push(format!("Pressed {}", voice::spoken_name(&keys[0])));
                 continue;
             }
-            voice::Intent::Keys(keys) => (ClientAction::Hotkey { keys: keys.clone() }, format!("Pressed {}", keys.join("+"))),
+            voice::Intent::Keys(keys) => (ClientAction::Hotkey { keys: keys.clone() }, format!("Pressed {}", keys.iter().map(|key| voice::spoken_name(key)).collect::<Vec<_>>().join("+"))),
             voice::Intent::System(command) => {
                 tauri::async_runtime::spawn_blocking(move || remote::run_system_command(command)).await.map_err(|_| "Could not run that".to_owned())??;
-                done.push(format!("{command:?}"));
+                done.push(voice::spoken_name(&format!("{command:?}")));
                 continue;
             }
             voice::Intent::Volume(level) => {

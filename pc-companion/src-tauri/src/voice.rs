@@ -166,6 +166,26 @@ const APP_ALIASES: &[(&str, &str)] = &[
     ("vlc", "vlc media player"), ("obs", "obs studio"), ("clock", "clock"), ("alarm", "clock"), ("timer", "clock"),
 ];
 
+/// "VolumeUp" or "PAGE_DOWN" as people say it: "Volume up", "Page down"; "META" is the Windows key.
+pub(super) fn spoken_name(code: &str) -> String {
+    match code {
+        "META" => return "Windows".into(),
+        "CTRL" => return "Ctrl".into(),
+        "PlayPause" => return "Play/pause".into(),
+        _ => {}
+    }
+    let mut words = String::new();
+    for (index, c) in code.replace('_', " ").chars().enumerate() {
+        if index > 0 && c.is_uppercase() && !words.ends_with(' ') && code.chars().any(char::is_lowercase) {
+            words.push(' ');
+        }
+        words.push(c);
+    }
+    let lower = words.to_lowercase();
+    let mut chars = lower.chars();
+    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
+}
+
 pub(super) fn site(name: &str) -> Option<&'static str> {
     SITES.iter().find(|(site, _)| *site == name).map(|(_, url)| *url)
 }
@@ -506,6 +526,10 @@ mod tests {
         assert_eq!(parse("hit f5"), vec![keys(&["F5"])]);
         assert_eq!(parse("spotify"), vec![Unknown("spotify".into())]);
         assert_eq!(search_url("a b&c"), "https://www.google.com/search?q=a+b%26c");
+        assert_eq!(spoken_name("VolumeUp"), "Volume up");
+        assert_eq!(spoken_name("PAGE_DOWN"), "Page down");
+        assert_eq!(spoken_name("F5"), "F5");
+        assert_eq!(spoken_name("META"), "Windows");
     }
 
     #[test]

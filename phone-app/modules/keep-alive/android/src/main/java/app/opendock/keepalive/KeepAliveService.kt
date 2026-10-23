@@ -70,6 +70,12 @@ class KeepAliveService : Service() {
     return START_NOT_STICKY
   }
 
+  // Swiping Open Dock away from recent apps ends the connection and the notification with it.
+  override fun onTaskRemoved(rootIntent: Intent?) {
+    stopSelf()
+    super.onTaskRemoved(rootIntent)
+  }
+
   override fun onDestroy() {
     wakeLock?.release()
     wifiLock?.release()

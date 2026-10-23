@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { startActivityAsync } from 'expo-intent-launcher';
 import * as Haptics from 'expo-haptics';
 import { Mic, Send } from 'lucide-react-native';
 import { Wallpaper } from '../../wallpaper';
@@ -11,15 +10,6 @@ import { useStyles, useTheme, type Colors } from '../../theme';
 import { useTabBarClearance } from '../../tab-inset';
 
 const EXAMPLES = ['Open Spotify', 'Volume up', 'Next song', 'Search for weather', 'Type hello', 'Lock the PC', 'Take a screenshot', 'Open youtube.com'];
-
-// Android's own speech dialog (Google's recognizer), so no extra app or permission is needed.
-async function listen(): Promise<string | null> {
-  const result = await startActivityAsync('android.speech.action.RECOGNIZE_SPEECH', {
-    extra: { 'android.speech.extra.LANGUAGE_MODEL': 'free_form', 'android.speech.extra.PROMPT': 'Say a command for your PC' },
-  });
-  const said = (result.extra as Record<string, unknown> | undefined)?.['android.speech.extra.RESULTS'];
-  return Array.isArray(said) && typeof said[0] === 'string' ? said[0] : null;
-}
 
 export default function VoiceScreen() {
   const { colors } = useTheme();
@@ -57,36 +47,32 @@ export default function VoiceScreen() {
     setTyped('');
   };
 
-  const speak = async () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    ring.setValue(0);
-    Animated.timing(ring, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    // Hands-free is already listening: skip the wake phrase for the next sentence.
-    if (handsFree.enabled) {
-      handsFree.arm();
+  // The ring pulses while the phone listens for the command.
+  const listening = handsFree.hearing || handsFree.armed;
+  useEffect(() => {
+    if (!listening) {
+      ring.stopAnimation();
+      ring.setValue(0);
       return;
     }
-    try {
-      const said = await listen();
-      if (said) await run(said);
-    } catch {
-      reveal({ said: '', ok: false, text: 'Speech recognition is not available on this phone. Type the command instead.' });
-    }
-  };
+    const pulse = Animated.loop(Animated.timing(ring, { toValue: 1, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: true }));
+    pulse.start();
+    return () => pulse.stop();
+  }, [listening, ring]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Wallpaper />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Voice</Text>
-        <Text style={styles.subtitle}>{!connected ? 'Connect to your PC to use voice commands.' : handsFree.armed ? 'Listening. Say the command.' : handsFree.enabled ? `Say “${handsFree.phrase}” and a command, or tap the mic.` : 'Tap the mic and say what the PC should do.'}</Text>
+        <Text style={styles.subtitle}>{!connected ? 'Connect to your PC to use voice commands.' : listening ? 'Listening. Say the command.' : handsFree.enabled ? `Say “${handsFree.phrase}” and a command, or tap the mic.` : 'Tap the mic and say what the PC should do.'}</Text>
 
         <View style={styles.micArea}>
           <Animated.View pointerEvents="none" style={[styles.ring, { opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }), transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] }) }] }]} />
           <Pressable
-            style={({ pressed }) => [styles.mic, handsFree.armed && styles.micArmed, !connected && styles.disabled, pressed && styles.pressed]}
-            disabled={!connected || busy || Platform.OS !== 'android'}
-            onPress={() => void speak()}
+            style={({ pressed }) => [styles.mic, listening && styles.micArmed, !connected && styles.disabled, pressed && styles.pressed]}
+            disabled={!connected || busy}
+            onPress={() => void handsFree.listenOnce()}
             accessibilityRole="button"
             accessibilityLabel="Speak a command"
           >
@@ -141,7 +127,18 @@ export default function VoiceScreen() {
               returnKeyType="done"
               accessibilityLabel="Wake phrase"
             />
-            {handsFree.error ? <Text style={styles.resultErrorText}>{handsFree.error}</Text> : null}
+            {handsFree.error ? (
+              <View style={styles.notice}>
+                <Text style={[styles.noticeText, styles.resultErrorText]}>{handsFree.error}</Text>
+                <Pressable style={({ pressed }) => [styles.noticeButton, pressed && styles.chipPressed]} onPress={handsFree.openSettings} accessibilityRole="button"><Text style={styles.chipText}>Open Settings</Text></Pressable>
+              </View>
+            ) : null}
+            {!handsFree.unrestricted ? (
+              <View style={styles.notice}>
+                <Text style={styles.noticeText}>Your phone may stop Open Dock in the background to save battery.</Text>
+                <Pressable style={({ pressed }) => [styles.noticeButton, pressed && styles.chipPressed]} onPress={handsFree.allowBackground} accessibilityRole="button"><Text style={styles.chipText}>Keep running</Text></Pressable>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -171,6 +168,9 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   handsFreeText: { flex: 1 },
   handsFreeTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
   handsFreeHint: { color: colors.muted, fontSize: 12, lineHeight: 16, marginTop: 3 },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  noticeText: { flex: 1, color: colors.muted, fontSize: 12, lineHeight: 16 },
+  noticeButton: { paddingHorizontal: 12, height: 34, borderRadius: 17, justifyContent: 'center', borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass },
   phraseLabel: { color: colors.muted, fontSize: 12, fontWeight: '600', marginTop: 4 },
   mic: { width: 132, height: 132, borderRadius: 66, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
   pressed: { transform: [{ scale: 0.95 }] },

@@ -1,9 +1,9 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AppState, PermissionsAndroid, Platform } from 'react-native';
+import { AppState, BackHandler, Linking, PermissionsAndroid, Platform } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
 import * as Haptics from 'expo-haptics';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
-import { startKeepAlive, stopKeepAlive } from '../modules/keep-alive';
+import { askToRunUnrestricted, moveToBack, runsUnrestricted, startKeepAlive, stopKeepAlive } from '../modules/keep-alive';
 import { usePcConnection } from './connection';
 
 const PHRASE_KEY = 'opendock.wake-phrase';
@@ -21,10 +21,16 @@ type HandsFree = {
   armed: boolean;
   last: Heard | null;
   error: string | null;
+  /** False while Android may stop Open Dock in the background to save battery. */
+  unrestricted: boolean;
+  allowBackground: () => void;
+  openSettings: () => void;
   setEnabled: (on: boolean) => Promise<void>;
   setPhrase: (phrase: string) => void;
-  /** Skip the wake phrase once: the next sentence is the command. */
-  arm: () => void;
+  /** A tap on the mic: listens for one sentence (or, with hands-free on, takes the next one without the wake phrase). */
+  listenOnce: () => Promise<void>;
+  /** Listening for that one sentence. */
+  hearing: boolean;
   report: (heard: Heard) => void;
 };
 
@@ -70,7 +76,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
   const [last, setLast] = useState<Heard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const connected = status === 'connected';
-  const latest = useRef({ phrase, armedAt, sendVoice, listening: false, wanted: false });
+  const latest = useRef({ phrase, armedAt, sendVoice });
   useEffect(() => { latest.current = { ...latest.current, phrase, armedAt, sendVoice }; });
 
   useEffect(() => {
@@ -89,34 +95,44 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     setLast({ said: command, ...result });
   }, []);
 
-  // Listening runs while hands-free is on and the PC is connected, in the background too (the keep-alive service holds the mic).
-  const listen = enabled && connected && Platform.OS === 'android';
+  // One recognizer serves both modes: "wake" listens all the time for the wake phrase (hands-free, also in the
+  // background, where the keep-alive service holds the mic); "once" takes one sentence after a tap on the mic.
+  const mode = useRef<'off' | 'wake' | 'once'>('off');
+  const listening = useRef(false);
+  const [hearing, setHearing] = useState(false);
+  const wakeWanted = enabled && connected && Platform.OS === 'android';
+  const wakeWantedRef = useRef(wakeWanted);
+  useEffect(() => { wakeWantedRef.current = wakeWanted; });
+
+  const begin = useCallback(() => {
+    if (listening.current || mode.current === 'off') return;
+    listening.current = true;
+    const once = mode.current === 'once';
+    ExpoSpeechRecognitionModule.start({
+      interimResults: false,
+      continuous: !once,
+      addsPunctuation: false,
+      androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: once ? 1500 : 1200 },
+    });
+  }, []);
+
   useEffect(() => {
-    const state = latest.current;
-    state.wanted = listen;
-    if (!listen) {
-      if (state.listening) ExpoSpeechRecognitionModule.abort();
-      return;
-    }
     let restart: ReturnType<typeof setTimeout> | undefined;
-    const begin = () => {
-      if (!state.wanted || state.listening) return;
-      state.listening = true;
-      ExpoSpeechRecognitionModule.start({
-        interimResults: false,
-        continuous: true,
-        addsPunctuation: false,
-        androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1200 },
-      });
-    };
     const subscriptions = [
       ExpoSpeechRecognitionModule.addListener('result', (event) => {
         if (!event.isFinal) return;
-        const text = event.results[0]?.transcript ?? '';
+        const text = (event.results[0]?.transcript ?? '').trim();
+        if (!text) return;
+        if (mode.current === 'once') {
+          mode.current = wakeWantedRef.current ? 'wake' : 'off';
+          setHearing(false);
+          void run(afterWakePhrase(text, latest.current.phrase) || text);
+          return;
+        }
         const rest = afterWakePhrase(text, latest.current.phrase);
         if (rest === null) {
           const armed = latest.current.armedAt;
-          if (armed && Date.now() - armed < ARMED_MS && text.trim()) void run(text.trim());
+          if (armed && Date.now() - armed < ARMED_MS) void run(text);
           return;
         }
         if (rest) {
@@ -127,26 +143,64 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
         }
       }),
       ExpoSpeechRecognitionModule.addListener('end', () => {
-        state.listening = false;
+        listening.current = false;
+        if (mode.current === 'once') {
+          // The tap's sentence never came (silence); go back to waiting for the wake phrase, if that is on.
+          mode.current = wakeWantedRef.current ? 'wake' : 'off';
+          setHearing(false);
+        }
         // Android stops after each sentence (or a silence) on older versions; start again.
-        restart = setTimeout(begin, 250);
+        if (mode.current === 'wake') restart = setTimeout(begin, 250);
       }),
       ExpoSpeechRecognitionModule.addListener('error', (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          state.wanted = false;
-          setError('Open Dock needs the microphone for hands-free. Allow it in Android settings.');
+          mode.current = 'off';
+          setHearing(false);
+          setError('Open Dock needs the microphone. Allow it in Settings, under Permissions.');
+        } else if (event.error === 'language-not-supported' || event.error === 'audio-capture') {
+          setError(`Speech recognition is not available (${event.error}). Type the command instead.`);
         }
       }),
     ];
-    begin();
     return () => {
       clearTimeout(restart);
       subscriptions.forEach((subscription) => subscription.remove());
-      state.wanted = false;
-      if (state.listening) ExpoSpeechRecognitionModule.abort();
-      state.listening = false;
     };
-  }, [listen, run]);
+  }, [begin, run]);
+
+  useEffect(() => {
+    if (wakeWanted && mode.current === 'off') {
+      mode.current = 'wake';
+      begin();
+    } else if (!wakeWanted && mode.current === 'wake') {
+      mode.current = 'off';
+      if (listening.current) ExpoSpeechRecognitionModule.abort();
+    }
+  }, [wakeWanted, begin]);
+  useEffect(() => () => {
+    mode.current = 'off';
+    if (listening.current) ExpoSpeechRecognitionModule.abort();
+  }, []);
+
+  /** A tap on the mic: the next sentence is the command. */
+  const listenOnce = useCallback(async () => {
+    setError(null);
+    if (mode.current === 'wake') {
+      setArmedAt(Date.now());
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      return;
+    }
+    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!permission.granted) {
+      setError('Open Dock needs the microphone. Allow it in Settings, under Permissions.');
+      return;
+    }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    mode.current = 'once';
+    setHearing(true);
+    if (listening.current) ExpoSpeechRecognitionModule.abort();
+    else begin();
+  }, [begin]);
 
   // The armed state wears off by itself.
   useEffect(() => {
@@ -169,14 +223,27 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     const where = status === 'connected' ? `Connected to ${deviceName}` : `Reconnecting to ${deviceName}…`;
     startKeepAlive('Open Dock', enabled ? `${where}. Say “${phrase}” and a command.` : where, enabled);
   }, [hasConnection, deviceName, enabled, phrase, status]);
-  useEffect(() => () => stopKeepAlive(), []);
+
+  // On the last screen, Back would close the app (and its connection); send it behind other apps instead, like Home.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !hasConnection) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', moveToBack);
+    return () => subscription.remove();
+  }, [hasConnection]);
+
+  // Phone makers' battery savers stop background apps unless Open Dock is let off battery limits.
+  const [unrestricted, setUnrestricted] = useState(runsUnrestricted);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') setUnrestricted(runsUnrestricted()); });
+    return () => subscription.remove();
+  }, []);
 
   const setEnabled = useCallback(async (on: boolean) => {
     setError(null);
     if (on) {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
-        setError('Open Dock needs the microphone for hands-free.');
+        setError('Open Dock needs the microphone for hands-free. Allow it in Settings, under Permissions.');
         return;
       }
       if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
@@ -194,13 +261,9 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     void Storage.setItem(PHRASE_KEY, value);
   }, []);
 
-  const arm = useCallback(() => {
-    setArmedAt(Date.now());
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, []);
 
   return (
-    <HandsFreeContext.Provider value={{ enabled, phrase, armed: armedAt > 0, last, error, setEnabled, setPhrase, arm, report }}>
+    <HandsFreeContext.Provider value={{ enabled, phrase, armed: armedAt > 0, last, error, unrestricted, allowBackground: askToRunUnrestricted, openSettings: () => void Linking.openSettings(), setEnabled, setPhrase, listenOnce, hearing, report }}>
       {children}
     </HandsFreeContext.Provider>
   );
