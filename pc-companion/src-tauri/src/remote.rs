@@ -191,6 +191,46 @@ pub(super) fn screenshot() -> Result<PathBuf, String> {
     Err("Screenshots are not supported on this platform".into())
 }
 
+/// Starting with Windows: a value under the user's Run key launches this program with `--autostart`,
+/// which keeps the window hidden so Open Dock waits in the tray for the phone.
+#[cfg(windows)]
+const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+#[cfg(windows)]
+const RUN_VALUE: &str = "Open Dock";
+
+#[cfg(windows)]
+pub(super) fn set_autostart(on: bool) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|_| "Could not find the Open Dock program file".to_owned())?;
+    let launch = format!("\"{}\" --autostart", exe.display());
+    let mut command = Command::new("reg.exe");
+    quiet(&mut command);
+    if on {
+        command.args(["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", &launch, "/f"]);
+    } else {
+        command.args(["delete", RUN_KEY, "/v", RUN_VALUE, "/f"]);
+    }
+    let status = command.status().map_err(|_| "Could not change the startup setting".to_owned())?;
+    // Deleting a value that is already gone fails, and that is the state asked for.
+    if status.success() || !on { Ok(()) } else { Err("Windows did not save the startup setting".into()) }
+}
+
+#[cfg(windows)]
+pub(super) fn autostart_enabled() -> bool {
+    let mut command = Command::new("reg.exe");
+    quiet(&mut command);
+    command.args(["query", RUN_KEY, "/v", RUN_VALUE]).output().is_ok_and(|output| output.status.success())
+}
+
+#[cfg(not(windows))]
+pub(super) fn set_autostart(_on: bool) -> Result<(), String> {
+    Err("Starting with the computer is only available on Windows for now".into())
+}
+
+#[cfg(not(windows))]
+pub(super) fn autostart_enabled() -> bool {
+    false
+}
+
 /// A finger-drawn signature: strokes of `[x, y]` points on a 1600×600 canvas, 0,0 at the top left.
 pub(super) type Strokes = Vec<Vec<[f32; 2]>>;
 const SIGN_WIDTH: u32 = 1600;

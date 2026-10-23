@@ -1,6 +1,7 @@
 import appIcon from '../src-tauri/icons/128x128.png';
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { flushSync } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import {
   AppWindow,
@@ -181,6 +182,13 @@ function App() {
   const [adbProgress, setAdbProgress] = useState('');
   const [pairingError, setPairingError] = useState('');
   const [screen, setScreen] = useState<'overview' | 'deck' | 'settings'>('overview');
+  // Switching pages glides the sidebar's selected pill to its new item (a view transition), where the browser can.
+  const go = (next: typeof screen) => {
+    if (next === screen) return;
+    const start = (document as Document & { startViewTransition?: (update: () => void) => unknown }).startViewTransition;
+    if (!start || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setScreen(next); return; }
+    start.call(document, () => flushSync(() => setScreen(next)));
+  };
   const updater = useUpdater();
   const { checkNow } = updater;
   useEffect(() => {
@@ -394,7 +402,7 @@ function App() {
     : "";
 
   return (
-    <main className={`app-shell ${connection?.isMacos ? 'macos-native-sidebar' : ''}`}>
+    <main className={`app-shell ${connection?.isMacos ? 'macos-native-sidebar' : connection ? 'glass-window' : ''}`}>
       <aside className="sidebar" data-tauri-drag-region>
         <div className="brand" data-tauri-drag-region>
           <img className="brand-icon" src={appIcon} width={22} height={22} alt="" />
@@ -405,13 +413,13 @@ function App() {
 
         <div className="nav-heading">Workspace</div>
         <nav aria-label="Workspace">
-          <button className={`nav-item ${screen === 'overview' ? 'selected' : ''}`} title="Overview" aria-label="Overview" aria-current={screen === 'overview' ? 'page' : undefined} onClick={() => setScreen('overview')}>
+          <button className={`nav-item ${screen === 'overview' ? 'selected' : ''}`} title="Overview" aria-label="Overview" aria-current={screen === 'overview' ? 'page' : undefined} onClick={() => go('overview')}>
             <LayoutDashboard size={16} strokeWidth={1.8} /><span>Overview</span>
           </button>
-          <button className={`nav-item ${screen === 'deck' ? 'selected' : ''}`} title="Deck" aria-label="Deck" aria-current={screen === 'deck' ? 'page' : undefined} onClick={() => setScreen('deck')}>
+          <button className={`nav-item ${screen === 'deck' ? 'selected' : ''}`} title="Deck" aria-label="Deck" aria-current={screen === 'deck' ? 'page' : undefined} onClick={() => go('deck')}>
             <Layers size={16} strokeWidth={1.8} /><span>Deck</span>
           </button>
-          <button className={`nav-item ${screen === 'settings' ? 'selected' : ''}`} title="Settings" aria-label="Settings" aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => setScreen('settings')}>
+          <button className={`nav-item ${screen === 'settings' ? 'selected' : ''}`} title="Settings" aria-label="Settings" aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => go('settings')}>
             <Settings size={16} strokeWidth={1.8} /><span>Settings</span>
           </button>
         </nav>
@@ -430,7 +438,7 @@ function App() {
           </div>
         </header>
 
-        <div className={screen === 'deck' ? 'content deck-content' : 'content'}>
+        <div key={screen} className={screen === 'deck' ? 'content deck-content' : 'content'}>
           {legacyImports.length > 0 ? <section className="legacy-imports" aria-label="Phone deck import">
             <div className="legacy-import-copy"><strong>{legacyImports.some((item) => item.ready) ? 'Phone deck ready to import' : 'Saved phone deck detected'}</strong><span>{legacyImports.map((item) => item.ready ? `${item.pages} pages · ${item.buttons} buttons ready as a new profile` : item.requested ? 'Transfer requested. Keep the phone connected.' : 'The saved buttons stay on the phone until you request a transfer.').join('  |  ')}</span></div>
             <div className="legacy-import-actions">{legacyImports.map((item) => <button key={item.sourceId} className="secondary-button" onClick={() => void (item.ready ? importPhoneDeck(item.sourceId) : requestPhoneDeck(item.sourceId))}>{item.ready ? 'Import phone deck' : item.requested ? 'Request again' : 'Transfer phone deck'}</button>)}</div>
@@ -440,6 +448,7 @@ function App() {
           <div className="page-heading"><div><h1>Settings</h1><p>Manage updates, device navigation and Open Dock plugins.</p></div></div>
           <AppearanceSetting />
           <UpdatesSetting updater={updater} />
+          <StartWithWindowsSetting />
           <section className="device-navigation-setting">
             <div className="device-navigation-copy"><h2>Independent device navigation</h2><p>Let each connected phone use its own profile and page. Turn this off to mirror navigation across all phones.</p></div>
             <button className={`setting-switch ${independentNavigation ? 'enabled' : ''}`} type="button" role="switch" aria-checked={independentNavigation} aria-label="Independent device navigation" disabled={navigationSettingBusy} onClick={() => void saveIndependentNavigation(!independentNavigation)}><span /></button>
@@ -2332,3 +2341,27 @@ function parseShortcut(value: string): string[] | null {
 }
 
 export default App;
+
+/** Starts Open Dock when you sign in to Windows, waiting in the tray so the phone connects without opening anything. */
+function StartWithWindowsSetting() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { void invoke<boolean>('get_autostart').then(setEnabled).catch(() => setEnabled(false)); }, []);
+  const toggle = async () => {
+    const next = !enabled;
+    setError('');
+    try {
+      await invoke('set_autostart', { enabled: next });
+      setEnabled(next);
+    } catch (failure) {
+      setError(String(failure));
+    }
+  };
+  return (
+    <section className="device-navigation-setting">
+      <div className="device-navigation-copy"><h2>Start with Windows</h2><p>Open Dock starts in the tray when you sign in, so your phone connects as soon as the PC is on.</p></div>
+      <button className={`setting-switch ${enabled ? 'enabled' : ''}`} type="button" role="switch" aria-checked={Boolean(enabled)} aria-label="Start with Windows" disabled={enabled === null} onClick={() => void toggle()}><span /></button>
+      {error ? <p className="setting-error" role="alert">{error}</p> : null}
+    </section>
+  );
+}

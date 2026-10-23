@@ -1,6 +1,6 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
-import { BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -31,6 +31,15 @@ const shortcutIcons: Record<string, typeof Command> = {
   headphones: Headphones,
   'app-window': AppWindow,
 };
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** A deck key that sinks under the finger and springs back, animated on the native thread. */
+function SpringKey({ style, ...props }: Omit<ComponentProps<typeof Pressable>, 'style'> & { style: StyleProp<ViewStyle> }) {
+  const [scale] = useState(() => new Animated.Value(1));
+  const to = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 7 }).start();
+  return <AnimatedPressable {...props} style={[style, { transform: [{ scale }] }]} onPressIn={() => to(0.93)} onPressOut={() => to(1)} />;
+}
 
 function controlIcon(button: DeckButton, playback: PlaybackState) {
   const { action } = button;
@@ -553,11 +562,11 @@ export default function DeckScreen() {
       const dynamicPlay = button.icon === 'auto' && button.action.type === 'media' && button.action.command === 'play_pause';
       const label = dynamicPlay ? (isPlaying ? 'Pause' : 'Play') : button.label;
       const Icon = controlIcon(button, playbackState);
-      return <Pressable key={button.id} style={({ pressed }) => [big ? styles.immersiveKey : styles.key, frame(placement), pressed && styles.keyPressed, !connected && !isFolder && styles.keyDisabled]} onPress={() => press(button, label)} onLongPress={isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
+      return <SpringKey key={button.id} style={[big ? styles.immersiveKey : styles.key, frame(placement), !connected && !isFolder && styles.keyDisabled]} onPress={() => press(button, label)} onLongPress={isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={inkIcon(button.iconSvg, scheme)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={colors.text} strokeWidth={1.7} />}
         {big ? null : <Text style={styles.keyLabel} numberOfLines={2}>{label}</Text>}
-      </Pressable>;
+      </SpringKey>;
     });
   };
 
@@ -656,7 +665,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   immersiveBackdrop: { ...StyleSheet.absoluteFill },
   immersiveGrid: { ...StyleSheet.absoluteFill },
   immersiveDeckCanvas: { position: 'absolute', left: 0, right: 0 },
-  immersiveKey: { borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, alignItems: 'center', justifyContent: 'center' },
+  immersiveKey: { borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, alignItems: 'center', justifyContent: 'center' },
   clockWidgetKey: { padding: 4, alignItems: 'center', justifyContent: 'center' },
   pluginWidgetContent: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 3, overflow: 'hidden' },
   immersivePluginWidgetContent: { gap: 7, paddingHorizontal: 8 },
@@ -723,11 +732,11 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   managePagesText: { color: colors.muted, fontSize: 12 },
   pageTabsScroll: { flexGrow: 0, flexShrink: 0 },
   pageTabs: { flexDirection: 'row', gap: 6, paddingBottom: 16 },
-  pageTab: { minHeight: 29, maxWidth: 180, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 5, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
+  pageTab: { minHeight: 29, maxWidth: 180, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 15, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass },
   pageTabActive: { backgroundColor: colors.pressed, borderColor: colors.borderActive },
   pageTabText: { color: colors.muted, fontSize: 13, fontWeight: '500' },
   pageTabTextActive: { color: colors.text },
-  connectBanner: { minHeight: 57, borderRadius: 7, paddingHorizontal: 12, marginBottom: 20, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  connectBanner: { minHeight: 57, borderRadius: 16, paddingHorizontal: 12, marginBottom: 20, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, flexDirection: 'row', alignItems: 'center', gap: 11 },
   bannerCopy: { flex: 1 },
   bannerTitle: { color: colors.text, fontSize: 14, fontWeight: '600' },
   bannerSub: { color: colors.muted, fontSize: 12, marginTop: 4 },
@@ -736,11 +745,10 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 4, paddingRight: 8 },
   backText: { flexShrink: 1, maxWidth: 140, color: colors.muted, fontSize: 14 },
   grid: { position: 'relative' },
-  key: { minHeight: 100, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, padding: 11, justifyContent: 'space-between' },
+  key: { minHeight: 100, borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, padding: 11, justifyContent: 'space-between' },
   emptyKey: { borderStyle: 'dashed', backgroundColor: 'transparent', opacity: 0.45 },
   appIcon: { width: 23, height: 23 },
   keyDisabled: { opacity: 0.52 },
-  keyPressed: { backgroundColor: colors.pressed, borderColor: colors.borderActive },
   keyLabel: { color: colors.text, fontSize: 13, fontWeight: '500', lineHeight: 14 },
   shortcutHint: { color: colors.faint, fontSize: 11, marginTop: -4 },
   addKey: { alignItems: 'flex-start', justifyContent: 'space-between', borderStyle: 'dashed', backgroundColor: 'transparent' },

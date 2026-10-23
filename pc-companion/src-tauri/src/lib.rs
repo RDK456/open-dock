@@ -2778,6 +2778,16 @@ if ($smallHandle -ne [IntPtr]::Zero) { $null = [OpenDockIconExtractor]::DestroyI
 }
 
 #[tauri::command]
+fn get_autostart() -> bool {
+    remote::autostart_enabled()
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool) -> Result<(), String> {
+    remote::set_autostart(enabled)
+}
+
+#[tauri::command]
 fn enable_android_usb(state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
     ensure_android_usb_reverse()?;
     let config_dir = state
@@ -4624,6 +4634,8 @@ pub fn run() {
             request_legacy_deck_import,
             import_legacy_deck,
             enable_android_usb,
+            get_autostart,
+            set_autostart,
             retry_android_usb,
             set_appearance,
             adb_status,
@@ -4680,6 +4692,17 @@ pub fn run() {
             let monitor_state = state.clone();
             thread::spawn(move || run_usb_monitor(monitor_state));
 
+            // Start with Windows unless the user turned it off: the first run turns it on, once.
+            let autostart_marker = config_dir.join("autostart-set");
+            if !autostart_marker.exists() && remote::set_autostart(true).is_ok() {
+                let _ = fs::write(&autostart_marker, "true");
+            }
+            if std::env::args().any(|arg| arg == "--autostart") {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+
             let profile_monitor = state.clone();
             thread::spawn(move || loop {
                 if let Some(foreground) = foreground_app() {
@@ -4702,7 +4725,7 @@ pub fn run() {
             }
 
             tauri::async_runtime::spawn(serve(state));
-            let open = MenuItem::with_id(app, "open", "Open Open Dock", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Show Open Dock", true, None::<&str>)?;
             let updates = MenuItem::with_id(app, "updates", "Check for Updates…", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Open Dock", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &updates, &quit])?;

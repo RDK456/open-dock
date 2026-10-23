@@ -8,6 +8,7 @@ import { AppState } from 'react-native';
 import type { WidgetSurface } from './now-playing-layout';
 import { clearPcStats, receivePcStats, setPcStatsSender } from './pc-stats-feed';
 import { countMessage } from './perf-overlay';
+import { findPcs } from './discovery';
 
 export type PcConnection = { host: string; port: number; token: string; deviceName?: string; transport?: 'wifi' | 'usb' };
 export type DeckMediaCommand = 'play_pause' | 'next_track' | 'previous_track' | 'volume_up' | 'volume_down' | 'mute';
@@ -297,13 +298,17 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
 
     const retry = () => {
       if (!shouldReconnectRef.current) return;
-      if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
-        shouldReconnectRef.current = false;
-        setStatus('disconnected');
-        return;
+      const attempt = reconnectAttemptRef.current;
+      // Keep trying in the background so the deck comes back by itself when the PC does; show it as offline meanwhile.
+      setStatus(attempt >= MAX_RECONNECT_ATTEMPTS ? 'disconnected' : 'connecting');
+      // A PC that is not answering may have a new address on this Wi-Fi: look for it by name and follow it there.
+      if (attempt >= 1 && next.transport !== 'usb' && next.deviceName) {
+        void findPcs().then((pcs) => {
+          const moved = pcs.find((pc) => pc.name === next.deviceName && (pc.host !== next.host || pc.port !== next.port));
+          if (moved && shouldReconnectRef.current && reconnectAttemptRef.current === attempt + 1) openConnectionRef.current?.({ ...next, host: moved.host, port: moved.port }, false);
+        }).catch(() => undefined);
       }
-      setStatus('connecting');
-      const delay = 1000 * 2 ** reconnectAttemptRef.current;
+      const delay = Math.min(30_000, 1000 * 2 ** attempt);
       reconnectAttemptRef.current += 1;
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null;

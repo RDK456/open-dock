@@ -754,3 +754,29 @@ button:focus-visible { outline-color: var(--accent); }
   .dock-dots { margin: 2px 0 6px; gap: 3px; justify-content: center; }
   .dock-dots i { width: 6px; height: 6px; }
 }
+
+/* Glass and motion: Windows paints Mica behind the transparent window, the rail and panel let it through.
+   Only transform and opacity animate, so motion stays on the compositor at the display's refresh rate. */
+html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { background: transparent; }
+.glass-window .sidebar { background: color-mix(in srgb, var(--rail) 78%, transparent); backdrop-filter: blur(24px) saturate(1.4); }
+.glass-window .main-panel { background: color-mix(in srgb, var(--background) 90%, transparent); min-height: 100vh; }
+.sidebar .nav-item.selected { view-transition-name: nav-pill; }
+::view-transition-group(nav-pill) { animation-duration: 260ms; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 180ms; }
+
+.content { animation: content-rise 320ms cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes content-rise { from { opacity: 0; transform: translateY(8px); } }
+
+.nav-item, .primary-button, .secondary-button, .icon-button, .panel-tile, .deck-button {
+  transition: transform 160ms cubic-bezier(.2, .8, .2, 1), background-color 160ms, border-color 160ms, color 160ms, box-shadow 160ms;
+}
+.nav-item:hover:not(.selected) { transform: translateX(3px); }
+.primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled), .panel-tile:hover { transform: translateY(-1px); }
+.deck-button:hover { transform: translateY(-2px); border-color: var(--accent); }
+.nav-item:active, .primary-button:active:not(:disabled), .secondary-button:active:not(:disabled), .icon-button:active, .deck-button:active { transform: scale(.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  .content { animation: none; }
+  .nav-item, .primary-button, .secondary-button, .icon-button, .panel-tile, .deck-button { transition: none; transform: none !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
