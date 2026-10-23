@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ComponentPro
 import { useIsFocused, useRouter } from 'expo-router';
 import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
+import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -14,6 +14,7 @@ import { WebWidgetLayer, type WebWidget } from '../../web-widgets';
 import { countRender, PerfOverlay } from '../../perf-overlay';
 import { useDeckScreenPower } from '../../screen-power';
 import { Wallpaper } from '../../wallpaper';
+import { ButtonEditor, type EditTarget } from '../../button-editor';
 import { buttonPlacement, surfaceOccupancy, type SurfaceItem } from '../../deck-layout';
 import { useStyles, useTheme, type Colors } from '../../theme';
 import { inkIcon } from '../../theme-colors';
@@ -349,6 +350,8 @@ export default function DeckScreen() {
   const { connection, status, playbackState, actionError, deckConfig, independentNavigation, selectedProfileId, selectedPageId, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectPage, selectProfile, reportWidgetSurface } = usePcConnection();
   const [feedback, setFeedback] = useState('');
   const [immersive, setImmersive] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [showImmersiveTools, setShowImmersiveTools] = useState(false);
   const [immersiveSize, setImmersiveSize] = useState({ width: 0, height: 0 });
   // The folder open on each page, by `profile:page`. Folders open and close on this phone only.
@@ -381,7 +384,7 @@ export default function DeckScreen() {
       try {
         await ScreenOrientation.lockAsync(immersive
           ? ScreenOrientation.OrientationLock.LANDSCAPE
-          : ScreenOrientation.OrientationLock.PORTRAIT_UP);
+          : ScreenOrientation.OrientationLock.DEFAULT);
       } catch {
         if (alive && immersive) {
           setImmersive(false);
@@ -423,7 +426,7 @@ export default function DeckScreen() {
 
   useEffect(() => () => {
     if (immersiveToolsTimer.current) clearTimeout(immersiveToolsTimer.current);
-    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
   }, []);
 
   const revealImmersiveTools = () => {
@@ -549,7 +552,9 @@ export default function DeckScreen() {
         const emptyFrame = cellFrame(row, column, 1, 1, cellWidth, cellHeight, gap, inset);
         return big
           ? <Pressable key={`empty-${index}`} onPress={revealImmersiveTools} style={[styles.immersiveEmptyKey, emptyFrame]} accessibilityLabel="Empty deck slot. Tap to show deck controls" />
-          : <View key={`empty-${index}`} style={[styles.key, styles.emptyKey, emptyFrame]} />;
+          : editing && activePage
+            ? <Pressable key={`empty-${index}`} style={[styles.key, styles.emptyKey, styles.addCell, emptyFrame]} onPress={() => setEditTarget({ pageId: activePage.id, folderId: folder?.id, placement: { row, column, rowSpan: 1, columnSpan: 1 } })} accessibilityRole="button" accessibilityLabel="Add a button here"><Plus size={20} color={colors.muted} /></Pressable>
+            : <View key={`empty-${index}`} style={[styles.key, styles.emptyKey, emptyFrame]} />;
       }
       if (item.type === 'widget') {
         const placement = item.widget.placement;
@@ -564,7 +569,7 @@ export default function DeckScreen() {
       const dynamicPlay = button.icon === 'auto' && button.action.type === 'media' && button.action.command === 'play_pause';
       const label = dynamicPlay ? (isPlaying ? 'Pause' : 'Play') : button.label;
       const Icon = controlIcon(button, playbackState);
-      return <SpringKey key={button.id} style={[big ? styles.immersiveKey : styles.key, frame(placement), !connected && !isFolder && styles.keyDisabled]} onPress={() => press(button, label)} onLongPress={isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
+      return <SpringKey key={button.id} style={[big ? styles.immersiveKey : styles.key, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={inkIcon(button.iconSvg, scheme)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={colors.text} strokeWidth={1.7} />}
         {big ? null : <Text style={styles.keyLabel} numberOfLines={2}>{label}</Text>}
@@ -612,6 +617,7 @@ export default function DeckScreen() {
         <View style={styles.header}>
           <View style={styles.brand}><Image source={appIcon} style={styles.brandIcon} accessibilityIgnoresInvertColors /><Text style={styles.brandName}>Open Dock</Text></View>
           <View style={styles.headerActions}>
+          {connected && activePage ? <Pressable style={[styles.immersiveToggle, editing && styles.editToggleOn]} onPress={() => setEditing((on) => !on)} accessibilityRole="button" accessibilityLabel={editing ? 'Done editing' : 'Edit deck'}>{editing ? <Check size={17} color={colors.onAccent} /> : <Pencil size={16} color={colors.muted} />}</Pressable> : null}
           <Pressable style={styles.immersiveToggle} onPress={() => void enterImmersive()} accessibilityRole="button" accessibilityLabel="Enter immersive landscape deck"><Maximize2 size={17} color={colors.muted} /></Pressable>
           <Pressable style={styles.connectionPill} onPress={() => router.push('/connect')} accessibilityRole="button" accessibilityLabel={`PC ${connected ? 'connected' : 'disconnected'}. Open connection settings`}>
             <View style={[styles.dot, connected ? styles.dotOnline : styles.dotOffline]} />
@@ -640,7 +646,8 @@ export default function DeckScreen() {
             <Pressable style={styles.backButton} onPress={closeFolder} accessibilityRole="button" accessibilityLabel={`Back to ${activePage?.name}`}><ChevronLeft size={16} color={colors.muted} /><Text style={styles.backText} numberOfLines={1}>{activePage?.name}</Text></Pressable>
             <Text style={styles.sectionTitle} numberOfLines={1}>{folder.name}</Text>
           </View> : null}
-          {hasItems ? <View style={[styles.grid, { height: rows * 100 + Math.max(0, rows - 1) * regularGap }]} onLayout={(event) => {
+          {editing ? <Text style={styles.editHint}>Tap a button to change it, or + to add one. Changes save to your PC.</Text> : null}
+          {hasItems || editing ? <View style={[styles.grid, { height: rows * 100 + Math.max(0, rows - 1) * regularGap }]} onLayout={(event) => {
             const width = event.nativeEvent.layout.width;
             setRegularGridWidth((current) => Math.abs(current - width) < 0.5 ? current : width);
           }} {...pageSwipeResponder.panHandlers}>
@@ -654,6 +661,7 @@ export default function DeckScreen() {
         </View>
       </ScrollView>
       <MediaToastView toast={mediaSource.toast} bottom={bottomClearance} onSwitch={(player) => mediaSource.choose(player.id, player.name)} onDismiss={mediaSource.dismissToast} />
+      {editTarget ? <ButtonEditor key={editTarget.button?.id ?? `${editTarget.placement.row}-${editTarget.placement.column}`} target={editTarget} onClose={() => setEditTarget(null)} /> : null}
       <PlayerSheet visible={mediaSource.sheetOpen} landscape={false} state={mediaSource.players} onChoose={mediaSource.choose} onClose={mediaSource.closeSheet} />
       <PerfOverlay />
       {power.overlay}
@@ -751,6 +759,10 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   emptyKey: { borderStyle: 'dashed', backgroundColor: 'transparent', opacity: 0.45 },
   appIcon: { width: 23, height: 23 },
   keyDisabled: { opacity: 0.52 },
+  editingKey: { borderStyle: 'dashed', borderColor: colors.accent },
+  addCell: { alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderColor: colors.borderStrong },
+  editToggleOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  editHint: { color: colors.muted, fontSize: 13, marginBottom: 10 },
   keyLabel: { color: colors.text, fontSize: 13, fontWeight: '500', lineHeight: 14 },
   shortcutHint: { color: colors.faint, fontSize: 11, marginTop: -4 },
   addKey: { alignItems: 'flex-start', justifyContent: 'space-between', borderStyle: 'dashed', backgroundColor: 'transparent' },

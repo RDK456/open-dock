@@ -60,6 +60,8 @@ type ConnectionContextValue = {
   sendPointer: (event: PointerEvent) => boolean;
   /** Pastes a drawn signature on the PC. Strokes are points on a 1600×600 canvas. Resolves to an error, or null when pasted. */
   sendSignature: (strokes: [number, number][][]) => Promise<string | null>;
+  /** Adds or replaces `button` and/or removes `removeId` on a page (or a folder in it). Resolves to an error, or null when saved. */
+  editButton: (edit: { pageId: string; folderId?: string; button?: DeckButton; removeId?: string }) => Promise<string | null>;
 };
 
 const STORAGE_KEY = 'opendock.pc-connection';
@@ -213,6 +215,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   const widgetSurfaceRef = useRef<WidgetSurface | null>(null);
   const pendingRequestsRef = useRef(new Set<string>());
   const signatureReplyRef = useRef<((error: string | null) => void) | null>(null);
+  const editRepliesRef = useRef(new Map<string, (error: string | null) => void>());
   const openConnectionRef = useRef<((next: PcConnection, retrying: boolean) => void) | null>(null);
   // Resolves once the saved pairings are loaded. A pairing link can open the app before that, and `connect` must not run first.
   const [restored] = useState(() => {
@@ -426,6 +429,10 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           if (message.type === 'signature_result') {
             signatureReplyRef.current?.(message.ok ? null : typeof message.error === 'string' ? message.error : 'Could not paste the signature');
             signatureReplyRef.current = null;
+          }
+          if (message.type === 'edit_result' && message.requestId) {
+            const error = message.ok ? null : message.error === 'stale_revision' ? 'The deck changed on the PC. Try again.' : typeof message.error === 'string' ? message.error : 'The PC could not save that button';
+            editRepliesRef.current.get(message.requestId)?.(error);
           }
           if (message.type === 'action_result' && message.requestId && pendingRequestsRef.current.delete(message.requestId)) {
             const reason = message.reason;
@@ -685,8 +692,24 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     }
   }), [status]);
 
+  const editButton = useCallback((edit: { pageId: string; folderId?: string; button?: DeckButton; removeId?: string }) => new Promise<string | null>((resolve) => {
+    const socket = socketRef.current;
+    if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN || !deckConfig) return resolve('Connect to your PC first');
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const replies = editRepliesRef.current;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const reply = (error: string | null) => { clearTimeout(timer); replies.delete(requestId); resolve(error); };
+    timer = setTimeout(() => reply('The PC did not answer'), 10_000);
+    replies.set(requestId, reply);
+    try {
+      socket.send(JSON.stringify({ type: 'edit_button', requestId, revision: deckConfig.revision, ...edit }));
+    } catch {
+      reply('Could not reach the PC');
+    }
+  }), [deckConfig, status]);
+
   return (
-    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature }}>
+    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton }}>
       {children}
     </ConnectionContext.Provider>
   );

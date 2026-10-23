@@ -1934,6 +1934,20 @@ enum ClientMessage {
     Signature {
         strokes: remote::Strokes,
     },
+    /// Adds or replaces `button` (matched by id) and/or removes `removeId` on a page or one of its folders.
+    EditButton {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        revision: u64,
+        #[serde(rename = "pageId")]
+        page_id: String,
+        #[serde(default, rename = "folderId")]
+        folder_id: Option<String>,
+        #[serde(default)]
+        button: Option<DeckButton>,
+        #[serde(default, rename = "removeId")]
+        remove_id: Option<String>,
+    },
 }
 
 enum ClientAction {
@@ -3771,6 +3785,27 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
             }
+            ClientMessage::EditButton {
+                request_id,
+                revision,
+                page_id,
+                folder_id,
+                button,
+                remove_id,
+            } if authenticated => {
+                let result = if valid_id(&request_id) {
+                    edit_button(&state, revision, &page_id, folder_id.as_deref(), button, remove_id.as_deref())
+                } else {
+                    Err("invalid_request".into())
+                };
+                let reply = match result {
+                    Ok(()) => serde_json::json!({ "type": "edit_result", "requestId": request_id, "ok": true }),
+                    Err(error) => serde_json::json!({ "type": "edit_result", "requestId": request_id, "ok": false, "error": error }),
+                };
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
             ClientMessage::PcStatsSubscribe { needs } if authenticated => {
                 pc_stats_needs = pc_stats::Needs::from_names(&needs[..needs.len().min(16)]);
                 state.pc_stats_demand.set(connection_id, pc_stats_needs, None);
@@ -3897,6 +3932,103 @@ fn update_selection(
         .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     save_deck_config_file(&config_dir.join("deck-config.json"), &config)?;
     let next = config.clone();
+    drop(config);
+    let _ = state.deck_updates.send(next);
+    Ok(())
+}
+
+/// Actions a phone may put on a button. They trigger nothing the phone's touchpad and keyboard could not
+/// already do; scripts, plugins, launches and folders stay choices made on the PC.
+fn phone_editable(action: &DeckAction) -> bool {
+    matches!(
+        action,
+        DeckAction::Media { .. }
+            | DeckAction::Hotkey { .. }
+            | DeckAction::TypeText { .. }
+            | DeckAction::OpenUrl { .. }
+            | DeckAction::System { .. }
+            | DeckAction::SelectPage { .. }
+            | DeckAction::SelectProfile { .. }
+    )
+}
+
+fn apply_button_edit(
+    config: &mut DeckConfig,
+    page_id: &str,
+    folder_id: Option<&str>,
+    button: Option<DeckButton>,
+    remove_id: Option<&str>,
+) -> Result<(), String> {
+    let page = config
+        .profiles
+        .iter_mut()
+        .flat_map(|profile| profile.pages.iter_mut())
+        .find(|page| page.id == page_id)
+        .ok_or_else(|| "unknown_page".to_owned())?;
+    let buttons = match folder_id {
+        Some(id) => {
+            &mut page
+                .folders
+                .iter_mut()
+                .find(|folder| folder.id == id)
+                .ok_or_else(|| "unknown_folder".to_owned())?
+                .buttons
+        }
+        None => &mut page.buttons,
+    };
+    if let Some(id) = remove_id {
+        let index = buttons
+            .iter()
+            .position(|item| item.id == id)
+            .ok_or_else(|| "unknown_button".to_owned())?;
+        if matches!(buttons[index].action, DeckAction::OpenFolder { .. }) {
+            return Err("Remove folders in Open Dock on the PC".into());
+        }
+        buttons.remove(index);
+    }
+    if let Some(button) = button {
+        if !phone_editable(&button.action) || button.app_icon_data.is_some() {
+            return Err("Set up this kind of button in Open Dock on the PC".into());
+        }
+        match buttons.iter().position(|item| item.id == button.id) {
+            Some(index) if !phone_editable(&buttons[index].action) => {
+                return Err("Edit this button in Open Dock on the PC".into());
+            }
+            Some(index) => buttons[index] = button,
+            None => buttons.push(button),
+        }
+    }
+    Ok(())
+}
+
+fn edit_button(
+    state: &AppState,
+    expected_revision: u64,
+    page_id: &str,
+    folder_id: Option<&str>,
+    button: Option<DeckButton>,
+    remove_id: Option<&str>,
+) -> Result<(), String> {
+    let mut config = state
+        .deck_config
+        .write()
+        .map_err(|_| "Deck config is unavailable".to_owned())?;
+    if config.revision != expected_revision {
+        return Err("stale_revision".into());
+    }
+    let mut next = config.clone();
+    apply_button_edit(&mut next, page_id, folder_id, button, remove_id)?;
+    normalize_deck_layout(&mut next);
+    validate_deck_config(&next)?;
+    next.revision = config.revision.saturating_add(1);
+    let config_dir = state
+        .config_dir
+        .read()
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
+        .clone()
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
+    save_deck_config_file(&config_dir.join("deck-config.json"), &next)?;
+    *config = next.clone();
     drop(config);
     let _ = state.deck_updates.send(next);
     Ok(())
@@ -4892,6 +5024,30 @@ mod playback_timing {
 mod deck_layout_tests {
     use super::*;
     use serde_json::{json, Value};
+
+    #[test]
+    fn phones_edit_only_safe_buttons() {
+        let script = json!({ "id": "s", "label": "s", "icon": "auto", "placement": { "row": 0, "column": 1, "rowSpan": 1, "columnSpan": 1 }, "action": { "type": "run_script", "path": "C:/a.ps1", "allowOnPc": true } });
+        let mut config: DeckConfig = serde_json::from_value(json!({
+            "schemaVersion": 2, "revision": 1, "activeProfileId": "p",
+            "profiles": [{ "id": "p", "name": "P", "activePageId": "g", "pages": [{ "id": "g", "name": "G", "rows": 2, "columns": 3, "buttons": [button("a", 0, 0), script] }] }]
+        }))
+        .unwrap();
+        let parse = |value: Value| Some(serde_json::from_value::<DeckButton>(value).unwrap());
+        let mut hotkey = button("b", 1, 0);
+        hotkey["action"] = json!({ "type": "hotkey", "keys": ["CTRL", "C"] });
+        assert!(apply_button_edit(&mut config, "g", None, parse(hotkey), None).is_ok());
+        assert!(apply_button_edit(&mut config, "g", None, None, Some("a")).is_ok());
+        let mut sneaky = button("c", 1, 1);
+        sneaky["action"] = json!({ "type": "run_script", "path": "C:/x.ps1", "allowOnPc": true });
+        assert!(apply_button_edit(&mut config, "g", None, parse(sneaky), None).is_err());
+        let mut rewrite = button("s", 0, 1);
+        rewrite["action"] = json!({ "type": "media", "command": "mute" });
+        assert!(apply_button_edit(&mut config, "g", None, parse(rewrite), None).is_err());
+        let ids: Vec<_> = config.profiles[0].pages[0].buttons.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["s", "b"]);
+        assert!(apply_button_edit(&mut config, "missing", None, None, Some("b")).is_err());
+    }
 
     #[test]
     fn text_url_and_delay_actions_are_checked() {

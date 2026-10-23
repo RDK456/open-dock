@@ -71,6 +71,8 @@
   --dot-4: #ecf0f1;
   --dot-5: #e74c3c;
   --dot-off: #3a4457;
+  --shadow: #00000066;
+  --hairline: #ffffff14;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -131,6 +133,8 @@
   --dot-4: #ffffff;
   --dot-5: #e74c3c;
   --dot-off: #c9a21f;
+  --shadow: #1a223018;
+  --hairline: #ffffffb3;
 }
 
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--z700) transparent; }
@@ -779,4 +783,36 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
   .content { animation: none; }
   .nav-item, .primary-button, .secondary-button, .icon-button, .panel-tile, .deck-button { transition: none; transform: none !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Open Dock v2: one bold element per screen (the pairing PIN), a floating glass rail, quieter cards.
+   Radii are concentric: a card is 18px, things inset 8px inside it are 10px. */
+.topbar { height: 44px; border-bottom: 0; }
+.page-heading h1 { text-wrap: balance; }
+.page-heading p, .pair-note, .section-title-row p { text-wrap: pretty; }
+
+.glass-window.app-shell { grid-template-columns: 248px minmax(0, 1fr); }
+.glass-window .sidebar { inset: 10px auto 10px 10px; border: 1px solid var(--hairline); border-radius: 20px; box-shadow: 0 10px 30px var(--shadow); }
+.sidebar .nav-item { border-radius: 12px; }
+
+.pair-card, .status-card, .content > section.device-navigation-setting, .open-dock-plugin-settings, .deck-canvas-wrap, .button-properties {
+  border-color: var(--hairline); border-radius: 18px; box-shadow: 0 1px 2px var(--shadow), 0 12px 28px var(--shadow);
+}
+.connection-details { margin-top: 0; border: 0; border-radius: 12px; background: var(--z950); }
+.connection-details code { font-size: 12px; }
+.qr-column { border-radius: 14px; border-color: var(--hairline); }
+.qr-frame { border-radius: 8px; }
+.usb-setup { border-radius: 12px; border-color: var(--hairline); }
+.section-icon { border-radius: 10px; }
+.secondary-button, .primary-button { border-radius: 10px; }
+.transport-tabs { border-radius: 10px; }
+.transport-tab { border-radius: 7px; }
+.ready-badge { border-radius: 999px; padding: 0 12px; }
+
+.pin-hero { margin: 4px 0 18px; display: grid; gap: 6px; }
+.pin-hero span { color: var(--muted); font-size: 13px; }
+.pin-hero strong { color: var(--foreground); font: 700 46px/1 "Bricolage Grotesque", "Segoe UI", sans-serif; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1250px) {
+  .glass-window.app-shell { grid-template-columns: 84px minmax(0, 1fr); }
 }

@@ -433,7 +433,7 @@ function App() {
 
       <section className="main-panel">
         <header className="topbar" data-tauri-drag-region>
-          <span>{screen === 'overview' ? 'Overview' : screen === 'deck' ? 'Deck' : 'Settings'}</span>
+          <span />
           <div className="network-badge">
             <Wifi size={14} strokeWidth={1.8} />
             {transport === 'usb' ? 'Android USB' : 'Local network'}
@@ -460,8 +460,8 @@ function App() {
           </> : <>
           <div className="page-heading">
             <div>
-              <h1>Overview</h1>
-              <p>Connect your phone and control this computer.</p>
+              <h1>{(connection?.activeDevices ?? 0) > 0 ? 'Your phone is connected' : 'Pair your phone'}</h1>
+              <p>{(connection?.activeDevices ?? 0) > 0 ? 'Use the Deck and Touch tabs on your phone to control this PC.' : 'Scan the code with the Open Dock app, or enter the PIN in Find my PC.'}</p>
             </div>
             <div className={`ready-badge ${online ? "ready" : ""}`}>
               <span className="status-dot" />
@@ -469,15 +469,8 @@ function App() {
             </div>
           </div>
 
-          <section className="pair-card" aria-labelledby="pair-title">
+          <section className="pair-card" aria-label="Pair a phone">
             <div className="pair-copy">
-              <div className="section-title-row">
-                <div className="section-icon"><Smartphone size={17} /></div>
-                <div>
-                  <h2 id="pair-title">Pair a phone</h2>
-                  <p>Scan this code from the Open Dock app on your phone.</p>
-                </div>
-              </div>
 
               <div className="connection-details">
                 <div>
@@ -497,10 +490,10 @@ function App() {
                     Key included in QR code
                   </span>
                 </div>
-                <div>
-                  <span>Pairing PIN</span>
-                  <code className="pairing-pin" aria-label="Pairing PIN for Find my PC">{connection?.pin ? `${connection.pin.slice(0, 3)} ${connection.pin.slice(3)}` : '——'}</code>
-                </div>
+              </div>
+              <div className="pin-hero">
+                <span>Pairing PIN</span>
+                <strong aria-label="Pairing PIN for Find my PC">{connection?.pin ? `${connection.pin.slice(0, 3)} ${connection.pin.slice(3)}` : '——— ———'}</strong>
               </div>
 
               <button
