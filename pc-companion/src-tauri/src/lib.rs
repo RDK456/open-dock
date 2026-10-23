@@ -3777,7 +3777,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 }
             }
             ClientMessage::VoiceCommand { request_id, text } if authenticated => {
-                let result = if valid_id(&request_id) && text.len() <= 500 { run_voice(&text).await } else { Err("That was too long".to_owned()) };
+                let result = if valid_id(&request_id) && text.len() <= 500 { run_voice(&text, &state, state.independent_navigation.load(Ordering::Relaxed), &mut selected_profile_id, &mut selected_page_id).await } else { Err("That was too long".to_owned()) };
                 if result.is_ok() {
                     state.media_refresh.notify_one();
                 }
@@ -4361,29 +4361,94 @@ fn run_action(action: ClientAction) -> Result<(), String> {
     Ok(())
 }
 
-/// Runs one spoken command and says what it did.
-async fn run_voice(text: &str) -> Result<String, String> {
-    let intent = voice::parse(text).ok_or_else(|| format!("Didn't understand \"{}\". Try \"open Spotify\" or \"volume up\".", text.trim()))?;
-    let (action, done) = match intent {
-        voice::Intent::Media(command) => (ClientAction::Media { command }, format!("{command:?}")),
-        voice::Intent::System(command) => {
-            tauri::async_runtime::spawn_blocking(move || remote::run_system_command(command)).await.map_err(|_| "Could not run that".to_owned())??;
-            return Ok(format!("{command:?}"));
+/// Runs a spoken sentence (one or more commands) and says what it did.
+async fn run_voice(
+    text: &str,
+    state: &AppState,
+    independent: bool,
+    selected_profile_id: &mut String,
+    selected_page_id: &mut String,
+) -> Result<String, String> {
+    let intents = voice::parse(text);
+    if intents.is_empty() {
+        return Err("Say a command, such as \"open Spotify\" or \"volume up\".".into());
+    }
+    let mut done = Vec::new();
+    for (index, intent) in intents.into_iter().enumerate() {
+        if index > 0 {
+            tokio::time::sleep(Duration::from_millis(if done.last().is_some_and(|d: &String| d.starts_with("Opened")) { 1200 } else { 150 })).await;
         }
-        voice::Intent::Type(words) => (ClientAction::TypeText { text: words.clone() }, format!("Typed \"{words}\"")),
-        voice::Intent::Search(query) => (ClientAction::OpenUrl { url: voice::search_url(&query) }, format!("Searched for \"{query}\"")),
-        voice::Intent::Url(url) => (ClientAction::OpenUrl { url: url.clone() }, format!("Opened {url}")),
-        voice::Intent::Open(name) => {
-            let apps = list_installed_apps().await?;
-            let path = voice::best_app(&name, apps.iter().map(|app| (app.name.as_str(), app.path.as_str())))
-                .ok_or_else(|| format!("No app called \"{name}\" on this PC"))?
-                .to_owned();
-            let label = apps.iter().find(|app| app.path == path).map_or(name, |app| app.name.clone());
-            (ClientAction::LaunchApp { app: path }, format!("Opened {label}"))
-        }
-    };
-    tauri::async_runtime::spawn_blocking(move || run_action(action)).await.map_err(|_| "Could not run that".to_owned())??;
-    Ok(done)
+        let (action, said) = match intent {
+            voice::Intent::Media(command) => (ClientAction::Media { command }, format!("{command:?}")),
+            voice::Intent::Keys(keys) if keys.len() == 1 => {
+                let key = keys[0].clone();
+                tauri::async_runtime::spawn_blocking(move || press_key(&key)).await.map_err(|_| "Could not run that".to_owned())??;
+                done.push(format!("Pressed {}", keys[0]));
+                continue;
+            }
+            voice::Intent::Keys(keys) => (ClientAction::Hotkey { keys: keys.clone() }, format!("Pressed {}", keys.join("+"))),
+            voice::Intent::System(command) => {
+                tauri::async_runtime::spawn_blocking(move || remote::run_system_command(command)).await.map_err(|_| "Could not run that".to_owned())??;
+                done.push(format!("{command:?}"));
+                continue;
+            }
+            voice::Intent::Volume(level) => {
+                system_media::set_system_volume(level)?;
+                done.push(format!("Volume {level}%"));
+                continue;
+            }
+            voice::Intent::Type(words) => (ClientAction::TypeText { text: words.clone() }, format!("Typed \"{words}\"")),
+            voice::Intent::Url(url) => (ClientAction::OpenUrl { url: url.clone() }, format!("Opened {url}")),
+            voice::Intent::Open(name) | voice::Intent::Unknown(name) => {
+                let loose = !text.trim().eq_ignore_ascii_case(&name);
+                // The user's own deck buttons come first, then installed apps, then well-known sites.
+                if let Some(button) = deck_button_named(state, &name, independent, selected_profile_id) {
+                    let revision = state.deck_config.read().map(|config| config.revision).unwrap_or_default();
+                    invoke_button(state, revision, &button.0, independent, selected_profile_id, selected_page_id)?;
+                    done.push(format!("Pressed {}", button.1));
+                    continue;
+                }
+                let apps = list_installed_apps().await?;
+                let wanted = voice::app_alias(&name);
+                if let Some(path) = voice::best_match(wanted, apps.iter().map(|app| (app.name.as_str(), app.path.as_str())), loose) {
+                    let label = apps.iter().find(|app| app.path == path).map_or(name.clone(), |app| app.name.clone());
+                    (ClientAction::LaunchApp { app: path.to_owned() }, format!("Opened {label}"))
+                } else if let Some(url) = voice::site(&name) {
+                    (ClientAction::OpenUrl { url: url.to_owned() }, format!("Opened {name}"))
+                } else if loose {
+                    return Err(format!("No app or site called \"{name}\"."));
+                } else {
+                    return Err(format!("Didn't catch that: \"{}\". Try \"open Spotify\", \"skip this song\" or \"close this tab\".", text.trim()));
+                }
+            }
+        };
+        tauri::async_runtime::spawn_blocking(move || run_action(action)).await.map_err(|_| "Could not run that".to_owned())??;
+        done.push(said);
+    }
+    done.dedup();
+    Ok(done.join(", then "))
+}
+
+/// The deck button on the phone's current profile whose label matches `name`: (id, label).
+fn deck_button_named(state: &AppState, name: &str, independent: bool, selected_profile_id: &str) -> Option<(String, String)> {
+    let config = state.deck_config.read().ok()?;
+    let profile_id = if independent { selected_profile_id } else { config.active_profile_id.as_str() };
+    let profile = config.profiles.iter().find(|profile| profile.id == profile_id)?;
+    let buttons: Vec<&DeckButton> = profile
+        .pages
+        .iter()
+        .flat_map(|page| page.buttons.iter().chain(page.folders.iter().flat_map(|folder| &folder.buttons)))
+        .filter(|button| !button.label.trim().is_empty())
+        .collect();
+    let id = voice::best_match(name, buttons.iter().map(|button| (button.label.trim(), button.id.as_str())), false)?;
+    buttons.iter().find(|button| button.id == id).map(|button| (button.id.clone(), button.label.trim().to_owned()))
+}
+
+/// One key on its own ("press enter", "start menu").
+fn press_key(key: &str) -> Result<(), String> {
+    let key = if key == "META" { Key::Meta } else { parse_key(key)? };
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|error| error.to_string())?;
+    enigo.key(key, Direction::Click).map_err(|error| error.to_string())
 }
 
 fn run_script(path: &str, args: &[String]) -> Result<(), String> {
