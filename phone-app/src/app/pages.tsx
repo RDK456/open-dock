@@ -13,7 +13,7 @@ export default function PagesScreen() {
       <Pressable style={styles.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back"><ArrowLeft size={17} color={colors.muted} /></Pressable>
       <Layers2 size={22} color={colors.muted} />
       <Text style={styles.title}>Deck pages</Text>
-      <Text style={styles.body}>Pages and buttons are managed by the Freeze desktop app and sync to this phone.</Text>
+      <Text style={styles.body}>Pages and buttons are managed by the Open Dock desktop app and sync to this phone.</Text>
     </View>
   </SafeAreaView>;
 }

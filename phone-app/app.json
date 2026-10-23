@@ -1,27 +1,27 @@
 {
   "expo": {
-    "name": "Freeze",
-    "slug": "freeze-phone",
-    "scheme": "freeze",
+    "name": "Open Dock",
+    "slug": "open-dock-phone",
+    "scheme": "opendock",
     "version": "1.3.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "backgroundColor": "#09090b",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "app.freeze.phone",
+      "bundleIdentifier": "app.opendock.phone",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Freeze connects to your PC on the same Wi-Fi network to send the controls you choose.",
+        "NSLocalNetworkUsageDescription": "Open Dock connects to your PC on the same Wi-Fi network to send the controls you choose.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
       }
     },
     "android": {
-      "package": "app.freeze.phone",
+      "package": "app.opendock.phone",
       "adaptiveIcon": {
-        "backgroundColor": "#09090b",
+        "backgroundColor": "#f4c22b",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
@@ -44,7 +44,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Freeze to scan the PC pairing code.",
+          "cameraPermission": "Allow Open Dock to scan the PC pairing code.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

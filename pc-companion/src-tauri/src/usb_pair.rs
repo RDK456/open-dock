@@ -1,5 +1,5 @@
 //! Pairs an Android phone over USB with no QR code. A phone that USB debugging already trusts can be handed the
-//! pairing key over the cable: Freeze opens its `freeze://pair` link on the phone through adb.
+//! pairing key over the cable: Open Dock opens its `opendock://pair` link on the phone through adb.
 //!
 //! The phone gets three tries per plug-in (a new cable, or Retry, starts three more). Once it has connected, it is
 //! not pushed again, so closing the app on the phone does not bring it back.
@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 use super::adb;
 
-/// The phone app's Android package, so the link opens Freeze and nothing else.
-pub const PACKAGE: &str = "app.freeze.phone";
+/// The phone app's Android package, so the link opens Open Dock and nothing else.
+pub const PACKAGE: &str = "app.opendock.phone";
 pub const MAX_TRIES: u8 = 3;
 /// After a phone shows up, how long an already-running app has to connect by itself.
 const GRACE: Duration = Duration::from_secs(3);
@@ -64,10 +64,10 @@ fn encode(text: &str) -> String {
 
 /// The link the phone app opens to pair: the PC's address and key, and USB as the way to reach it.
 pub fn pair_link(host: &str, port: u16, token: &str, name: &str) -> String {
-    format!("freeze://pair?host={}&port={port}&token={token}&name={}&transport=usb", encode(host), encode(name))
+    format!("opendock://pair?host={}&port={port}&token={token}&name={}&transport=usb", encode(host), encode(name))
 }
 
-/// Opens `link` in the Freeze app on the phone.
+/// Opens `link` in the Open Dock app on the phone.
 pub fn send_link(adb: &Path, serial: &str, link: &str) -> Result<(), String> {
     // adb joins its arguments for the phone's shell, where `&` would end the command: quote the link.
     let quoted = format!("'{link}'");
@@ -77,9 +77,9 @@ pub fn send_link(adb: &Path, serial: &str, link: &str) -> Result<(), String> {
         return Ok(());
     }
     Err(if text.contains("unable to resolve") || text.contains("not installed") {
-        "Install or update the Freeze app on the phone".into()
+        "Install or update the Open Dock app on the phone".into()
     } else {
-        "Could not open Freeze on the phone. Unlock it and try again".into()
+        "Could not open Open Dock on the phone. Unlock it and try again".into()
     })
 }
 
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn the_link_is_one_safe_argument() {
         let link = pair_link("192.168.1.5", 39421, &"ab".repeat(32), "Dev's PC & more");
-        assert_eq!(link, format!("freeze://pair?host=192.168.1.5&port=39421&token={}&name=Dev%27s%20PC%20%26%20more&transport=usb", "ab".repeat(32)));
+        assert_eq!(link, format!("opendock://pair?host=192.168.1.5&port=39421&token={}&name=Dev%27s%20PC%20%26%20more&transport=usb", "ab".repeat(32)));
         // No quote can end the shell's quoting around it.
         assert!(!link.contains('\''));
     }

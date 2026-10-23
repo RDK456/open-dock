@@ -453,7 +453,7 @@ fn node_load(adapter: &mut Adapter) -> Option<f32> {
 }
 
 /// Loads a GPU vendor DLL from System32 only, where the drivers install them. A bare name would also
-/// search the app's folder and PATH, letting a planted DLL of the same name run inside Freeze.
+/// search the app's folder and PATH, letting a planted DLL of the same name run inside Open Dock.
 pub(super) fn load_system_library(name: &str) -> Option<libloading::Library> {
     use libloading::os::windows::{Library, LOAD_LIBRARY_SEARCH_SYSTEM32};
     unsafe { Library::load_with_flags(name, LOAD_LIBRARY_SEARCH_SYSTEM32) }
@@ -503,7 +503,7 @@ fn display_devices() -> Vec<(u32, u32, u32)> {
     devices
 }
 
-/// The performance counters Freeze reads, in one PDH query.
+/// The performance counters Open Dock reads, in one PDH query.
 struct Counters {
     query: PDH_HQUERY,
     engine: Option<PDH_HCOUNTER>,
@@ -523,8 +523,8 @@ impl Counters {
             let mut counter = PDH_HCOUNTER::default();
             (unsafe { PdhAddEnglishCounterW(query, path, 0, &mut counter) } == 0).then_some(counter)
         };
-        // FREEZE_SENSOR_NO_COUNTERS=1 forces the D3DKMT load fallback, for testing it on a normal PC.
-        let skip_gpu = std::env::var("FREEZE_SENSOR_NO_COUNTERS").ok().as_deref() == Some("1");
+        // OPEN_DOCK_SENSOR_NO_COUNTERS=1 forces the D3DKMT load fallback, for testing it on a normal PC.
+        let skip_gpu = std::env::var("OPEN_DOCK_SENSOR_NO_COUNTERS").ok().as_deref() == Some("1");
         let counters = Self {
             query,
             engine: if skip_gpu {

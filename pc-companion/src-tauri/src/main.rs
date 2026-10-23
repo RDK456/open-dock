@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    freeze_pc_lib::run()
+    open_dock_pc_lib::run()
 }

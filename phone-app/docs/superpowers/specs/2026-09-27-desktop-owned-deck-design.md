@@ -1,4 +1,4 @@
-# Freeze Desktop-Owned Deck Design
+# Open Dock Desktop-Owned Deck Design
 
 **Status:** Proposed for review
 
@@ -6,7 +6,7 @@
 
 ## Summary
 
-Freeze will use the desktop companion as the authoritative deck editor and action runner. The phone will display the selected PC's deck and send control requests. The Connect tab will be redesigned while retaining QR pairing, manual setup, saved PCs, connection status/retry, and Android USB setup.
+Open Dock will use the desktop companion as the authoritative deck editor and action runner. The phone will display the selected PC's deck and send control requests. The Connect tab will be redesigned while retaining QR pairing, manual setup, saved PCs, connection status/retry, and Android USB setup.
 
 This follows Elgato's mobile model: its desktop software manages mobile actions and profiles, while Smart Profiles can change the active profile when an associated application becomes focused.
 
@@ -26,12 +26,12 @@ Phone tap(button ID) -> PC resolves configured action -> Windows/macOS executes 
 - Make each PC's saved profiles, pages, button assignments, labels, icons, order, and action settings authoritative.
 - Keep the phone deck and PC preview synchronized with the selected PC.
 - Resolve and execute app launches and action sequences on the PC using its operating-system-specific targets.
-- Support a broad set of Stream Deck keypad actions through direct compatibility when possible and Freeze-built functional equivalents when a plugin cannot run in Freeze.
+- Support a broad set of Stream Deck keypad actions through direct compatibility when possible and Open Dock-built functional equivalents when a plugin cannot run in Open Dock.
 - Make it straightforward to create and configure PC-local custom script actions.
 - Improve the phone's Connect flow and layout without losing existing pairing and reconnect capabilities.
 - Keep the existing Wi-Fi and Android USB transports and pairing workflow.
 - Preserve the existing pairing/security model while redesigning the Connect tab.
-- Maintain the current simple dark Freeze/shadcn-inspired visual style and Lucide icon set.
+- Maintain the current simple dark Open Dock/shadcn-inspired visual style and Lucide icon set.
 - Retain one-time migration for decks currently saved on a phone.
 
 ## Not in scope
@@ -51,21 +51,21 @@ An app launch action stores an application identity/target for the host platform
 
 Sequences are configured on the desktop as ordered supported action steps. They execute on the PC, stop and report an error when a step fails, and have a bounded number of steps. They may contain approved built-in, plugin, or script actions; nested sequences are excluded initially.
 
-## Elgato compatibility and Freeze actions
+## Elgato compatibility and Open Dock actions
 
-The compatibility target is the Elgato Stream Deck SDK's key-based action model: plugin/action metadata, action settings, lifecycle and key-press events, dynamic title/image/state updates, and property-inspector configuration. Freeze advertises a keypad-like virtual device to compatible plugins. Encoder/dial-only actions cannot be represented directly by the current phone deck and remain unsupported unless a useful tap/gesture mapping can be implemented without misleading behavior.
+The compatibility target is the Elgato Stream Deck SDK's key-based action model: plugin/action metadata, action settings, lifecycle and key-press events, dynamic title/image/state updates, and property-inspector configuration. Open Dock advertises a keypad-like virtual device to compatible plugins. Encoder/dial-only actions cannot be represented directly by the current phone deck and remain unsupported unless a useful tap/gesture mapping can be implemented without misleading behavior.
 
-The PC companion will have a plugin catalog and install/import flow. It will validate a plugin manifest, show publisher/source and requested capabilities, and run compatible plugin processes on the PC. The catalog will show whether a Marketplace action is direct-compatible, has a Freeze equivalent, or is unsupported, and can link to the official listing. The direct compatibility path targets `.streamDeckPlugin` packages that are accessible, permitted for this use, and can run against Freeze's supported host surface. Plugins that depend on private Stream Deck software, physical hardware, unsupported native extensions, or inaccessible Marketplace packaging are not considered compatible merely because their manifest can be read.
+The PC companion will have a plugin catalog and install/import flow. It will validate a plugin manifest, show publisher/source and requested capabilities, and run compatible plugin processes on the PC. The catalog will show whether a Marketplace action is direct-compatible, has a Open Dock equivalent, or is unsupported, and can link to the official listing. The direct compatibility path targets `.streamDeckPlugin` packages that are accessible, permitted for this use, and can run against Open Dock's supported host surface. Plugins that depend on private Stream Deck software, physical hardware, unsupported native extensions, or inaccessible Marketplace packaging are not considered compatible merely because their manifest can be read.
 
-For high-demand Marketplace features that cannot run directly, Freeze will provide independently implemented Freeze actions under Freeze's own naming and assets, using public service APIs or documented operating-system interfaces. Do not copy proprietary plugin source, artwork, package contents, or marketplace pages. Direct Marketplace browsing/install or distribution of third-party packages remains conditional on Elgato's written clarification and applicable publisher rights. A Freeze catalog can instead link to Elgato's listing and offer a clearly labeled Freeze equivalent when available.
+For high-demand Marketplace features that cannot run directly, Open Dock will provide independently implemented Open Dock actions under Open Dock's own naming and assets, using public service APIs or documented operating-system interfaces. Do not copy proprietary plugin source, artwork, package contents, or marketplace pages. Direct Marketplace browsing/install or distribution of third-party packages remains conditional on Elgato's written clarification and applicable publisher rights. A Open Dock catalog can instead link to Elgato's listing and offer a clearly labeled Open Dock equivalent when available.
 
-Compatibility is a matrix, not a claim that every Marketplace plugin works: audit the catalog, then record tested plugin/SDK version, operating system, supported action subset, and unsupported device/service dependencies. Prioritize keypad actions for common streaming, communications, media, system, and smart-device workflows, then select concrete integrations using user demand and feasibility. Track coverage as direct-compatible, Freeze equivalent, or unsupported so “most” can be measured against an agreed target list instead of implied universal support.
+Compatibility is a matrix, not a claim that every Marketplace plugin works: audit the catalog, then record tested plugin/SDK version, operating system, supported action subset, and unsupported device/service dependencies. Prioritize keypad actions for common streaming, communications, media, system, and smart-device workflows, then select concrete integrations using user demand and feasibility. Track coverage as direct-compatible, Open Dock equivalent, or unsupported so “most” can be measured against an agreed target list instead of implied universal support.
 
 ## Custom scripts
 
 Custom script actions are created and saved on the desktop. A small guided editor offers starter templates, a plain code field or local script-file picker, runtime selection/detection, optional static arguments, a **Test script** button, and readable output/errors. Initial runtimes should use common Windows/macOS interpreters (PowerShell, Python, and Node.js where installed); the UI reports a missing interpreter and gives setup guidance. Script files and arguments are PC-local and are never sent in a phone invocation.
 
-Before enabling a script, Freeze shows its exact source path or saved contents, interpreter, arguments, and that it runs as the logged-in PC user. The user explicitly enables that script once; subsequent button presses run the saved action without repeated prompts. Scripts run as a child process with a timeout and bounded output capture, using structured executable/argument values instead of constructing a shell command string. This is a trust/consent boundary, not a claim that arbitrary user scripts are sandboxed.
+Before enabling a script, Open Dock shows its exact source path or saved contents, interpreter, arguments, and that it runs as the logged-in PC user. The user explicitly enables that script once; subsequent button presses run the saved action without repeated prompts. Scripts run as a child process with a timeout and bounded output capture, using structured executable/argument values instead of constructing a shell command string. This is a trust/consent boundary, not a claim that arbitrary user scripts are sandboxed.
 
 Plugin and service credentials are kept outside profile/plugin configuration files and the phone. Store tokens in the host operating system's protected credential storage, request only needed integration scopes, and provide disconnect/revoke controls on the desktop.
 
@@ -103,7 +103,7 @@ The first app picker will select an executable (`.exe`) on Windows or an applica
 
 The Connect redesign improves presentation and pairing guidance while retaining QR scan, manual entry, saved-device connect/disconnect/retry/remove, camera permission fallback, Wi-Fi, and Android USB capabilities. It does not discard paired-device records or rotate pairing keys. PC discovery beyond QR/manual setup is a later enhancement, not a prerequisite for the redesign.
 
-Dynamic labels/icons are derived from host state when available. For example, Play/Pause reflects the system-reported playback state where the OS exposes it; where it does not, Freeze indicates that the state is unavailable and may use a short-lived visual prediction after a tap.
+Dynamic labels/icons are derived from host state when available. For example, Play/Pause reflects the system-reported playback state where the OS exposes it; where it does not, Open Dock indicates that the state is unavailable and may use a short-lived visual prediction after a tap.
 
 ## Security and failure behavior
 
@@ -124,8 +124,8 @@ Dynamic labels/icons are derived from host state when available. For example, Pl
 2. **Connect experience:** redesign Add PC/QR, the first-class paired-PC list, manual setup, transport selection, and status/retry controls without losing existing pairing behavior or records.
 3. **Core platform completion:** add optional foreground-app profile association and platform-specific app/media state reporting. Ship Windows first while keeping host abstractions portable, then validate native macOS launch/control and supported macOS versions.
 4. **Custom script actions:** after the desktop and phone core is stable, build the PC-only guided script editor, runtime detection, templates/test flow, and trust/enable controls. Keep script paths/source and credentials off the phone; apply the security boundaries above.
-5. **Elgato compatibility research spike:** after core delivery, test an official, non-protected sample plugin against a narrow Freeze host prototype. Establish which SDK lifecycle, settings, property-inspector, and dynamic-state features can be supported on Windows and macOS. Do not use or attempt to unwrap Marketplace DRM packages. Record the compatibility matrix before committing to broad third-party support.
-6. **Plugin platform and marketplace equivalents:** add a documented Freeze plugin/action API and compatible `.streamDeckPlugin` support for validated, permitted packages where the spike proves feasible. Independently implement Freeze actions for selected common integrations where Marketplace packages are protected, host-dependent, or unsupported. Direct Marketplace package support requires rights/technical confirmation; never decrypt or patch protected packages.
+5. **Elgato compatibility research spike:** after core delivery, test an official, non-protected sample plugin against a narrow Open Dock host prototype. Establish which SDK lifecycle, settings, property-inspector, and dynamic-state features can be supported on Windows and macOS. Do not use or attempt to unwrap Marketplace DRM packages. Record the compatibility matrix before committing to broad third-party support.
+6. **Plugin platform and marketplace equivalents:** add a documented Open Dock plugin/action API and compatible `.streamDeckPlugin` support for validated, permitted packages where the spike proves feasible. Independently implement Open Dock actions for selected common integrations where Marketplace packages are protected, host-dependent, or unsupported. Direct Marketplace package support requires rights/technical confirmation; never decrypt or patch protected packages.
 7. **Release validation:** validate cross-platform behavior, permissions, connection flows, persistence/migration, plugin compatibility claims, and packaging against the supported feature matrix.
 
 ## Sub-project boundaries
@@ -133,7 +133,7 @@ Dynamic labels/icons are derived from host state when available. For example, Pl
 - **Core desktop and phone apps:** PC-owned profiles, desktop editing, built-in action configuration, versioned connection protocol, phone remote rendering, and one-time migration. This is the prerequisite for all extension actions.
 - **Connection experience:** the phone Connect redesign is part of the initial product work and preserves the same pairing identity and saved-device behavior.
 - **Custom scripts:** a later PC-only action provider that plugs into the stable deck core; keep it separate from third-party plugin compatibility because its editor, runtime discovery, and permission model differ.
-- **Plugin compatibility:** a later, separate platform project. Begin with the bounded compatibility spike, then implement only the supported key-action subset and selected Freeze equivalents. Do not block core desktop or phone apps on Marketplace coverage.
+- **Plugin compatibility:** a later, separate platform project. Begin with the bounded compatibility spike, then implement only the supported key-action subset and selected Open Dock equivalents. Do not block core desktop or phone apps on Marketplace coverage.
 
 ## Acceptance criteria
 
@@ -144,7 +144,7 @@ Dynamic labels/icons are derived from host state when available. For example, Pl
 - Legacy phone deck data can be explicitly imported once without replacing existing PC config.
 - The redesigned Connect tab retains QR/manual setup, paired-PC list outside Manual setup, retry/disconnect/remove controls, and Android USB support.
 - The same profile model works in Windows and macOS builds, with native application targets resolved per host OS.
-- Compatibility claims list the tested plugin/SDK subset and distinguish direct-compatible plugins from Freeze-built equivalents; unsupported encoder actions are clearly identified.
+- Compatibility claims list the tested plugin/SDK subset and distinguish direct-compatible plugins from Open Dock-built equivalents; unsupported encoder actions are clearly identified.
 - A custom script is configured and enabled on the PC; a phone button tap sends only its action ID, and script errors/timeouts appear in the PC app.
 - Script/plugin credentials never appear in deck snapshots or phone storage.
 
@@ -154,8 +154,8 @@ Dynamic labels/icons are derived from host state when available. For example, Pl
 - Deck editing lives on desktop; phone profile/page selectors are remote controls, not local editors.
 - Profiles use a local versioned JSON file and OS-appropriate app targets; there is no cloud service.
 - App-linked automatic profile switching follows the editor/synchronization foundation rather than blocking it.
-- Plugin imports and scripts run only on the PC after explicit user enablement; Freeze provides equivalents when third-party plugin packages cannot be hosted.
-- Freeze does not decrypt or bypass access controls on Elgato Marketplace content; direct compatibility is limited to packages and action surfaces that are permitted and technically supported.
+- Plugin imports and scripts run only on the PC after explicit user enablement; Open Dock provides equivalents when third-party plugin packages cannot be hosted.
+- Open Dock does not decrypt or bypass access controls on Elgato Marketplace content; direct compatibility is limited to packages and action surfaces that are permitted and technically supported.
 
 ## References
 

@@ -1,8 +1,8 @@
-# Freeze Core Desktop and Phone Apps Implementation Plan
+# Open Dock Core Desktop and Phone Apps Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** Make the Windows-first desktop companion the authority for Freeze profiles, pages, built-in buttons, and action execution, with the phone showing a synchronized remote deck.
+**Goal:** Make the Windows-first desktop companion the authority for Open Dock profiles, pages, built-in buttons, and action execution, with the phone showing a synchronized remote deck.
 
 **Architecture:** Keep the desktop's Rust process as the single source of truth and action executor. Persist a versioned local JSON config, expose safe Tauri editor commands, and send authenticated config snapshots over the existing WebSocket; the phone sends only stable button/profile/page IDs with the current revision. Preserve the current pairing identity, Wi-Fi and Android USB transports, and paired-PC storage while replacing phone-owned deck editing with remote controls.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Work in `D:\freeze\pc-companion` for the desktop and `D:\freeze\phone-app` for the phone; the PC companion is currently not a Git repository.
+- Work in `D:\opendock\pc-companion` for the desktop and `D:\opendock\phone-app` for the phone; the PC companion is currently not a Git repository.
 - Preserve all existing user changes in the phone repo. Do not reset, clean, or stage unrelated files.
 - Windows is the first implementation target; use OS-conditional action execution and keep the config/protocol portable for the planned macOS build.
 - Do not add plugin or script runtime code in this core plan. Those are later projects after the core is stable.
@@ -35,7 +35,7 @@
 
 ### Task 1: Add the PC-owned core deck model and persistence
 
-**Files:** `D:\freeze\pc-companion\src-tauri\src\lib.rs`
+**Files:** `D:\opendock\pc-companion\src-tauri\src\lib.rs`
 
 - [x] Add Serde models for `DeckConfig`, `DeckProfile`, `DeckPage`, `DeckButton`, and core actions only: media, hotkey, app launch, sequence, and profile/page navigation.
 - [x] Add a default profile containing the existing six media buttons. Use stable IDs and existing Lucide key names; no plugin/script variants in this phase.
@@ -43,11 +43,11 @@
 - [x] On Tauri setup, load and validate `deck-config.json`; create the default config if absent or invalid. Save edits by serializing to a sibling temporary file then replacing the target.
 - [x] Add `deck_config` and `save_deck_config` Tauri commands. Validate IDs, labels, button/page/profile limits, action bounds, and app targets before writing.
 
-**Check:** `cargo check` from `D:\freeze\pc-companion\src-tauri`; inspect that the old pairing key path and permissions are untouched.
+**Check:** `cargo check` from `D:\opendock\pc-companion\src-tauri`; inspect that the old pairing key path and permissions are untouched.
 
 ### Task 2: Add a desktop Deck editor for built-in actions
 
-**Files:** `D:\freeze\pc-companion\src\App.tsx`, `D:\freeze\pc-companion\src\App.css`
+**Files:** `D:\opendock\pc-companion\src\App.tsx`, `D:\opendock\pc-companion\src\App.css`
 
 - [x] Add a Deck navigation item and a compact shadcn-like editor view using the existing dark palette and Lucide icons.
 - [x] Load/save via the Tauri deck commands. Show profile selector, page tabs, button grid, and selected-button properties.
@@ -55,11 +55,11 @@
 - [x] Configure media, hotkey, app launch, and bounded sequences on the PC. Use a validated Windows app path field; defer a native file picker until the desktop has an existing dialog dependency or the path field proves insufficient.
 - [x] Keep Overview and QR pairing content available and do not add plugin/script screens in this task.
 
-**Check:** `npm run build` in `D:\freeze\pc-companion`; manually verify empty/default config and editor changes persist across app restart.
+**Check:** `npm run build` in `D:\opendock\pc-companion`; manually verify empty/default config and editor changes persist across app restart.
 
 ### Task 3: Change the authenticated socket protocol to host-resolved IDs
 
-**Files:** `D:\freeze\pc-companion\src-tauri\src\lib.rs`
+**Files:** `D:\opendock\pc-companion\src-tauri\src\lib.rs`
 
 - [x] After successful authentication, send a versioned complete deck snapshot and initial playback state instead of only `ready`.
 - [x] Add messages for `invoke_button`, `select_profile`, and `select_page`; include request IDs and config revision.
@@ -71,7 +71,7 @@
 
 ### Task 4: Make the phone connection context consume host snapshots
 
-**Files:** `D:\freeze\phone-app\src\connection.tsx`, `D:\freeze\phone-app\src\theme.ts` (only if snapshot types need styling-independent placement)
+**Files:** `D:\opendock\phone-app\src\connection.tsx`, `D:\opendock\phone-app\src\theme.ts` (only if snapshot types need styling-independent placement)
 
 - [x] Define mobile-side types for the versioned deck snapshot and correlated action results.
 - [x] On the new authenticated snapshot message, keep the current PC's snapshot in context and cache the last valid snapshot in existing SQLite key-value storage.
@@ -79,11 +79,11 @@
 - [x] Preserve secure pairing records, connection retry cap/manual retry, saved device selection, and USB behavior without rescan.
 - [x] Keep cached snapshot visible while disconnected but disable action presses; request a fresh snapshot after reconnect or stale-revision error.
 
-**Check:** `npx tsc --noEmit` and `npm run lint` in `D:\freeze\phone-app`; manually verify authenticated `ready`/snapshot flow against the desktop server.
+**Check:** `npx tsc --noEmit` and `npm run lint` in `D:\opendock\phone-app`; manually verify authenticated `ready`/snapshot flow against the desktop server.
 
 ### Task 5: Render the PC-owned deck and remote profile/page selectors on phone
 
-**Files:** `D:\freeze\phone-app\src\app\(tabs)\index.tsx`, `D:\freeze\phone-app\src\app\(tabs)\edit.tsx`, `D:\freeze\phone-app\src\app\pages.tsx`, `D:\freeze\phone-app\src\deck.ts`, `D:\freeze\phone-app\src\app\(tabs)\_layout.tsx`
+**Files:** `D:\opendock\phone-app\src\app\(tabs)\index.tsx`, `D:\opendock\phone-app\src\app\(tabs)\edit.tsx`, `D:\opendock\phone-app\src\app\pages.tsx`, `D:\opendock\phone-app\src\deck.ts`, `D:\opendock\phone-app\src\app\(tabs)\_layout.tsx`
 
 - [x] Render the active PC profile/page and button definitions from connection context; resolve Lucide icons using the existing icon registry.
 - [x] Invoke buttons by ID/revision and use correlated responses for feedback. Keep media icon/label state driven by the desktop playback state.
@@ -95,7 +95,7 @@
 
 ### Task 6: Offer explicit migration of legacy phone decks
 
-**Files:** `D:\freeze\pc-companion\src-tauri\src\lib.rs`, `D:\freeze\pc-companion\src\App.tsx`, `D:\freeze\phone-app\src\connection.tsx`, `D:\freeze\phone-app\src\deck.ts`
+**Files:** `D:\opendock\pc-companion\src-tauri\src\lib.rs`, `D:\opendock\pc-companion\src\App.tsx`, `D:\opendock\phone-app\src\connection.tsx`, `D:\opendock\phone-app\src\deck.ts`
 
 - [x] During the versioned handshake, let the phone indicate only whether legacy deck data exists; transfer bounded data only after the PC user requests it.
 - [x] Validate imported labels, icon keys, action types, sequence sizes, and targets as untrusted input; regenerate PC-owned IDs. Require PC-side app target review where a phone target does not suit Windows.
@@ -106,7 +106,7 @@
 
 ### Task 7: Preserve and refine Connect experience against the new deck protocol
 
-**Files:** `D:\freeze\phone-app\src\app\(tabs)\connect.tsx`, `D:\freeze\phone-app\src\connection.tsx`, `D:\freeze\pc-companion\src\App.tsx`
+**Files:** `D:\opendock\phone-app\src\app\(tabs)\connect.tsx`, `D:\opendock\phone-app\src\connection.tsx`, `D:\opendock\pc-companion\src\App.tsx`
 
 - [x] Keep Add PC/QR, separate Paired PCs list, Manual setup, per-device status/actions, and capped retries with manual retry after exhaustion.
 - [x] Show the selected PC's snapshot readiness and deck protocol compatibility in the connection status, with a clear update-required state for unsupported protocol versions.

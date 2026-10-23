@@ -12,7 +12,10 @@ import { countMessage } from './perf-overlay';
 export type PcConnection = { host: string; port: number; token: string; deviceName?: string; transport?: 'wifi' | 'usb' };
 export type DeckMediaCommand = 'play_pause' | 'next_track' | 'previous_track' | 'volume_up' | 'volume_down' | 'mute';
 export type DeckStep = { type: 'media'; command: DeckMediaCommand } | { type: 'hotkey'; keys: string[] } | { type: 'launch_app'; app: string } | { type: 'launch_file'; path: string } | { type: 'launch_folder'; path: string };
-export type DeckAction = DeckStep | { type: 'run_script'; path: string; allowOnPc: boolean } | { type: 'plugin_action'; pluginId: string; actionId: string; allowOnPc: boolean; inputs?: Record<string, string> } | { type: 'sequence'; steps: DeckStep[] } | { type: 'select_profile'; profileId: string } | { type: 'select_page'; pageId: string } | { type: 'open_folder'; folderId: string };
+export type DeckAction = DeckStep | { type: 'run_script'; path: string; allowOnPc: boolean } | { type: 'plugin_action'; pluginId: string; actionId: string; allowOnPc: boolean; inputs?: Record<string, string> } | { type: 'sequence'; steps: DeckStep[] } | { type: 'select_profile'; profileId: string } | { type: 'select_page'; pageId: string } | { type: 'open_folder'; folderId: string } | { type: 'system'; command: SystemCommand };
+export type SystemCommand = 'lock' | 'sleep' | 'restart' | 'shutdown' | 'sign_out' | 'brightness_up' | 'brightness_down' | 'screenshot';
+/** Touchpad and keyboard input; `move` and `scroll` are in PC pixels and wheel steps. */
+export type PointerEvent = { kind: 'move' | 'scroll'; dx: number; dy: number } | { kind: 'zoom'; steps: number } | { kind: 'click' | 'press' | 'release'; button: 'left' | 'right' | 'middle' } | { kind: 'text'; text: string } | { kind: 'key'; key: string };
 export type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
 export type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction };
 export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
@@ -52,18 +55,22 @@ type ConnectionContextValue = {
   selectProfile: (profileId: string) => boolean;
   selectPage: (pageId: string) => boolean;
   reportWidgetSurface: (surface: WidgetSurface) => void;
+  /** Sends touchpad or keyboard input; false when there is no connection. Fire and forget. */
+  sendPointer: (event: PointerEvent) => boolean;
+  /** Pastes a drawn signature on the PC. Strokes are points on a 1600×600 canvas. Resolves to an error, or null when pasted. */
+  sendSignature: (strokes: [number, number][][]) => Promise<string | null>;
 };
 
-const STORAGE_KEY = 'freeze.pc-connection';
-const PAIRED_KEY = 'freeze.pc-connections';
+const STORAGE_KEY = 'opendock.pc-connection';
+const PAIRED_KEY = 'opendock.pc-connections';
 const LEGACY_STORAGE_KEY = 'decklink.pc-connection';
 const MAX_RECONNECT_ATTEMPTS = 3;
 // Some phones (iPhones especially) let a connection to an address nobody answers hang for over a minute.
 const CONNECT_TIMEOUT_MS = 8000;
-const DECK_CACHE_KEY = 'freeze.deck-snapshot';
-const DEVICE_SELECTION_KEY = 'freeze.device-navigation';
-const LEGACY_SOURCE_KEY = 'freeze.legacy-import-source';
-const LEGACY_IMPORTED_KEY = 'freeze.legacy-imported';
+const DECK_CACHE_KEY = 'opendock.deck-snapshot';
+const DEVICE_SELECTION_KEY = 'opendock.device-navigation';
+const LEGACY_SOURCE_KEY = 'opendock.legacy-import-source';
+const LEGACY_IMPORTED_KEY = 'opendock.legacy-imported';
 const ConnectionContext = createContext<ConnectionContextValue | null>(null);
 const EMPTY_MEDIA_STATE: SystemMediaState = { playbackState: 'unavailable' };
 // The PC's playback speed: 0 while a browser buffers; missing means normal speed.
@@ -204,6 +211,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   const socketRef = useRef<WebSocket | null>(null);
   const widgetSurfaceRef = useRef<WidgetSurface | null>(null);
   const pendingRequestsRef = useRef(new Set<string>());
+  const signatureReplyRef = useRef<((error: string | null) => void) | null>(null);
   const openConnectionRef = useRef<((next: PcConnection, retrying: boolean) => void) | null>(null);
   // Resolves once the saved pairings are loaded. A pairing link can open the app before that, and `connect` must not run first.
   const [restored] = useState(() => {
@@ -343,7 +351,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       socket.onmessage = async (event) => {
         if (socketRef.current !== socket || typeof event.data !== 'string') return;
         try {
-          const message = JSON.parse(event.data) as { type?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; requestId?: string; sourceId?: string; volumePercent?: unknown };
+          const message = JSON.parse(event.data) as { type?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown };
           countMessage(message.type ?? 'unknown');
           if (message.type === 'ready') {
             reconnectAttemptRef.current = 0;
@@ -410,6 +418,10 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
               volumePercent: typeof progress.volumePercent === 'number' && Number.isFinite(progress.volumePercent) && progress.volumePercent >= 0 && progress.volumePercent <= 100 ? Math.round(progress.volumePercent) : current.volumePercent,
             }));
           }
+          if (message.type === 'signature_result') {
+            signatureReplyRef.current?.(message.ok ? null : typeof message.error === 'string' ? message.error : 'Could not paste the signature');
+            signatureReplyRef.current = null;
+          }
           if (message.type === 'action_result' && message.requestId && pendingRequestsRef.current.delete(message.requestId)) {
             const reason = message.reason;
             setActionError(message.ok ? null : reason === 'accessibility_permission_required' || reason === 'app_launch_failed' || reason === 'stale_revision' || reason === 'unknown_button' ? reason : 'control_failed');
@@ -453,7 +465,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           if (message.type === 'error' && message.message === 'update_required') {
             shouldReconnectRef.current = false;
             terminalErrorRef.current = true;
-            setProtocolError('Update the Freeze desktop app to connect to this phone app.');
+            setProtocolError('Update the Open Dock desktop app to connect to this phone app.');
             setStatus('error');
             socket.close();
           }
@@ -642,8 +654,34 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     if (status === 'connected' && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'widget_surface', surface }));
   }, [status]);
 
+  const sendPointer = useCallback((event: PointerEvent) => {
+    const socket = socketRef.current;
+    if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return false;
+    try {
+      socket.send(JSON.stringify({ type: 'pointer', event }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, [status]);
+
+  const sendSignature = useCallback((strokes: [number, number][][]) => new Promise<string | null>((resolve) => {
+    const socket = socketRef.current;
+    if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return resolve('Connect to your PC first');
+    signatureReplyRef.current?.('Replaced by a newer signature');
+    const timer = setTimeout(() => { if (signatureReplyRef.current === reply) { signatureReplyRef.current = null; resolve('The PC did not answer'); } }, 15_000);
+    const reply = (error: string | null) => { clearTimeout(timer); resolve(error); };
+    signatureReplyRef.current = reply;
+    try {
+      socket.send(JSON.stringify({ type: 'signature', strokes }));
+    } catch {
+      signatureReplyRef.current = null;
+      reply('Could not reach the PC');
+    }
+  }), [status]);
+
   return (
-    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface }}>
+    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature }}>
       {children}
     </ConnectionContext.Provider>
   );

@@ -1,14 +1,14 @@
-# Freeze System Media Integration
+# Open Dock System Media Integration
 
 ## Goal
 
-Replace the Spotify-specific starter plugin with a general system-media integration. Show live now-playing details and artwork from the desktop's current media session on the configured Freeze widget screen, and keep using Freeze's existing cross-platform deck controls.
+Replace the Spotify-specific starter plugin with a general system-media integration. Show live now-playing details and artwork from the desktop's current media session on the configured Open Dock widget screen, and keep using Open Dock's existing cross-platform deck controls.
 
 ## User intent and scope
 
 - Support media players through the operating system's current media session, rather than a Spotify-owned API client.
 - Show the active track's artwork and metadata on connected phones.
-- Remove the Spotify-specific sample plugin from Freeze.
+- Remove the Spotify-specific sample plugin from Open Dock.
 - Keep the editor's existing per-page widget area and grid controls.
 - First provider target is Windows, matching the requested FluentFlyout-style system-wide behavior.
 - Do not add Spotify login, developer credentials, service-specific branding, or app-specific UI.
@@ -18,7 +18,7 @@ Replace the Spotify-specific starter plugin with a general system-media integrat
 
 1. **Windows Global System Media Transport Controls (recommended).** Read the system-selected media session. It can expose the title, artist, album, playback status, timeline and thumbnail without a Spotify API client. This is the broadest Windows source with the least service-specific code.
 2. **Separate Spotify, Apple Music and other service integrations.** Each needs its own interface, authentication or platform-specific behavior; this is slower and recreates the limitations of the Spotify-only approach.
-3. **Generic media keys only.** Freeze already supports global media-key actions, but those cannot reliably supply track metadata or artwork.
+3. **Generic media keys only.** Open Dock already supports global media-key actions, but those cannot reliably supply track metadata or artwork.
 
 The first approach is selected. Windows chooses the session it considers most likely to control; users do not choose a specific player in v1.
 
@@ -30,14 +30,14 @@ The first approach is selected. Windows chooses the session it considers most li
 - Observe current-session, media-properties, playback and timeline changes. Refresh the current position periodically while playing; do not poll all installed applications or request a Spotify token.
 - Publish one current-session state with available source app ID, title, artist, album, playback state, position/duration and artwork. Missing optional metadata and missing artwork are valid states.
 - When no current session exists, publish a cleared/empty state. A player that does not publish a Windows media session cannot be discovered by this provider.
-- Use Freeze's existing global media commands for buttons. Do not add player-specific controls or a provider scripting runtime.
+- Use Open Dock's existing global media commands for buttons. Do not add player-specific controls or a provider scripting runtime.
 
 ### Phone synchronization and rendering
 
 - Add a separate `media_state` message to the authenticated existing WebSocket protocol. It is a live snapshot, independent of deck configuration and device navigation selection.
 - Send an initial state after authentication, then send updates only when track, playback, timeline, or artwork changes. Position-only messages may be sent at a modest interval while playing.
-- Read artwork from the Windows session thumbnail and send a bounded image data URL only when that artwork changes. Cap its decoded size; if absent or too large, omit it and show Freeze's neutral music artwork fallback. Do not put live metadata or artwork into saved deck JSON or long-lived phone storage.
-- Keep the source display Freeze-owned and responsive in normal, widget-only, and landscape immersive views. Text must truncate safely in narrow cells, and missing title/artist/artwork must not make the widget invalid.
+- Read artwork from the Windows session thumbnail and send a bounded image data URL only when that artwork changes. Cap its decoded size; if absent or too large, omit it and show Open Dock's neutral music artwork fallback. Do not put live metadata or artwork into saved deck JSON or long-lived phone storage.
+- Keep the source display Open Dock-owned and responsive in normal, widget-only, and landscape immersive views. Text must truncate safely in narrow cells, and missing title/artist/artwork must not make the widget invalid.
 - Do not transmit media state to unauthenticated sockets. Existing pairing token and local-network transport remain the boundary.
 
 ### Editor and widget contract
@@ -49,17 +49,17 @@ The first approach is selected. Windows chooses the session it considers most li
 
 ### Visual direction
 
-- Make the widget feel like part of Freeze: use the existing dark neutral surfaces, restrained borders, typography and spacing, with Freeze's cool accent for playback/progress details. Do not use Spotify branding/green or reproduce Elgato's artwork/layout.
+- Make the widget feel like part of Open Dock: use the existing dark neutral surfaces, restrained borders, typography and spacing, with Open Dock's cool accent for playback/progress details. Do not use Spotify branding/green or reproduce Elgato's artwork/layout.
 - Let artwork be the visual anchor in roomy cells. Pair it with a clear title/artist hierarchy, quiet album/source details, and a compact playback progress treatment when timeline data exists.
 - Adapt the layout to widget aspect ratio and available size: wide cells can place artwork beside text and progress; narrow/small cells must prioritize legible artwork and a short title/artist without overflow. Keep all labels and progress optional when space is tight.
 - Preserve the same visual language in standard, widget-only, and immersive landscape modes, including stable empty/missing-art states.
 
 ### Spotify starter removal
 
-- Remove the bundled `freeze.spotify-controls` sample package and its Spotify-specific documentation/references.
+- Remove the bundled `opendock.spotify-controls` sample package and its Spotify-specific documentation/references.
 - Remove its installed package from the current desktop companion if present.
 - Preserve saved deck JSON and unrelated plugins. Any saved references to the removed plugin remain as data and are visibly unavailable until replaced; do not silently delete buttons or widget layouts.
-- Freeze's existing generic system media buttons remain available.
+- Open Dock's existing generic system media buttons remain available.
 
 ## Constraints and edge cases
 

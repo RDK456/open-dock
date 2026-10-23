@@ -263,7 +263,7 @@ pub async fn install(app: tauri::AppHandle) -> Result<PathBuf, String> {
         return Err("The USB tools are already being downloaded".into());
     }
     let _guard = InstallGuard;
-    let dir = managed_dir().ok_or("Freeze settings are unavailable")?;
+    let dir = managed_dir().ok_or("Open Dock settings are unavailable")?;
     install_into(&dir, |stage, received| {
         let _ = app.emit("adb-progress", Progress { stage, received, total: PIN.size });
     })
@@ -273,7 +273,7 @@ pub async fn install(app: tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 async fn install_into(dir: &Path, emit: impl Fn(&'static str, u64)) -> Result<(), String> {
-    let parent = dir.parent().ok_or("Freeze settings are unavailable")?.to_path_buf();
+    let parent = dir.parent().ok_or("Open Dock settings are unavailable")?.to_path_buf();
     let part = parent.join("platform-tools.zip.part");
     let staging = parent.join("platform-tools.new");
     let old = parent.join("platform-tools.old");
@@ -287,7 +287,7 @@ async fn install_into(dir: &Path, emit: impl Fn(&'static str, u64)) -> Result<()
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(600))
-            .user_agent("Freeze")
+            .user_agent("Open Dock")
             .build()
             .map_err(network_error)?;
         let mut response = client.get(url).send().await.map_err(network_error)?;
@@ -328,7 +328,7 @@ async fn install_into(dir: &Path, emit: impl Fn(&'static str, u64)) -> Result<()
             .await
             .map_err(|_| "Unpacking the download failed".to_owned())??;
         if !works(&staging.join(PIN.exe)) {
-            return Err("Freeze could not start the downloaded adb. Security software may have blocked it; allow it or install Android Platform-Tools yourself.".into());
+            return Err("Open Dock could not start the downloaded adb. Security software may have blocked it; allow it or install Android Platform-Tools yourself.".into());
         }
         swap_in(dir, &staging, &old)
     }
@@ -380,7 +380,7 @@ fn swap_in(dir: &Path, staging: &Path, old: &Path) -> Result<(), String> {
             let _ = run(&exe, &["kill-server"], Duration::from_secs(5));
         }
         let _ = fs::remove_dir_all(old);
-        fs::rename(dir, old).map_err(|_| "adb is in use. Close programs that use adb (or restart Freeze) and try again.".to_owned())?;
+        fs::rename(dir, old).map_err(|_| "adb is in use. Close programs that use adb (or restart Open Dock) and try again.".to_owned())?;
     }
     if let Err(error) = fs::rename(staging, dir) {
         let _ = fs::rename(old, dir);
@@ -395,7 +395,7 @@ mod tests {
     use super::*;
 
     fn zip_with(names: &[&str]) -> PathBuf {
-        let path = std::env::temp_dir().join(format!("freeze-adb-test-{}-{}.zip", std::process::id(), names.len()));
+        let path = std::env::temp_dir().join(format!("open-dock-adb-test-{}-{}.zip", std::process::id(), names.len()));
         let mut writer = zip::ZipWriter::new(fs::File::create(&path).unwrap());
         for name in names {
             writer.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
@@ -411,7 +411,7 @@ mod tests {
         names.push("platform-tools/fastboot".into());
         names.push("../escape/adb".into());
         let zip = zip_with(&names.iter().map(String::as_str).collect::<Vec<_>>());
-        let staging = std::env::temp_dir().join(format!("freeze-adb-staging-{}", std::process::id()));
+        let staging = std::env::temp_dir().join(format!("open-dock-adb-staging-{}", std::process::id()));
         let _ = fs::remove_dir_all(&staging);
         unpack(&zip, &staging).unwrap();
         let mut got: Vec<String> = fs::read_dir(&staging).unwrap().map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect();
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn unpack_rejects_an_archive_without_adb() {
         let zip = zip_with(&["platform-tools/NOTICE.txt"]);
-        let staging = std::env::temp_dir().join(format!("freeze-adb-staging2-{}", std::process::id()));
+        let staging = std::env::temp_dir().join(format!("open-dock-adb-staging2-{}", std::process::id()));
         assert!(unpack(&zip, &staging).is_err());
         let _ = fs::remove_dir_all(&staging);
         let _ = fs::remove_file(&zip);
@@ -436,7 +436,7 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn downloads_checks_and_runs_adb() {
-        let root = std::env::temp_dir().join(format!("freeze-adb-e2e-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("open-dock-adb-e2e-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let dir = root.join("platform-tools");
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn swap_replaces_an_existing_install() {
-        let root = std::env::temp_dir().join(format!("freeze-adb-swap-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("open-dock-adb-swap-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let (dir, staging, old) = (root.join("platform-tools"), root.join("platform-tools.new"), root.join("platform-tools.old"));
         fs::create_dir_all(&dir).unwrap();

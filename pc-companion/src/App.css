@@ -14,37 +14,37 @@
    either theme. Colors that must stay fixed (the QR code's white, white text on a red button) are written out. */
 :root, :root[data-theme="dark"] {
   color-scheme: dark;
-  --background: #09090b;
-  --sidebar: #111113;
-  --card: #111113;
-  --card-raised: #18181b;
-  --border: #27272a;
-  --foreground: #fafafa;
-  --muted: #a1a1aa;
-  --subtle: #71717a;
+  --background: #0f131a;
+  --sidebar: #161b24;
+  --card: #151a23;
+  --card-raised: #1c2230;
+  --border: #283041;
+  --foreground: #f3f5f8;
+  --muted: #a7b0c0;
+  --subtle: #8590a3;
   --green: #4ade80;
-  --z50: #fafafa;
-  --z200: #e4e4e7;
-  --z300: #d4d4d8;
-  --z400: #a1a1aa;
-  --z500: #71717a;
-  --z600: #52525b;
-  --z700: #3f3f46;
-  --z800: #27272a;
-  --z850: #202024;
-  --z900: #18181b;
-  --z925: #111113;
-  --z940: #0f0f11;
-  --z950: #0c0c0e;
-  --z955: #0b0b0d;
-  --z975: #09090b;
-  --blue: #93c5fd;
-  --red: #f87171;
-  --red-solid: #ef4444;
-  --red-hover: #f87171;
+  --z50: #f3f5f8;
+  --z200: #e1e6ee;
+  --z300: #cbd2de;
+  --z400: #a7b0c0;
+  --z500: #8590a3;
+  --z600: #556074;
+  --z700: #3a4457;
+  --z800: #283041;
+  --z850: #222939;
+  --z900: #1c2230;
+  --z925: #151a23;
+  --z940: #131820;
+  --z950: #11161e;
+  --z955: #10141c;
+  --z975: #0f131a;
+  --blue: #6cb6e8;
+  --red: #f58a78;
+  --red-solid: #c63b28;
+  --red-hover: #d4432f;
   --red-dim: #7f1d1d;
   --red-wash: #2a1214;
-  --star: #facc15;
+  --star: #f4c22b;
   --warn-text: #facc15;
   --warn-border: #854d0e;
   --warn-bg: #42200633;
@@ -55,40 +55,56 @@
   --shadow-strong: #000c;
   --np-tint: rgba(9, 9, 11, .78);
   --np-art: .3;
+  --rail: #161b24;
+  --rail-text: #e1e6ee;
+  --rail-muted: #a7b0c0;
+  --rail-hover: #202736;
+  --rail-selected: #f4c22b;
+  --rail-selected-text: #1f1a08;
+  --brand: #f4c22b;
+  --accent: #6cb6e8;
+  --accent-hover: #8cc7ef;
+  --accent-text: #0f131a;
+  --dot-1: #e74c3c;
+  --dot-2: #e67e22;
+  --dot-3: #c0399b;
+  --dot-4: #ecf0f1;
+  --dot-5: #e74c3c;
+  --dot-off: #3a4457;
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --background: #ffffff;
-  --sidebar: #fafafa;
-  --card: #fafafa;
-  --card-raised: #f4f4f5;
-  --border: #e4e4e7;
-  --foreground: #18181b;
-  --muted: #52525b;
-  --subtle: #686872;
+  --background: #f5f6f8;
+  --sidebar: #f4c22b;
+  --card: #ffffff;
+  --card-raised: #eef1f5;
+  --border: #dde2ea;
+  --foreground: #141a24;
+  --muted: #4d576a;
+  --subtle: #5c6679;
   --green: #16a34a;
-  --z50: #18181b;
-  --z200: #27272a;
-  --z300: #3f3f46;
-  --z400: #52525b;
-  --z500: #686872;
-  --z600: #a1a1aa;
-  --z700: #d4d4d8;
-  --z800: #e4e4e7;
-  --z850: #ececee;
-  --z900: #f4f4f5;
-  --z925: #fafafa;
-  --z940: #fcfcfc;
-  --z950: #ffffff;
-  --z955: #fdfdfd;
+  --z50: #141a24;
+  --z200: #222a37;
+  --z300: #384254;
+  --z400: #4d576a;
+  --z500: #5c6679;
+  --z600: #9aa3b3;
+  --z700: #cdd3dd;
+  --z800: #e3e8ef;
+  --z850: #e9edf2;
+  --z900: #eef1f5;
+  --z925: #f2f4f7;
+  --z940: #f5f6f8;
+  --z950: #f8f9fa;
+  --z955: #fafbfc;
   --z975: #ffffff;
-  --blue: #2563eb;
-  --red: #b91c1c;
-  --red-solid: #dc2626;
-  --red-hover: #b91c1c;
+  --blue: #2a74ae;
+  --red: #b3341f;
+  --red-solid: #c63b28;
+  --red-hover: #b3341f;
   --red-dim: #fca5a5;
   --red-wash: #fef2f2;
-  --star: #f59e0b;
+  --star: #d99a06;
   --warn-text: #854d0e;
   --warn-border: #e0b64a;
   --warn-bg: #fef3c7;
@@ -99,6 +115,22 @@
   --shadow-strong: rgb(24 24 27 / 28%);
   --np-tint: rgba(255, 255, 255, .66);
   --np-art: .38;
+  --rail: #f4c22b;
+  --rail-text: #1f1a08;
+  --rail-muted: #4a3d0c;
+  --rail-hover: #e9b61c;
+  --rail-selected: #ffffff;
+  --rail-selected-text: #141a24;
+  --brand: #f4c22b;
+  --accent: #2a74ae;
+  --accent-hover: #236396;
+  --accent-text: #ffffff;
+  --dot-1: #e74c3c;
+  --dot-2: #e67e22;
+  --dot-3: #c0399b;
+  --dot-4: #ffffff;
+  --dot-5: #e74c3c;
+  --dot-off: #c9a21f;
 }
 
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--z700) transparent; }
@@ -143,24 +175,24 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .setting-switch.enabled { border-color: var(--z200); background: var(--z200); }
 .setting-switch.enabled > span { background: var(--z900); transform: translateX(18px); }
 .setting-switch:disabled { opacity: .55; cursor: wait; }
-.freeze-plugin-settings { margin-top: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
-.freeze-plugin-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.freeze-plugin-heading h2 { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--foreground); font-size: 14px; font-weight: 600; }
-.freeze-plugin-heading p, .freeze-plugin-warning, .freeze-plugin-empty { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 17px; }
-.freeze-plugin-warning { margin-top: 14px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--z900); }
-.freeze-plugin-errors { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--warn-border); border-radius: 6px; background: var(--warn-bg); color: var(--warn-text); font-size: 12px; }
-.freeze-plugin-errors p { margin: 0; line-height: 18px; }
-.freeze-plugin-list { margin-top: 11px; display: grid; gap: 7px; }
-.freeze-plugin-item { min-width: 0; padding: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 6px; }
-.freeze-plugin-item > div { min-width: 0; display: grid; gap: 4px; }
-.freeze-plugin-item strong { color: var(--foreground); font-size: 12px; }
-.freeze-plugin-item strong span, .freeze-plugin-item small, .freeze-plugin-format span { color: var(--muted); font-size: 11px; }
-.freeze-plugin-item small { overflow-wrap: anywhere; }
-.freeze-plugin-empty { margin-top: 11px; }
-.freeze-plugin-format { margin-top: 12px; color: var(--muted); font-size: 11px; }
-.freeze-plugin-format summary { width: fit-content; cursor: pointer; }
-.freeze-plugin-format code { margin-top: 9px; padding: 10px; display: block; border: 1px solid var(--border); border-radius: 6px; background: var(--z950); color: var(--foreground); white-space: pre-wrap; }
-.freeze-plugin-format span { margin-top: 6px; display: block; }
+.open-dock-plugin-settings { margin-top: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.open-dock-plugin-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.open-dock-plugin-heading h2 { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--foreground); font-size: 14px; font-weight: 600; }
+.open-dock-plugin-heading p, .open-dock-plugin-warning, .open-dock-plugin-empty { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 17px; }
+.open-dock-plugin-warning { margin-top: 14px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--z900); }
+.open-dock-plugin-errors { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--warn-border); border-radius: 6px; background: var(--warn-bg); color: var(--warn-text); font-size: 12px; }
+.open-dock-plugin-errors p { margin: 0; line-height: 18px; }
+.open-dock-plugin-list { margin-top: 11px; display: grid; gap: 7px; }
+.open-dock-plugin-item { min-width: 0; padding: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 6px; }
+.open-dock-plugin-item > div { min-width: 0; display: grid; gap: 4px; }
+.open-dock-plugin-item strong { color: var(--foreground); font-size: 12px; }
+.open-dock-plugin-item strong span, .open-dock-plugin-item small, .open-dock-plugin-format span { color: var(--muted); font-size: 11px; }
+.open-dock-plugin-item small { overflow-wrap: anywhere; }
+.open-dock-plugin-empty { margin-top: 11px; }
+.open-dock-plugin-format { margin-top: 12px; color: var(--muted); font-size: 11px; }
+.open-dock-plugin-format summary { width: fit-content; cursor: pointer; }
+.open-dock-plugin-format code { margin-top: 9px; padding: 10px; display: block; border: 1px solid var(--border); border-radius: 6px; background: var(--z950); color: var(--foreground); white-space: pre-wrap; }
+.open-dock-plugin-format span { margin-top: 6px; display: block; }
 .plugin-action-info span { color: var(--subtle); font-size: 11px; font-weight: 400; line-height: 1.4; }
 .setting-error { flex-basis: 100%; margin: -7px 0 0; color: var(--red); font-size: 12px; }
 .updates-setting { margin-bottom: 14px; }
@@ -187,6 +219,7 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .connection-details code { overflow: hidden; color: var(--z200); font: 10px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .pairing-ready { display: flex; align-items: center; gap: 6px; color: var(--z300); }
 .pairing-ready svg { color: var(--subtle); }
+.pairing-pin { font-size: 1.15em; letter-spacing: 0.14em; font-variant-numeric: tabular-nums; }
 .secondary-button { min-height: 34px; padding: 0 11px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--z900); color: var(--z200); font-size: 12px; font-weight: 500; cursor: pointer; }
 .secondary-button:hover:not(:disabled) { background: var(--z800); }
 .secondary-button:disabled { opacity: .5; cursor: default; }
@@ -690,4 +723,34 @@ body.deck-dragging, body.deck-dragging * { cursor: grabbing !important; user-sel
   .deck-workspace.side-open .button-properties { position: absolute; z-index: 20; top: 0; right: 0; bottom: 0; width: min(320px, 100%); box-shadow: -14px 0 30px var(--shadow); }
   .deck-workspace.side-open .deck-main { margin-right: min(320px, 100%); }
   .deck-panel-toggle, .deck-panel-close { display: inline-flex; }
+}
+
+/* Open Dock look: the icon's sunflower as the sidebar rail, screen blue for actions, Bricolage for headings.
+   The one moving part is the dock dots under the name, which light up in turn when a phone connects. */
+:root { font-family: "IBM Plex Sans", "Segoe UI", sans-serif; }
+.sidebar { background: var(--rail); border-right: 0; }
+.brand { height: 46px; gap: 11px; color: var(--rail-text); font-family: "Bricolage Grotesque", "Segoe UI", sans-serif; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+.brand-icon { flex: none; width: 28px; height: 28px; }
+.dock-dots { display: flex; gap: 6px; margin: 0 10px 0 49px; }
+.dock-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--dot-off); transition: background-color .35s ease; }
+.dock-dots.live i:nth-child(1) { background: var(--dot-1); }
+.dock-dots.live i:nth-child(2) { background: var(--dot-2); transition-delay: .07s; }
+.dock-dots.live i:nth-child(3) { background: var(--dot-3); transition-delay: .14s; }
+.dock-dots.live i:nth-child(4) { background: var(--dot-4); transition-delay: .21s; }
+.dock-dots.live i:nth-child(5) { background: var(--dot-5); transition-delay: .28s; }
+.nav-heading { color: var(--rail-muted); }
+.sidebar .nav-item { height: 40px; border-radius: 10px; color: var(--rail-muted); font-weight: 500; }
+.sidebar .nav-item svg, .sidebar .nav-item.selected svg { color: currentColor; }
+.sidebar .nav-item:hover { background: var(--rail-hover); color: var(--rail-text); }
+.sidebar .nav-item.selected { background: var(--rail-selected); color: var(--rail-selected-text); box-shadow: 0 1px 2px var(--shadow-soft); }
+.sidebar .version { color: var(--rail-muted); }
+.page-heading h1 { font-family: "Bricolage Grotesque", "Segoe UI", sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+.panel-head h2, .device-navigation-copy h2 { font-family: "Bricolage Grotesque", "Segoe UI", sans-serif; font-size: 15px; }
+.primary-button { border-color: var(--accent); border-radius: 8px; background: var(--accent); color: var(--accent-text); }
+.primary-button:hover:not(:disabled) { background: var(--accent-hover); }
+button:focus-visible { outline-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .dock-dots i { transition: none; } }
+@media (max-width: 1250px) {
+  .dock-dots { margin: 2px 0 6px; gap: 3px; justify-content: center; }
+  .dock-dots i { width: 6px; height: 6px; }
 }

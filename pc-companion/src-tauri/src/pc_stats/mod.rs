@@ -164,7 +164,7 @@ pub(super) struct CpuTemp {
     source: &'static str,
 }
 
-/// The readings to sample. Widgets name what they show with FreezeStats.needs() in pc-stats.js
+/// The readings to sample. Widgets name what they show with OpenDockStats.needs() in pc-stats.js
 /// ("cpu", "gpu", "net", ...); the PC samples the union of what's on screen and nothing else.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct Needs(u16);
@@ -375,14 +375,14 @@ impl Sensors {
     }
 }
 
-/// With FREEZE_SENSOR_DUMP=1 every sample and the platform's raw readings are appended to
-/// freeze-sensor-dump.jsonl in the temp folder, so a tester's machine can become a test fixture.
+/// With OPEN_DOCK_SENSOR_DUMP=1 every sample and the platform's raw readings are appended to
+/// open-dock-sensor-dump.jsonl in the temp folder, so a tester's machine can become a test fixture.
 fn open_dump() -> Option<std::fs::File> {
-    if std::env::var("FREEZE_SENSOR_DUMP").ok().as_deref() != Some("1") {
+    if std::env::var("OPEN_DOCK_SENSOR_DUMP").ok().as_deref() != Some("1") {
         return None;
     }
-    let path = std::env::temp_dir().join("freeze-sensor-dump.jsonl");
-    eprintln!("Freeze: writing sensor dump to {}", path.display());
+    let path = std::env::temp_dir().join("open-dock-sensor-dump.jsonl");
+    eprintln!("Open Dock: writing sensor dump to {}", path.display());
     std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -562,15 +562,15 @@ mod tests {
     #[test]
     #[ignore = "reads this machine's sensors"]
     fn live_sample() {
-        // FREEZE_LIVE_SECONDS=75 watches longer, e.g. past GPU re-detection at 30 s.
-        let seconds: f32 = std::env::var("FREEZE_LIVE_SECONDS")
+        // OPEN_DOCK_LIVE_SECONDS=75 watches longer, e.g. past GPU re-detection at 30 s.
+        let seconds: f32 = std::env::var("OPEN_DOCK_LIVE_SECONDS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(4.5);
         let (updates, mut samples) = watch::channel(PcStatsHistory::default());
         let demand = Arc::new(Demand::default());
-        // FREEZE_LIVE_NEEDS=gpu,net samples only those readings (default: everything).
-        let names = std::env::var("FREEZE_LIVE_NEEDS")
+        // OPEN_DOCK_LIVE_NEEDS=gpu,net samples only those readings (default: everything).
+        let names = std::env::var("OPEN_DOCK_LIVE_NEEDS")
             .unwrap_or_else(|_| "cpu,cores,clock,cputemp,gpu,ram,disk,diskio,net".into());
         demand.set(
             DESKTOP,

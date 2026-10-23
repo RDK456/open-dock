@@ -4,11 +4,12 @@ import Storage from 'expo-sqlite/kv-store';
 import * as Brightness from 'expo-brightness';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setThemeMode, useStyles, useThemeMode, type Colors, type ThemeMode } from './theme';
+import { setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
 
 // The screen is a deck's biggest power draw. These settings decide whether the deck keeps it on and
 // whether it dims when nobody is touching it. (Expo Go keeps the screen on while developing anyway.)
 export type ScreenSettings = { keepAwake: boolean; dimAfterMin: 0 | 1 | 2 | 5 };
-const KEY = 'freeze.screen';
+const KEY = 'opendock.screen';
 const DEFAULTS: ScreenSettings = { keepAwake: false, dimAfterMin: 0 };
 const DIM_LEVEL = 0.05;
 
@@ -45,8 +46,8 @@ export function useDeckScreenPower() {
 
   useEffect(() => {
     if (!keepAwake) return;
-    void activateKeepAwakeAsync('freeze-deck');
-    return () => { void deactivateKeepAwake('freeze-deck'); };
+    void activateKeepAwakeAsync('open-dock-deck');
+    return () => { void deactivateKeepAwake('open-dock-deck'); };
   }, [keepAwake]);
 
   const restore = () => {
@@ -98,11 +99,17 @@ function Choice<T extends string | number | boolean>({ options, value, onChange 
 export function AppearanceSection() {
   const styles = useStyles(makeStyles);
   const mode = useThemeMode();
+  const { wallpaper, motion } = useWallpaperSettings();
   const options: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
   return <View style={styles.card}>
     <Text style={styles.title}>Appearance</Text>
     <Choice options={options} value={mode} onChange={setThemeMode} />
     <Text style={styles.hint}>{"System follows this phone's setting. Your PC has its own."}</Text>
+    <Text style={styles.label}>Wallpaper</Text>
+    <Choice options={WALLPAPERS} value={wallpaper} onChange={(value) => setWallpaperSettings({ wallpaper: value })} />
+    <Text style={styles.label}>Wallpaper motion</Text>
+    <Choice options={[[false, 'Still'], [true, 'Drift']]} value={motion} onChange={(value) => setWallpaperSettings({ motion: value })} />
+    <Text style={styles.hint}>Shows behind the Deck and Touch screens. Drift pauses when the phone asks for reduced motion.</Text>
   </View>;
 }
 

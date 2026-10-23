@@ -1286,36 +1286,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "freeze-pc"
-version = "1.3.0"
-dependencies = [
- "axum",
- "base64 0.22.1",
- "enigo",
- "libloading 0.8.9",
- "local-ip-address",
- "nvml-wrapper",
- "objc2-app-kit",
- "objc2-foundation",
- "png 0.17.16",
- "rand 0.9.5",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tokio",
- "windows 0.62.2",
- "zip",
-]
-
-[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2862,6 +2832,36 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "open-dock-pc"
+version = "1.3.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "enigo",
+ "libloading 0.8.9",
+ "local-ip-address",
+ "nvml-wrapper",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "png 0.17.16",
+ "rand 0.9.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tokio",
+ "windows 0.62.2",
+ "zip",
+]
 
 [[package]]
 name = "openssl-probe"

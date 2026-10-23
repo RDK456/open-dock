@@ -9,9 +9,9 @@ export type CustomShortcut = { id: string; label: string; icon?: ShortcutIcon } 
 );
 export type DeckPage = { id: string; name: string; shortcuts: CustomShortcut[] };
 
-const PAGES_KEY = 'freeze.deck-pages';
-const ACTIVE_PAGE_KEY = 'freeze.active-deck-page';
-const LEGACY_KEYS = ['freeze.custom-shortcuts', 'decklink.custom-shortcuts'];
+const PAGES_KEY = 'opendock.deck-pages';
+const ACTIVE_PAGE_KEY = 'opendock.active-deck-page';
+const LEGACY_KEYS = ['opendock.custom-shortcuts', 'decklink.custom-shortcuts'];
 
 function validPages(value: unknown): value is DeckPage[] {
   return Array.isArray(value) && value.length > 0 && value.every((page) =>

@@ -1,14 +1,14 @@
-# Freeze-native plugin widgets Implementation Plan
+# Open Dock-native plugin widgets Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let installed Freeze plugins provide configurable text widgets that can be placed on the existing desktop-edited widget grid and rendered by the phone app.
+**Goal:** Let installed Open Dock plugins provide configurable text widgets that can be placed on the existing desktop-edited widget grid and rendered by the phone app.
 
-**Architecture:** Extend the current plugin manifest with declarative widget metadata and the current deck widget data with a backward-compatible plugin variant. The desktop editor configures instances and stores their placement/values; the phone receives the deck snapshot and renders a Freeze-owned native text widget without executing plugin code.
+**Architecture:** Extend the current plugin manifest with declarative widget metadata and the current deck widget data with a backward-compatible plugin variant. The desktop editor configures instances and stores their placement/values; the phone receives the deck snapshot and renders a Open Dock-owned native text widget without executing plugin code.
 
 **Tech Stack:** Rust + Serde/Tauri backend, React + TypeScript desktop editor, Expo React Native phone app.
 
-**Spec:** `docs/superpowers/specs/2026-10-02-freeze-native-widget-plugins-design.md`
+**Spec:** `docs/superpowers/specs/2026-10-02-open-dock-native-widget-plugins-design.md`
 
 ## Global Constraints
 
@@ -35,8 +35,8 @@
 - Modify: `pc-companion/src-tauri/src/lib.rs`
 
 **Interfaces:**
-- Consumes: current `FreezePluginManifest`, `FreezePluginAction`, `DeckWidget`, `validate_plugin_manifest`, plugin install/uninstall paths, and `validate_deck_config`.
-- Produces: optional `FreezePluginManifest.widgets: Vec<FreezePluginWidget>`; `FreezePluginWidget { id, name, description, kind, inputs }`; backward-compatible `DeckWidget` plugin fields (`pluginId`, `widgetId`, `renderType`, `values`) while preserving the clock JSON shape.
+- Consumes: current `OpenDockPluginManifest`, `OpenDockPluginAction`, `DeckWidget`, `validate_plugin_manifest`, plugin install/uninstall paths, and `validate_deck_config`.
+- Produces: optional `OpenDockPluginManifest.widgets: Vec<OpenDockPluginWidget>`; `OpenDockPluginWidget { id, name, description, kind, inputs }`; backward-compatible `DeckWidget` plugin fields (`pluginId`, `widgetId`, `renderType`, `values`) while preserving the clock JSON shape.
 
 - [ ] Add a default-empty top-level manifest `widgets` field and a metadata struct with `id`, `name`, optional `description`, `type` renamed to `kind`, and default-empty `inputs`.
 - [ ] Validate no more than 32 widget definitions, unique valid IDs, valid labels/descriptions, `type == "text"`, at most 16 inputs, and valid input metadata/options using the same rules as action inputs.
@@ -73,7 +73,7 @@
 
 **Interfaces:**
 - Consumes: plugin widget metadata and saved instances from Tasks 1–2, existing widget occupancy and responsive grid layout.
-- Produces: `DeckWidget` discriminated union for `clock` and `plugin`, snapshot validation for plugin widget values, and a Freeze-owned text widget view that does not require the plugin manifest on the phone.
+- Produces: `DeckWidget` discriminated union for `clock` and `plugin`, snapshot validation for plugin widget values, and a Open Dock-owned text widget view that does not require the plugin manifest on the phone.
 
 - [x] Update `DeckWidget` into a discriminated union while retaining the legacy `clock` shape.
 - [x] Validate plugin widget instance IDs, plugin/widget identifiers, renderer string, string values, and placement; allow unknown renderer identifiers through snapshot parsing so the page can render a placeholder.
@@ -84,14 +84,14 @@
 ### Task 4: Document the widget manifest and verify the integrated flow
 
 **Files:**
-- Modify: `pc-companion/docs/freeze-plugin-format.md`
+- Modify: `pc-companion/docs/open-dock-plugin-format.md`
 
 **Interfaces:**
 - Consumes: manifest and deck shapes from Tasks 1–3.
 - Produces: documented widget manifest example and limitations for plugin authors.
 
 - [x] Add a complete manifest example defining a text widget with title and body inputs.
-- [x] Document that widgets are rendered by Freeze, do not run plugin code, and currently display static configured text; list dynamic providers as deferred.
+- [x] Document that widgets are rendered by Open Dock, do not run plugin code, and currently display static configured text; list dynamic providers as deferred.
 - [x] Re-run `cargo check`, `npm run build`, `npx tsc --noEmit`, and `git diff --check`; read each command's result.
 - [x] Confirm the desktop app and Expo server are still running for user testing; restart either app if it stopped.
 

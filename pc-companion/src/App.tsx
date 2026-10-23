@@ -1,3 +1,4 @@
+import appIcon from '../src-tauri/icons/128x128.png';
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -38,12 +39,19 @@ import {
   SkipBack,
   SkipForward,
   Smartphone,
-  Snowflake,
   Wifi,
   Volume1,
   Volume2,
   VolumeX,
   Zap,
+  Lock,
+  Moon,
+  Power,
+  RotateCcw,
+  LogOut,
+  Sun,
+  SunDim,
+  Camera,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -77,15 +85,18 @@ type ConnectionInfo = {
   androidUsbEnabled: boolean;
   androidUsb: { status: string; phone: string; detail: string };
   widgetSurface: WidgetSurface | null;
+  pin: string;
 };
 
+type SystemCommand = 'lock' | 'sleep' | 'restart' | 'shutdown' | 'sign_out' | 'brightness_up' | 'brightness_down' | 'screenshot';
+const SYSTEM_COMMANDS: [SystemCommand, string][] = [['screenshot', 'Screenshot'], ['lock', 'Lock'], ['sleep', 'Sleep'], ['brightness_up', 'Brightness up'], ['brightness_down', 'Brightness down'], ['sign_out', 'Sign out'], ['restart', 'Restart'], ['shutdown', 'Shut down']];
 type MediaCommand = 'play_pause' | 'next_track' | 'previous_track' | 'volume_up' | 'volume_down' | 'mute';
 type DeckStep = { type: 'media'; command: MediaCommand } | { type: 'hotkey'; keys: string[] } | { type: 'launch_app'; app: string } | { type: 'launch_file'; path: string } | { type: 'launch_folder'; path: string };
-type DeckAction = DeckStep | { type: 'run_script'; path: string; allowOnPc: boolean } | { type: 'plugin_action'; pluginId: string; actionId: string; allowOnPc: boolean; inputs: Record<string, string> } | { type: 'launch_app'; app: string } | { type: 'sequence'; steps: DeckStep[] } | { type: 'select_profile'; profileId: string } | { type: 'select_page'; pageId: string } | { type: 'open_folder'; folderId: string };
-type FreezePluginInput = { id: string; label: string; type: 'text' | 'number' | 'select'; default: string; options: string[]; optionLabels: string[] };
-type FreezePluginWidget = { id: string; name: string; description: string; type: 'text'; inputs: FreezePluginInput[] };
-type FreezePlugin = { id: string; name: string; version: string; description: string; actions: { id: string; name: string; description: string; script: string; inputs: FreezePluginInput[] }[]; widgets: FreezePluginWidget[] };
-type FreezePluginListing = { plugins: FreezePlugin[]; warnings: string[] };
+type DeckAction = DeckStep | { type: 'run_script'; path: string; allowOnPc: boolean } | { type: 'plugin_action'; pluginId: string; actionId: string; allowOnPc: boolean; inputs: Record<string, string> } | { type: 'launch_app'; app: string } | { type: 'sequence'; steps: DeckStep[] } | { type: 'select_profile'; profileId: string } | { type: 'select_page'; pageId: string } | { type: 'open_folder'; folderId: string } | { type: 'system'; command: SystemCommand };
+type OpenDockPluginInput = { id: string; label: string; type: 'text' | 'number' | 'select'; default: string; options: string[]; optionLabels: string[] };
+type OpenDockPluginWidget = { id: string; name: string; description: string; type: 'text'; inputs: OpenDockPluginInput[] };
+type OpenDockPlugin = { id: string; name: string; version: string; description: string; actions: { id: string; name: string; description: string; script: string; inputs: OpenDockPluginInput[] }[]; widgets: OpenDockPluginWidget[] };
+type OpenDockPluginListing = { plugins: OpenDockPlugin[]; warnings: string[] };
 type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
 type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction };
 type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
@@ -151,7 +162,7 @@ function usbMessage(usb: { status: string; phone: string; detail: string } | und
     case 'unauthorized': return 'Unlock the phone and tap Allow USB debugging';
     case 'pairing': return `Pairing with ${phone}…`;
     case 'connected': return `${usb.phone || 'Your phone'} is connected by USB`;
-    case 'idle': return `${usb.phone || 'The phone'} is plugged in but not connected. Open Freeze on it, or press Retry`;
+    case 'idle': return `${usb.phone || 'The phone'} is plugged in but not connected. Open Open Dock on it, or press Retry`;
     case 'failed': return `Could not pair with ${phone}${usb.detail ? `. ${usb.detail}` : ''}`;
     default: return usb.detail || 'Checking the USB connection…';
   }
@@ -185,8 +196,8 @@ function App() {
   const [mediaState, setMediaState] = useState<SystemMediaState>({ playbackState: 'unavailable' });
   const [legacyImports, setLegacyImports] = useState<LegacyImportSummary[]>([]);
   const [importError, setImportError] = useState('');
-  const [freezePlugins, setFreezePlugins] = useState<FreezePlugin[]>([]);
-  const [freezePluginWarnings, setFreezePluginWarnings] = useState<string[]>([]);
+  const [openDockPlugins, setOpenDockPlugins] = useState<OpenDockPlugin[]>([]);
+  const [openDockPluginWarnings, setOpenDockPluginWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -209,7 +220,7 @@ function App() {
     void refresh();
     void invoke<DeckConfig>('deck_config').then((config) => { if (live) setDeckConfig(config); }).catch(() => {});
     void invoke<boolean>('get_independent_navigation').then((enabled) => { if (live) setIndependentNavigation(enabled); }).catch(() => {});
-    void invoke<FreezePluginListing>('list_freeze_plugins').then(({ plugins, warnings }) => { if (live) { setFreezePlugins(plugins); setFreezePluginWarnings(warnings); } }).catch(() => {});
+    void invoke<OpenDockPluginListing>('list_open_dock_plugins').then(({ plugins, warnings }) => { if (live) { setOpenDockPlugins(plugins); setOpenDockPluginWarnings(warnings); } }).catch(() => {});
     const timer = window.setInterval(refresh, 2000);
     return () => {
       live = false;
@@ -372,7 +383,7 @@ function App() {
   const online = connection?.serverOnline ?? false;
   const pairingQr = connection
     ? JSON.stringify({
-        type: "freeze-pair",
+        type: "open-dock-pair",
         version: 1,
         transport,
         host: connection.host,
@@ -386,9 +397,11 @@ function App() {
     <main className={`app-shell ${connection?.isMacos ? 'macos-native-sidebar' : ''}`}>
       <aside className="sidebar" data-tauri-drag-region>
         <div className="brand" data-tauri-drag-region>
-          <Snowflake size={20} strokeWidth={1.8} />
-          <span>Freeze</span>
+          <img className="brand-icon" src={appIcon} width={22} height={22} alt="" />
+          <span>Open Dock</span>
         </div>
+        {/* The icon's dock dots, lit while a phone is connected. */}
+        <div className={`dock-dots ${(connection?.activeDevices ?? 0) > 0 ? 'live' : ''}`} role="status" aria-label={(connection?.activeDevices ?? 0) > 0 ? 'Phone connected' : 'No phone connected'}><i /><i /><i /><i /><i /></div>
 
         <div className="nav-heading">Workspace</div>
         <nav aria-label="Workspace">
@@ -423,8 +436,8 @@ function App() {
             <div className="legacy-import-actions">{legacyImports.map((item) => <button key={item.sourceId} className="secondary-button" onClick={() => void (item.ready ? importPhoneDeck(item.sourceId) : requestPhoneDeck(item.sourceId))}>{item.ready ? 'Import phone deck' : item.requested ? 'Request again' : 'Transfer phone deck'}</button>)}</div>
             {importError ? <p className="usb-error" role="alert">{importError}</p> : null}
           </section> : null}
-          {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} onSaved={setDeckConfig} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={freezePlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'settings' ? <>
-          <div className="page-heading"><div><h1>Settings</h1><p>Manage updates, device navigation and Freeze plugins.</p></div></div>
+          {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} onSaved={setDeckConfig} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={openDockPlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'settings' ? <>
+          <div className="page-heading"><div><h1>Settings</h1><p>Manage updates, device navigation and Open Dock plugins.</p></div></div>
           <AppearanceSetting />
           <UpdatesSetting updater={updater} />
           <section className="device-navigation-setting">
@@ -432,7 +445,7 @@ function App() {
             <button className={`setting-switch ${independentNavigation ? 'enabled' : ''}`} type="button" role="switch" aria-checked={independentNavigation} aria-label="Independent device navigation" disabled={navigationSettingBusy} onClick={() => void saveIndependentNavigation(!independentNavigation)}><span /></button>
             {navigationSettingError ? <p className="setting-error" role="alert">{navigationSettingError}</p> : null}
           </section>
-          <FreezePluginSettings plugins={freezePlugins} warnings={freezePluginWarnings} onChange={(plugins, warnings) => { setFreezePlugins(plugins); setFreezePluginWarnings(warnings); }} />
+          <OpenDockPluginSettings plugins={openDockPlugins} warnings={openDockPluginWarnings} onChange={(plugins, warnings) => { setOpenDockPlugins(plugins); setOpenDockPluginWarnings(warnings); }} />
           </> : <>
           <div className="page-heading">
             <div>
@@ -451,7 +464,7 @@ function App() {
                 <div className="section-icon"><Smartphone size={17} /></div>
                 <div>
                   <h2 id="pair-title">Pair a phone</h2>
-                  <p>Scan this code from the Freeze app on your phone.</p>
+                  <p>Scan this code from the Open Dock app on your phone.</p>
                 </div>
               </div>
 
@@ -473,6 +486,10 @@ function App() {
                     Key included in QR code
                   </span>
                 </div>
+                <div>
+                  <span>Pairing PIN</span>
+                  <code className="pairing-pin" aria-label="Pairing PIN for Find my PC">{connection?.pin ? `${connection.pin.slice(0, 3)} ${connection.pin.slice(3)}` : '——'}</code>
+                </div>
               </div>
 
               <button
@@ -487,7 +504,7 @@ function App() {
                 <div>
                   <strong>Android USB</strong>
                   <span>{adbDownloadMb !== null
-                    ? `Freeze needs Google's Android USB tool (adb, about ${adbDownloadMb} MB). It is downloaded from dl.google.com and kept inside Freeze.`
+                    ? `Open Dock needs Google's Android USB tool (adb, about ${adbDownloadMb} MB). It is downloaded from dl.google.com and kept inside Open Dock.`
                     : "Needs USB debugging turned on in the phone's Developer options."}</span>
                 </div>
                 <button className="secondary-button" onClick={() => void (adbDownloadMb !== null ? installAdb() : enableAndroidUsb())} disabled={!connection || usbBusy}>
@@ -495,17 +512,17 @@ function App() {
                 </button>
               </div>
               {usbError ? <p className="usb-error" role="alert">{usbError}</p> : null}
-              {transport === 'usb' && usbEnabled ? <p className="pair-note">Plug the Android phone in and Freeze pairs it by itself. Keep USB debugging enabled while using Freeze.</p> : null}
+              {transport === 'usb' && usbEnabled ? <p className="pair-note">Plug the Android phone in and Open Dock pairs it by itself. Keep USB debugging enabled while using Open Dock.</p> : null}
               {transport === 'usb' ? <p className="pair-note">On the phone: Settings → About phone → tap Build number 7 times → Developer options → turn on USB debugging, then tap Allow when asked.</p> : null}
               <p className="pair-note">iPhone USB data control needs a compatible MFi accessory. Use Wi-Fi on iOS.</p>
               <button className="secondary-button reset-pairing-button" onClick={() => void rotatePairingKey()}>Reset pairing key</button>
               {pairingError ? <p className="usb-error" role="alert">{pairingError}</p> : null}
               <p className="pair-note">
-                Keep the QR code private. Anyone who scans it can control this PC.
+                Keep the QR code and PIN private. Anyone who has them can control this PC. Phones that use Find my PC enter the PIN; it changes after each use.
               </p>
               {connection?.isMacos && (
                 <p className="pair-note mac-note">
-                  Allow Freeze under System Settings → Privacy &amp; Security → Accessibility to send shortcuts and volume keys. Now playing, play/pause and track skipping work without it.
+                  Allow Open Dock under System Settings → Privacy &amp; Security → Accessibility to send shortcuts and volume keys. Now playing, play/pause and track skipping work without it.
                 </p>
               )}
             </div>
@@ -528,7 +545,7 @@ function App() {
                     size={184}
                     level="M"
                     marginSize={2}
-                    aria-label="Freeze phone pairing QR code"
+                    aria-label="Open Dock phone pairing QR code"
                   />
                 ) : (
                   <div className="qr-placeholder">
@@ -579,45 +596,45 @@ function App() {
   );
 }
 
-function FreezePluginSettings({ plugins, warnings, onChange }: { plugins: FreezePlugin[]; warnings: string[]; onChange: (plugins: FreezePlugin[], warnings: string[]) => void }) {
+function OpenDockPluginSettings({ plugins, warnings, onChange }: { plugins: OpenDockPlugin[]; warnings: string[]; onChange: (plugins: OpenDockPlugin[], warnings: string[]) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function refresh() {
-    const listing = await invoke<FreezePluginListing>('list_freeze_plugins');
+    const listing = await invoke<OpenDockPluginListing>('list_open_dock_plugins');
     onChange(listing.plugins, listing.warnings);
   }
   async function install() {
     setBusy(true);
     setError('');
     try {
-      const sourcePath = await openFileDialog({ title: 'Choose a Freeze plugin folder', multiple: false, directory: true });
+      const sourcePath = await openFileDialog({ title: 'Choose a Open Dock plugin folder', multiple: false, directory: true });
       if (typeof sourcePath !== 'string') return;
-      await invoke<FreezePlugin>('install_freeze_plugin', { sourcePath });
+      await invoke<OpenDockPlugin>('install_open_dock_plugin', { sourcePath });
       await refresh();
     } catch (error) { setError(String(error)); }
     finally { setBusy(false); }
   }
-  async function uninstall(plugin: FreezePlugin) {
-    if (!window.confirm(`Remove Freeze plugin “${plugin.name}”? Deck items using its actions or widgets must be removed or reconfigured first.`)) return;
+  async function uninstall(plugin: OpenDockPlugin) {
+    if (!window.confirm(`Remove Open Dock plugin “${plugin.name}”? Deck items using its actions or widgets must be removed or reconfigured first.`)) return;
     setBusy(true);
     setError('');
     try {
-      await invoke('uninstall_freeze_plugin', { pluginId: plugin.id });
+      await invoke('uninstall_open_dock_plugin', { pluginId: plugin.id });
       await refresh();
     } catch (error) { setError(String(error)); }
     finally { setBusy(false); }
   }
-  return <section className="freeze-plugin-settings">
-    <div className="freeze-plugin-heading"><div><h2><Package size={16} /> Freeze plugins</h2><p>Install Freeze-native actions and widgets for your deck.</p></div><button type="button" className="secondary-button" disabled={busy} onClick={() => void install()}><Plus size={14} /> Install plugin</button></div>
-    <p className="freeze-plugin-warning">Only install code from people you trust. Plugin scripts run as your PC user and may access your files and applications. Each deck button requires separate permission before it can run. Elgato Stream Deck packages are not supported.</p>
+  return <section className="open-dock-plugin-settings">
+    <div className="open-dock-plugin-heading"><div><h2><Package size={16} /> Open Dock plugins</h2><p>Install Open Dock-native actions and widgets for your deck.</p></div><button type="button" className="secondary-button" disabled={busy} onClick={() => void install()}><Plus size={14} /> Install plugin</button></div>
+    <p className="open-dock-plugin-warning">Only install code from people you trust. Plugin scripts run as your PC user and may access your files and applications. Each deck button requires separate permission before it can run. Elgato Stream Deck packages are not supported.</p>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
-    {warnings.length ? <div className="freeze-plugin-errors" role="status">{warnings.map((warning, index) => <p key={`${index}-${warning}`}>{warning}</p>)}</div> : null}
-    {plugins.length ? <div className="freeze-plugin-list">{plugins.map((plugin) => <article className="freeze-plugin-item" key={plugin.id}><div><strong>{plugin.name} <span>v{plugin.version}</span></strong><small>{plugin.description || `${plugin.actions.length} actions`}</small><small>{plugin.actions.map((action) => action.name).join(' · ')}</small></div><button type="button" className="icon-button" aria-label={`Remove ${plugin.name}`} title="Remove plugin" disabled={busy} onClick={() => void uninstall(plugin)}><Trash2 size={14} /></button></article>)}</div> : <p className="freeze-plugin-empty">No Freeze plugins installed.</p>}
-    <details className="freeze-plugin-format"><summary>Plugin folder format</summary><code>{`manifest.json\nscripts/your-action.ps1  (Windows)\nscripts/your-action.sh    (macOS)`}</code><span>Manifest schema and a complete example: pc-companion/docs/freeze-plugin-format.md</span></details>
+    {warnings.length ? <div className="open-dock-plugin-errors" role="status">{warnings.map((warning, index) => <p key={`${index}-${warning}`}>{warning}</p>)}</div> : null}
+    {plugins.length ? <div className="open-dock-plugin-list">{plugins.map((plugin) => <article className="open-dock-plugin-item" key={plugin.id}><div><strong>{plugin.name} <span>v{plugin.version}</span></strong><small>{plugin.description || `${plugin.actions.length} actions`}</small><small>{plugin.actions.map((action) => action.name).join(' · ')}</small></div><button type="button" className="icon-button" aria-label={`Remove ${plugin.name}`} title="Remove plugin" disabled={busy} onClick={() => void uninstall(plugin)}><Trash2 size={14} /></button></article>)}</div> : <p className="open-dock-plugin-empty">No Open Dock plugins installed.</p>}
+    <details className="open-dock-plugin-format"><summary>Plugin folder format</summary><code>{`manifest.json\nscripts/your-action.ps1  (Windows)\nscripts/your-action.sh    (macOS)`}</code><span>Manifest schema and a complete example: pc-companion/docs/open-dock-plugin-format.md</span></details>
   </section>;
 }
 
-function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaState, isMacos, plugins, widgetSurface }: { config: DeckConfig | null; onSaved: (config: DeckConfig) => void; playbackState: PlaybackState; mediaState: SystemMediaState; isMacos: boolean; plugins: FreezePlugin[]; widgetSurface: WidgetSurface | null }) {
+function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaState, isMacos, plugins, widgetSurface }: { config: DeckConfig | null; onSaved: (config: DeckConfig) => void; playbackState: PlaybackState; mediaState: SystemMediaState; isMacos: boolean; plugins: OpenDockPlugin[]; widgetSurface: WidgetSurface | null }) {
   const theme = useTheme();
   const [workingConfig, setWorkingConfig] = useState<DeckConfig | null>(savedConfig);
   const [profileId, setProfileId] = useState('');
@@ -1928,7 +1945,7 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
       {dialog.type === 'settings' ? <div className="deck-dialog" role="dialog" aria-modal="true" aria-label={`${dialogProfile.name} settings`}>
         <h2>{dialogProfile.name} settings</h2>
         <label className="deck-dialog-field">Name<input value={renaming?.kind === 'profile' && renaming.id === dialogProfile.id ? renameDraft : dialogProfile.name} maxLength={32} disabled={busy} onFocus={() => startRename('profile', dialogProfile.id, dialogProfile.id, dialogProfile.name)} onChange={(event) => setRenameDraft(event.target.value)} onBlur={commitRename} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>
-        <div className="deck-dialog-row"><div><strong>Default profile</strong><p>Freeze opens on this profile, and returns to it when an automatic profile is left.</p></div><button type="button" role="switch" aria-checked={profileDefault === dialogProfile.id} aria-label="Default profile" className={`setting-switch ${profileDefault === dialogProfile.id ? 'enabled' : ''}`} disabled={busy || profileDefault === dialogProfile.id} onClick={() => setDefaultProfile(dialogProfile.id)}><span /></button></div>
+        <div className="deck-dialog-row"><div><strong>Default profile</strong><p>Open Dock opens on this profile, and returns to it when an automatic profile is left.</p></div><button type="button" role="switch" aria-checked={profileDefault === dialogProfile.id} aria-label="Default profile" className={`setting-switch ${profileDefault === dialogProfile.id ? 'enabled' : ''}`} disabled={busy || profileDefault === dialogProfile.id} onClick={() => setDefaultProfile(dialogProfile.id)}><span /></button></div>
         <div className="deck-dialog-row"><div><strong>Switch automatically</strong><p>Use this profile when one of its apps is in front on this PC.</p></div><button type="button" role="switch" aria-checked={dialogProfile.autoSwitchEnabled} aria-label="Switch automatically" className={`setting-switch ${dialogProfile.autoSwitchEnabled ? 'enabled' : ''}`} disabled={busy} onClick={() => updateProfileAutoSwitch(!dialogProfile.autoSwitchEnabled)}><span /></button></div>
         <div className="auto-switch-apps"><div className="auto-switch-apps-heading"><strong>Apps assigned to {dialogProfile.name}</strong><span>Entering a process name also works.</span></div><div className="auto-switch-app-add"><input value={autoSwitchAppDraft} maxLength={512} disabled={busy} placeholder={isMacos ? 'App name or .app path' : 'App name or .exe path'} onChange={(event) => setAutoSwitchAppDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addAutoSwitchApp(); } }} /><button type="button" className="secondary-button" disabled={busy || !autoSwitchAppDraft.trim()} onClick={() => addAutoSwitchApp()}>Add app</button><button type="button" className="icon-button" aria-label="Browse for an application" title="Browse for an application" disabled={busy} onClick={browseAutoSwitchApp}><FolderOpen size={15} /></button></div>{dialogProfile.autoSwitchApps.length ? <div className="auto-switch-app-list">{dialogProfile.autoSwitchApps.map((app) => <span className="auto-switch-app" key={app}>{app}<button type="button" className="icon-button" aria-label={`Remove ${app}`} disabled={busy} onClick={() => updateAutoSwitchApps(dialogProfile.autoSwitchApps.filter((entry) => entry !== app))}><Trash2 size={12} /></button></span>)}</div> : <p className="auto-switch-empty">No apps assigned to this profile yet.</p>}</div>
         {error ? <p className="usb-error" role="alert">{error}</p> : null}
@@ -1989,7 +2006,7 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
 
 function PluginWidgetProperties({ widget, definition, busy, onChange }: {
   widget: Extract<DeckWidget, { type: 'plugin' }>;
-  definition: FreezePluginWidget | null;
+  definition: OpenDockPluginWidget | null;
   busy: boolean;
   onChange: (inputId: string, value: string) => void;
 }) {
@@ -2012,7 +2029,7 @@ function buttonSummary(button: DeckButton, page: DeckPage): string {
     const count = (entry?.buttons.length ?? 0) + (entry?.widgets.length ?? 0);
     return `Folder · ${count} item${count === 1 ? '' : 's'}`;
   }
-  return ({ media: 'Media control', hotkey: 'Keyboard shortcut', launch_app: 'Opens an app on this PC', launch_file: 'Opens a file on this PC', launch_folder: 'Opens a folder on this PC', run_script: 'Runs a script on this PC', plugin_action: 'Plugin action', sequence: 'Runs steps in order', select_profile: 'Switches profile', select_page: 'Switches page' } as Record<string, string>)[action.type] ?? 'Button';
+  return ({ media: 'Media control', hotkey: 'Keyboard shortcut', launch_app: 'Opens an app on this PC', launch_file: 'Opens a file on this PC', launch_folder: 'Opens a folder on this PC', run_script: 'Runs a script on this PC', plugin_action: 'Plugin action', sequence: 'Runs steps in order', select_profile: 'Switches profile', select_page: 'Switches page', system: 'System & power' } as Record<string, string>)[action.type] ?? 'Button';
 }
 
 function buttonLabel(button: DeckButton, playback: PlaybackState) {
@@ -2040,6 +2057,7 @@ function autoIcon(action: DeckAction, playback: PlaybackState) {
   if (action.type === 'open_folder') return FolderClosed;
   if (action.type === 'select_profile') return Layers2;
   if (action.type === 'select_page') return PanelsTopLeft;
+  if (action.type === 'system') return ({ lock: Lock, sleep: Moon, restart: RotateCcw, shutdown: Power, sign_out: LogOut, brightness_up: Sun, brightness_down: SunDim, screenshot: Camera } as const)[action.command];
   return Keyboard;
 }
 
@@ -2086,7 +2104,7 @@ function IconPicker({ value, disabled, onChange }: { value: string; disabled: bo
   </div>;
 }
 
-function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onChange, onIcon }: { button: DeckButton; busy: boolean; isMacos: boolean; profiles: DeckProfile[]; pages: DeckPage[]; plugins: FreezePlugin[]; onChange: (patch: Partial<DeckButton>) => void; onIcon: (kind: 'app' | 'file', target: string, prefetched?: string | null) => void }) {
+function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onChange, onIcon }: { button: DeckButton; busy: boolean; isMacos: boolean; profiles: DeckProfile[]; pages: DeckPage[]; plugins: OpenDockPlugin[]; onChange: (patch: Partial<DeckButton>) => void; onIcon: (kind: 'app' | 'file', target: string, prefetched?: string | null) => void }) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const action = button.action;
@@ -2179,23 +2197,24 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
     }
   }
   const isWindowsShortcut = !isMacos && app.toLowerCase().endsWith('.lnk');
-  const actionOptions = [['media', 'Media'], ['hotkey', 'Keyboard shortcut'], ['launch_app', 'Launch app'], ['launch_file', 'Launch file'], ['launch_folder', 'Launch folder'], ['run_script', 'Run local script'], ['sequence', 'Sequence'], ['select_profile', 'Select profile'], ['select_page', 'Select page']].map(([value, label]) => ({ value, label }));
+  const actionOptions = [['media', 'Media'], ['hotkey', 'Keyboard shortcut'], ['launch_app', 'Launch app'], ['launch_file', 'Launch file'], ['launch_folder', 'Launch folder'], ['run_script', 'Run local script'], ['sequence', 'Sequence'], ['select_profile', 'Select profile'], ['select_page', 'Select page'], ['system', 'System & power']].map(([value, label]) => ({ value, label }));
   actionOptions.push(...plugins.flatMap((plugin) => plugin.actions.map((pluginAction) => ({ value: `plugin:${plugin.id}:${pluginAction.id}`, label: `${plugin.name} / ${pluginAction.name}` }))));
   const setKind = (value: string) => {
     thumbnailRequestRef.current += 1;
     setExtractingThumbnail(false);
     const pluginTarget = value.startsWith('plugin:') ? value.slice(7).split(':') : [];
     const selectedPluginAction = pluginTarget.length === 2 ? plugins.find((plugin) => plugin.id === pluginTarget[0])?.actions.find((item) => item.id === pluginTarget[1]) : undefined;
-    const next: DeckAction = pluginTarget.length === 2 ? { type: 'plugin_action', pluginId: pluginTarget[0], actionId: pluginTarget[1], allowOnPc: false, inputs: Object.fromEntries((selectedPluginAction?.inputs ?? []).map((input) => [input.id, input.default || (input.type === 'select' ? input.options[0] ?? '' : '')])) } : value === 'media' ? { type: 'media', command: 'play_pause' } : value === 'launch_app' ? { type: 'launch_app', app: '' } : value === 'launch_file' ? { type: 'launch_file', path: '' } : value === 'launch_folder' ? { type: 'launch_folder', path: '' } : value === 'run_script' ? { type: 'run_script', path: '', allowOnPc: false } : value === 'sequence' ? { type: 'sequence', steps: [{ type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] }, { type: 'hotkey', keys: ['CTRL', 'S'] }] } : value === 'select_profile' ? { type: 'select_profile', profileId: profiles[0]?.id ?? '' } : value === 'select_page' ? { type: 'select_page', pageId: pages[0]?.id ?? '' } : { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] };
+    const next: DeckAction = pluginTarget.length === 2 ? { type: 'plugin_action', pluginId: pluginTarget[0], actionId: pluginTarget[1], allowOnPc: false, inputs: Object.fromEntries((selectedPluginAction?.inputs ?? []).map((input) => [input.id, input.default || (input.type === 'select' ? input.options[0] ?? '' : '')])) } : value === 'media' ? { type: 'media', command: 'play_pause' } : value === 'launch_app' ? { type: 'launch_app', app: '' } : value === 'launch_file' ? { type: 'launch_file', path: '' } : value === 'launch_folder' ? { type: 'launch_folder', path: '' } : value === 'run_script' ? { type: 'run_script', path: '', allowOnPc: false } : value === 'sequence' ? { type: 'sequence', steps: [{ type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] }, { type: 'hotkey', keys: ['CTRL', 'S'] }] } : value === 'select_profile' ? { type: 'select_profile', profileId: profiles[0]?.id ?? '' } : value === 'select_page' ? { type: 'select_page', pageId: pages[0]?.id ?? '' } : value === 'system' ? { type: 'system', command: 'screenshot' } : { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] };
     onChange({ action: next, ...(value === 'launch_app' ? {} : { icon: 'auto', iconSvg: undefined, appIconData: undefined }) });
   };
   return <>
     {pickerOpen ? <AppPicker isMacos={isMacos} onClose={() => setPickerOpen(false)} onPick={(path, _name, icon) => { setPickerOpen(false); setAppTarget(path, icon); }} /> : null}
     <PanelSection title="Action">
       <label>Action<DeckSelect value={kind} onChange={setKind} disabled={busy} options={actionOptions} /></label>
-      {action.type === 'plugin_action' ? <><label className="plugin-action-info">Plugin action<span>{pluginAction?.description || 'Runs the local script defined by this Freeze plugin.'}</span></label>{pluginAction?.inputs.map((input) => <label key={input.id}>{input.label}{input.type === 'select' ? <DeckSelect value={action.inputs?.[input.id] ?? input.default ?? input.options[0] ?? ''} disabled={busy} options={input.options.map((option, index) => ({ value: option, label: input.optionLabels?.[index] || option }))} onChange={(value) => onChange({ action: { ...action, inputs: { ...action.inputs, [input.id]: value } } })} /> : <input type={input.type} value={action.inputs?.[input.id] ?? input.default} onChange={(event) => onChange({ action: { ...action, inputs: { ...action.inputs, [input.id]: event.target.value } } })} disabled={busy} maxLength={512} />}</label>)}<label className="script-permission"><input type="checkbox" checked={action.allowOnPc} disabled={busy} onChange={(event) => onChange({ action: { ...action, allowOnPc: event.target.checked } })} /><span>Allow this plugin action to run on this PC from a paired phone</span></label></> : null}
-      {kind === 'run_script' && action.type === 'run_script' ? <><label>Local script<div className="app-path-picker"><input value={scriptPath} onChange={(event) => onChange({ action: { ...action, path: event.target.value } })} placeholder={isMacos ? 'Choose a .sh or .py script' : 'Choose a .ps1 or .py script'} disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a local script" title="Browse for a local script" disabled={busy} onClick={() => void browseScript()}><File size={15} /></button></div></label><label className="script-permission"><input type="checkbox" checked={action.allowOnPc} disabled={busy || !scriptPath.trim()} onChange={(event) => onChange({ action: { ...action, allowOnPc: event.target.checked } })} /><span>Allow this script to run on this PC when activated from a paired phone</span></label><small>Scripts run as your Windows or macOS user. Freeze follows the operating system’s script policy.</small>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
+      {action.type === 'plugin_action' ? <><label className="plugin-action-info">Plugin action<span>{pluginAction?.description || 'Runs the local script defined by this Open Dock plugin.'}</span></label>{pluginAction?.inputs.map((input) => <label key={input.id}>{input.label}{input.type === 'select' ? <DeckSelect value={action.inputs?.[input.id] ?? input.default ?? input.options[0] ?? ''} disabled={busy} options={input.options.map((option, index) => ({ value: option, label: input.optionLabels?.[index] || option }))} onChange={(value) => onChange({ action: { ...action, inputs: { ...action.inputs, [input.id]: value } } })} /> : <input type={input.type} value={action.inputs?.[input.id] ?? input.default} onChange={(event) => onChange({ action: { ...action, inputs: { ...action.inputs, [input.id]: event.target.value } } })} disabled={busy} maxLength={512} />}</label>)}<label className="script-permission"><input type="checkbox" checked={action.allowOnPc} disabled={busy} onChange={(event) => onChange({ action: { ...action, allowOnPc: event.target.checked } })} /><span>Allow this plugin action to run on this PC from a paired phone</span></label></> : null}
+      {kind === 'run_script' && action.type === 'run_script' ? <><label>Local script<div className="app-path-picker"><input value={scriptPath} onChange={(event) => onChange({ action: { ...action, path: event.target.value } })} placeholder={isMacos ? 'Choose a .sh or .py script' : 'Choose a .ps1 or .py script'} disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a local script" title="Browse for a local script" disabled={busy} onClick={() => void browseScript()}><File size={15} /></button></div></label><label className="script-permission"><input type="checkbox" checked={action.allowOnPc} disabled={busy || !scriptPath.trim()} onChange={(event) => onChange({ action: { ...action, allowOnPc: event.target.checked } })} /><span>Allow this script to run on this PC when activated from a paired phone</span></label><small>Scripts run as your Windows or macOS user. Open Dock follows the operating system’s script policy.</small>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
       {kind === 'media' ? <label>Media command<DeckSelect value={media} onChange={(value) => onChange({ action: { type: 'media', command: value as MediaCommand } })} disabled={busy} options={[['play_pause', 'Play / Pause'], ['next_track', 'Next track'], ['previous_track', 'Previous track'], ['volume_up', 'Volume up'], ['volume_down', 'Volume down'], ['mute', 'Mute']].map(([value, label]) => ({ value, label }))} /></label> : null}
+      {kind === 'system' && action.type === 'system' ? <><label>Command<DeckSelect value={action.command} onChange={(value) => onChange({ action: { type: 'system', command: value as SystemCommand } })} disabled={busy} options={SYSTEM_COMMANDS.map(([value, label]) => ({ value, label }))} /></label>{action.command === 'screenshot' ? <small>Saves the main monitor as a PNG in Pictures/Open Dock.</small> : action.command.startsWith('brightness') ? <small>Works on built-in laptop screens.</small> : ['restart', 'shutdown', 'sign_out'].includes(action.command) ? <small>Runs at once, without asking. Open apps may lose unsaved work.</small> : null}</> : null}
       {kind === 'hotkey' ? <label>Keys<input value={keys} onChange={(event) => onChange({ action: { type: 'hotkey', keys: event.target.value.toUpperCase().split('+').map((key) => key.trim()).filter(Boolean) } })} placeholder="CTRL+SHIFT+M" disabled={busy} /></label> : null}
       {kind === 'launch_app' && action.type === 'launch_app' ? <><label>App path or name<div className="app-path-picker"><input value={app} onChange={(event) => setAppTarget(event.target.value)} placeholder="Application, shortcut, or app name" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for an application" title="Browse for an application" disabled={busy} onClick={() => void browseApp()}><FolderOpen size={15} /></button></div></label></> : null}
       {kind === 'launch_file' && action.type === 'launch_file' ? <><label>File path<div className="app-path-picker"><input value={filePath} onChange={(event) => setFileTarget(event.target.value)} placeholder="Choose a file" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a file" title="Browse for a file" disabled={busy} onClick={() => void browseFileOrFolder(false)}><File size={15} /></button></div></label></> : null}

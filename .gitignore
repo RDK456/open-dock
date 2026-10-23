@@ -15,7 +15,7 @@ node_modules/
 Thumbs.db
 *.tsbuildinfo
 
-# Release signing keys live in ~/.freeze-signing, never here
+# Release signing keys live in ~/.open-dock-signing, never here
 *.jks
 *.keystore
 *.p12

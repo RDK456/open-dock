@@ -495,7 +495,7 @@ pub(super) fn read_system_volume() -> Option<u8> {
 
 /// Reads the default output device's volume through CoreAudio. This runs every second while
 /// something plays, so it must not start a process: a child that touches AppKit is registered by
-/// macOS as another Freeze and shows a bouncing Freeze icon in the Dock.
+/// macOS as another Open Dock and shows a bouncing Open Dock icon in the Dock.
 #[cfg(target_os = "macos")]
 pub(super) fn read_system_volume() -> Option<u8> {
     #[repr(C)]
@@ -745,7 +745,7 @@ pub(super) fn send_media_command(command_id: u8) -> Result<(), String> {
     mac_adapter::run(&["send", &command_id.to_string()])
 }
 
-/// Stops the macOS now playing stream so its perl process doesn't outlive Freeze.
+/// Stops the macOS now playing stream so its perl process doesn't outlive Open Dock.
 pub(super) fn shutdown() {
     #[cfg(target_os = "macos")]
     mac_adapter::stop();
@@ -968,7 +968,7 @@ mod mac_adapter {
     }
 
     /// Copies the bundled adapter out of the app before use. Files inside a downloaded app carry
-    /// the quarantine flag, which can stop macOS loading the library into perl; files Freeze writes
+    /// the quarantine flag, which can stop macOS loading the library into perl; files Open Dock writes
     /// itself don't. Each file is replaced through a rename so a running copy is never rewritten.
     fn install(app: &AppHandle) -> Result<Paths, String> {
         let source = app.path().resource_dir().map_err(|error| error.to_string())?.join("mediaremote");

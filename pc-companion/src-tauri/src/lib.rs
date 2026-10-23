@@ -33,6 +33,7 @@ mod adb;
 mod icon_png;
 mod media_players;
 mod pc_stats;
+mod remote;
 mod system_media;
 mod usb_pair;
 #[cfg(windows)]
@@ -76,6 +77,7 @@ struct AppState {
     usb_retry: AtomicBool,
     session_epoch: AtomicUsize,
     widget_surface: RwLock<Option<WidgetSurface>>,
+    pin_pairing: std::sync::Mutex<remote::PinPairing>,
 }
 
 /// The phone's widget area in px, reported so the desktop Now Playing preview sizes blocks like the phone.
@@ -103,7 +105,7 @@ impl WidgetSurface {
     }
 }
 
-/// Keeps a process Freeze starts from opening a console window on Windows. Every helper process goes through
+/// Keeps a process Open Dock starts from opening a console window on Windows. Every helper process goes through
 /// this (scripts/check-quiet-processes.ts fails the build when one does not); elsewhere it does nothing.
 fn quiet(command: &mut Command) -> &mut Command {
     #[cfg(windows)]
@@ -146,6 +148,7 @@ struct ConnectionInfo {
     android_usb_enabled: bool,
     android_usb: UsbPanel,
     widget_surface: Option<WidgetSurface>,
+    pin: String,
 }
 
 #[cfg(target_os = "macos")]
@@ -181,7 +184,7 @@ struct DeckProfile {
     auto_switch_apps: Vec<String>,
     #[serde(default)]
     auto_switch_enabled: bool,
-    /// The page this profile opens on when Freeze starts. Empty means the first page.
+    /// The page this profile opens on when Open Dock starts. Empty means the first page.
     #[serde(default)]
     default_page_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -326,7 +329,7 @@ struct DeckButton {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct FreezePluginManifest {
+struct OpenDockPluginManifest {
     schema_version: u32,
     id: String,
     name: String,
@@ -334,13 +337,13 @@ struct FreezePluginManifest {
     #[serde(default)]
     description: String,
     #[serde(default)]
-    widgets: Vec<FreezePluginWidget>,
-    actions: Vec<FreezePluginAction>,
+    widgets: Vec<OpenDockPluginWidget>,
+    actions: Vec<OpenDockPluginAction>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct FreezePluginWidget {
+struct OpenDockPluginWidget {
     id: String,
     name: String,
     #[serde(default)]
@@ -348,24 +351,24 @@ struct FreezePluginWidget {
     #[serde(rename = "type")]
     kind: String,
     #[serde(default)]
-    inputs: Vec<FreezePluginInput>,
+    inputs: Vec<OpenDockPluginInput>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct FreezePluginAction {
+struct OpenDockPluginAction {
     id: String,
     name: String,
     #[serde(default)]
     description: String,
     script: String,
     #[serde(default)]
-    inputs: Vec<FreezePluginInput>,
+    inputs: Vec<OpenDockPluginInput>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct FreezePluginInput {
+struct OpenDockPluginInput {
     id: String,
     label: String,
     #[serde(rename = "type")]
@@ -380,19 +383,19 @@ struct FreezePluginInput {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct InstalledFreezePlugin {
+struct InstalledOpenDockPlugin {
     id: String,
     name: String,
     version: String,
     description: String,
-    actions: Vec<FreezePluginAction>,
-    widgets: Vec<FreezePluginWidget>,
+    actions: Vec<OpenDockPluginAction>,
+    widgets: Vec<OpenDockPluginWidget>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FreezePluginListing {
-    plugins: Vec<InstalledFreezePlugin>,
+struct OpenDockPluginListing {
+    plugins: Vec<InstalledOpenDockPlugin>,
     warnings: Vec<String>,
 }
 
@@ -453,6 +456,10 @@ enum DeckAction {
     OpenFolder {
         #[serde(alias = "folder_id")]
         folder_id: String,
+    },
+    /// Power, brightness and screenshots.
+    System {
+        command: remote::SystemCommand,
     },
 }
 
@@ -1215,7 +1222,8 @@ fn validate_action(action: &DeckAction) -> Result<(), String> {
         DeckAction::Media { .. }
         | DeckAction::SelectProfile { .. }
         | DeckAction::SelectPage { .. }
-        | DeckAction::OpenFolder { .. } => Ok(()),
+        | DeckAction::OpenFolder { .. }
+        | DeckAction::System { .. } => Ok(()),
         DeckAction::Hotkey { keys } => validate_hotkey(keys),
         DeckAction::LaunchApp { app } => validate_app_target(app),
         DeckAction::LaunchFile { path } => validate_file_target(path),
@@ -1323,7 +1331,7 @@ fn valid_plugin_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
 }
 
-fn validate_plugin_manifest(manifest: &FreezePluginManifest) -> Result<(), String> {
+fn validate_plugin_manifest(manifest: &OpenDockPluginManifest) -> Result<(), String> {
     if manifest.schema_version != 1
         || !valid_plugin_id(&manifest.id)
         || !valid_label(&manifest.name, 80)
@@ -1336,7 +1344,7 @@ fn validate_plugin_manifest(manifest: &FreezePluginManifest) -> Result<(), Strin
         || manifest.widgets.len() > 32
         || (manifest.actions.is_empty() && manifest.widgets.is_empty())
     {
-        return Err("The Freeze plugin manifest has invalid metadata".into());
+        return Err("The Open Dock plugin manifest has invalid metadata".into());
     }
     let mut ids = std::collections::HashSet::new();
     for action in &manifest.actions {
@@ -1350,7 +1358,7 @@ fn validate_plugin_manifest(manifest: &FreezePluginManifest) -> Result<(), Strin
             || action.script[8..].contains(['/', '\\', ':'])
             || action.script[8..].starts_with('.')
         {
-            return Err("The Freeze plugin contains an invalid action".into());
+            return Err("The Open Dock plugin contains an invalid action".into());
         }
         validate_plugin_inputs(&action.inputs)?;
         validate_script_target(&action.script[8..])?;
@@ -1364,14 +1372,14 @@ fn validate_plugin_manifest(manifest: &FreezePluginManifest) -> Result<(), Strin
             || widget.description.chars().any(char::is_control)
             || widget.kind != "text"
         {
-            return Err("The Freeze plugin contains an invalid widget".into());
+            return Err("The Open Dock plugin contains an invalid widget".into());
         }
         validate_plugin_inputs(&widget.inputs)?;
     }
     Ok(())
 }
 
-fn validate_plugin_inputs(inputs: &[FreezePluginInput]) -> Result<(), String> {
+fn validate_plugin_inputs(inputs: &[OpenDockPluginInput]) -> Result<(), String> {
     if inputs.len() > 16 {
         return Err("A plugin action or widget can define at most 16 inputs".into());
     }
@@ -1383,7 +1391,7 @@ fn validate_plugin_inputs(inputs: &[FreezePluginInput]) -> Result<(), String> {
             || input.default.len() > 512
             || input.default.chars().any(char::is_control)
         {
-            return Err("The Freeze plugin contains an invalid input".into());
+            return Err("The Open Dock plugin contains an invalid input".into());
         }
         match input.kind.as_str() {
             "text" if input.options.is_empty() && input.option_labels.is_empty() => (),
@@ -1413,20 +1421,20 @@ fn validate_plugin_inputs(inputs: &[FreezePluginInput]) -> Result<(), String> {
                     })
                     || (!input.default.is_empty() && !options.contains(&input.default))
                 {
-                    return Err("The Freeze plugin contains an invalid select input".into());
+                    return Err("The Open Dock plugin contains an invalid select input".into());
                 }
             }
             "text" => return Err("Text inputs cannot define options".into()),
-            "number" => return Err("The Freeze plugin contains an invalid number input".into()),
-            _ => return Err("Freeze plugin inputs must be text, number, or select".into()),
+            "number" => return Err("The Open Dock plugin contains an invalid number input".into()),
+            _ => return Err("Open Dock plugin inputs must be text, number, or select".into()),
         }
     }
     Ok(())
 }
 
-fn read_freeze_plugin_manifest(
+fn read_open_dock_plugin_manifest(
     directory: &Path,
-) -> Result<(FreezePluginManifest, Vec<u8>), String> {
+) -> Result<(OpenDockPluginManifest, Vec<u8>), String> {
     let directory_metadata = fs::symlink_metadata(directory)
         .map_err(|_| "Could not access the plugin folder".to_owned())?;
     if directory_metadata.file_type().is_symlink() || !directory_metadata.is_dir() {
@@ -1443,15 +1451,15 @@ fn read_freeze_plugin_manifest(
     }
     let bytes =
         fs::read(&manifest_path).map_err(|_| "Could not read the plugin manifest".to_owned())?;
-    let manifest: FreezePluginManifest = serde_json::from_slice(&bytes)
-        .map_err(|_| "The plugin manifest is not valid Freeze plugin JSON".to_owned())?;
+    let manifest: OpenDockPluginManifest = serde_json::from_slice(&bytes)
+        .map_err(|_| "The plugin manifest is not valid Open Dock plugin JSON".to_owned())?;
     validate_plugin_manifest(&manifest)?;
     Ok((manifest, bytes))
 }
 
 fn plugin_scripts(
     directory: &Path,
-    manifest: &FreezePluginManifest,
+    manifest: &OpenDockPluginManifest,
 ) -> Result<Vec<(PathBuf, String)>, String> {
     let root = directory
         .canonicalize()
@@ -1490,7 +1498,7 @@ fn plugin_scripts(
     Ok(scripts)
 }
 
-fn freeze_plugins_path(config_dir: &Path) -> PathBuf {
+fn open_dock_plugins_path(config_dir: &Path) -> PathBuf {
     config_dir.join("plugins")
 }
 
@@ -1699,9 +1707,9 @@ fn set_independent_navigation(
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are unavailable".to_owned())?;
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     fs::write(
         config_dir.join("independent-navigation"),
         if enabled { "true" } else { "false" },
@@ -1747,7 +1755,7 @@ fn load_deck_config(path: &Path) -> DeckConfig {
                         }
                     }
                     normalize_deck_layout(&mut config);
-                    // Freeze opens on the default profile and each profile's default page.
+                    // Open Dock opens on the default profile and each profile's default page.
                     for profile in &mut config.profiles {
                         if profile.pages.iter().any(|page| page.id == profile.default_page_id) {
                             profile.active_page_id = profile.default_page_id.clone();
@@ -1869,6 +1877,14 @@ enum ClientMessage {
         #[serde(default, rename = "playerId")]
         player_id: Option<String>,
     },
+    /// Touchpad and keyboard input from the phone's Touch screen.
+    Pointer {
+        event: remote::PointerEvent,
+    },
+    /// A signature drawn on the phone, to paste into the app that has focus on the PC.
+    Signature {
+        strokes: remote::Strokes,
+    },
 }
 
 enum ClientAction {
@@ -1928,6 +1944,7 @@ fn connection_info(state: tauri::State<'_, Arc<AppState>>) -> ConnectionInfo {
         android_usb_enabled: state.android_usb_enabled.load(Ordering::Relaxed),
         android_usb: state.usb_panel.read().map(|panel| panel.clone()).unwrap_or_default(),
         widget_surface: state.widget_surface.read().ok().and_then(|surface| *surface),
+        pin: state.pin_pairing.lock().map(|pairing| pairing.pin().to_owned()).unwrap_or_default(),
     }
 }
 
@@ -1937,31 +1954,31 @@ fn deck_config(state: tauri::State<'_, Arc<AppState>>) -> Result<DeckConfig, Str
         .deck_config
         .read()
         .map(|config| config.clone())
-        .map_err(|_| "Freeze deck config is unavailable".to_owned())
+        .map_err(|_| "Open Dock deck config is unavailable".to_owned())
 }
 
 #[tauri::command]
-fn list_freeze_plugins(
+fn list_open_dock_plugins(
     state: tauri::State<'_, Arc<AppState>>,
-) -> Result<FreezePluginListing, String> {
+) -> Result<OpenDockPluginListing, String> {
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are still starting".to_owned())?;
-    let root = freeze_plugins_path(&config_dir);
+        .ok_or_else(|| "Open Dock settings are still starting".to_owned())?;
+    let root = open_dock_plugins_path(&config_dir);
     if !root.exists() {
-        return Ok(FreezePluginListing {
+        return Ok(OpenDockPluginListing {
             plugins: Vec::new(),
             warnings: Vec::new(),
         });
     }
     let mut plugins = Vec::new();
     let mut warnings = Vec::new();
-    for entry in fs::read_dir(root).map_err(|_| "Could not list Freeze plugins".to_owned())? {
+    for entry in fs::read_dir(root).map_err(|_| "Could not list Open Dock plugins".to_owned())? {
         let Ok(entry) = entry else {
-            warnings.push("Could not read one entry in Freeze's plugin folder.".to_owned());
+            warnings.push("Could not read one entry in Open Dock's plugin folder.".to_owned());
             continue;
         };
         let Ok(metadata) = fs::symlink_metadata(entry.path()) else {
@@ -1974,7 +1991,7 @@ fn list_freeze_plugins(
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
             continue;
         }
-        let (manifest, _) = match read_freeze_plugin_manifest(&entry.path()) {
+        let (manifest, _) = match read_open_dock_plugin_manifest(&entry.path()) {
             Ok(manifest) => manifest,
             Err(error) => {
                 warnings.push(format!(
@@ -1995,7 +2012,7 @@ fn list_freeze_plugins(
             warnings.push(format!("Plugin '{}': {error}", manifest.name));
             continue;
         }
-        plugins.push(InstalledFreezePlugin {
+        plugins.push(InstalledOpenDockPlugin {
             id: manifest.id,
             name: manifest.name,
             version: manifest.version,
@@ -2005,35 +2022,35 @@ fn list_freeze_plugins(
         });
     }
     plugins.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    Ok(FreezePluginListing { plugins, warnings })
+    Ok(OpenDockPluginListing { plugins, warnings })
 }
 
 #[tauri::command]
-fn install_freeze_plugin(
+fn install_open_dock_plugin(
     source_path: String,
     state: tauri::State<'_, Arc<AppState>>,
-) -> Result<InstalledFreezePlugin, String> {
+) -> Result<InstalledOpenDockPlugin, String> {
     let source = PathBuf::from(source_path)
         .canonicalize()
-        .map_err(|_| "Choose an existing Freeze plugin folder".to_owned())?;
+        .map_err(|_| "Choose an existing Open Dock plugin folder".to_owned())?;
     if !source.is_dir() {
         return Err("Choose a folder containing manifest.json and scripts/".into());
     }
-    let (manifest, manifest_bytes) = read_freeze_plugin_manifest(&source)?;
+    let (manifest, manifest_bytes) = read_open_dock_plugin_manifest(&source)?;
     let scripts = plugin_scripts(&source, &manifest)?;
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are still starting".to_owned())?;
-    let plugins_dir = freeze_plugins_path(&config_dir);
+        .ok_or_else(|| "Open Dock settings are still starting".to_owned())?;
+    let plugins_dir = open_dock_plugins_path(&config_dir);
     fs::create_dir_all(&plugins_dir)
-        .map_err(|_| "Could not prepare Freeze's plugin folder".to_owned())?;
+        .map_err(|_| "Could not prepare Open Dock's plugin folder".to_owned())?;
     let target = plugins_dir.join(&manifest.id);
     if target.exists() {
         return Err(
-            "A Freeze plugin with this id is already installed. Remove it before reinstalling."
+            "A Open Dock plugin with this id is already installed. Remove it before reinstalling."
                 .into(),
         );
     }
@@ -2051,7 +2068,7 @@ fn install_freeze_plugin(
         let _ = fs::remove_dir_all(&target);
         return Err(error);
     }
-    Ok(InstalledFreezePlugin {
+    Ok(InstalledOpenDockPlugin {
         id: manifest.id,
         name: manifest.name,
         version: manifest.version,
@@ -2062,17 +2079,17 @@ fn install_freeze_plugin(
 }
 
 #[tauri::command]
-fn uninstall_freeze_plugin(
+fn uninstall_open_dock_plugin(
     plugin_id: String,
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
     if !valid_plugin_id(&plugin_id) {
-        return Err("Invalid Freeze plugin id".into());
+        return Err("Invalid Open Dock plugin id".into());
     }
     let config = state
         .deck_config
         .read()
-        .map_err(|_| "Freeze deck config is unavailable".to_owned())?;
+        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?;
     if plugin_is_used(&config, &plugin_id) {
         return Err(
             "Change or remove this plugin's deck buttons or widgets before uninstalling it".into(),
@@ -2082,12 +2099,12 @@ fn uninstall_freeze_plugin(
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are still starting".to_owned())?;
-    let target = freeze_plugins_path(&config_dir).join(plugin_id);
+        .ok_or_else(|| "Open Dock settings are still starting".to_owned())?;
+    let target = open_dock_plugins_path(&config_dir).join(plugin_id);
     if target.exists() {
-        fs::remove_dir_all(target).map_err(|_| "Could not remove the Freeze plugin".to_owned())?;
+        fs::remove_dir_all(target).map_err(|_| "Could not remove the Open Dock plugin".to_owned())?;
     }
     Ok(())
 }
@@ -2148,7 +2165,7 @@ fn import_legacy_deck(
     let mut config = state
         .deck_config
         .write()
-        .map_err(|_| "Freeze deck config is unavailable".to_owned())?;
+        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?;
     let mut profile_name = "Imported phone deck".to_owned();
     let mut suffix = 2;
     while config
@@ -2262,9 +2279,9 @@ fn import_legacy_deck(
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are unavailable".to_owned())?;
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     save_deck_config_file(&config_dir.join("deck-config.json"), &config)?;
     let result = config.clone();
     drop(config);
@@ -2332,13 +2349,13 @@ fn save_deck_config(
     let mut current = state
         .deck_config
         .write()
-        .map_err(|_| "Freeze deck config is unavailable".to_owned())?;
+        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?;
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are unavailable".to_owned())?;
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     config.revision = current.revision.saturating_add(1);
     save_deck_config_file(&config_dir.join("deck-config.json"), &config)?;
     *current = config.clone();
@@ -2396,7 +2413,7 @@ fn foreground_app() -> Option<ForegroundApp> {
 
     let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
     let identity = app.bundleIdentifier()?.to_string();
-    if identity == "app.freeze.pc" {
+    if identity == "app.opendock.pc" {
         return None;
     }
     let path = app.bundleURL()?.path()?.to_string();
@@ -2629,13 +2646,13 @@ fn read_app_icon(app: String, use_shortcut_icon: bool) -> Result<String, String>
         }
         let script = r#"
 Add-Type -AssemblyName System.Drawing
-$path = $env:FREEZE_APP_PATH
+$path = $env:OPEN_DOCK_APP_PATH
 $icon = $null
 $iconHandle = [IntPtr]::Zero
 $smallHandle = [IntPtr]::Zero
 if ([IO.Path]::GetExtension($path) -ieq '.lnk') {
   $link = (New-Object -ComObject WScript.Shell).CreateShortcut($path)
-  if ($env:FREEZE_USE_SHORTCUT_ICON -eq '1') {
+  if ($env:OPEN_DOCK_USE_SHORTCUT_ICON -eq '1') {
     $location = [Environment]::ExpandEnvironmentVariables($link.IconLocation)
     if ($location -match '^(.*),\s*(-?\d+)$') {
       $iconPath = $Matches[1].Trim().Trim('"')
@@ -2648,14 +2665,14 @@ if ([IO.Path]::GetExtension($path) -ieq '.lnk') {
       Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
-public static class FreezeIconExtractor {
+public static class OpenDockIconExtractor {
   [DllImport("shell32.dll", EntryPoint = "ExtractIconExW", CharSet = CharSet.Unicode)]
   public static extern uint ExtractIconEx(string file, int index, out IntPtr large, out IntPtr small, uint count);
   [DllImport("user32.dll", SetLastError = true)]
   public static extern bool DestroyIcon(IntPtr icon);
 }
 '@
-      $count = [FreezeIconExtractor]::ExtractIconEx($iconPath, $iconIndex, [ref]$iconHandle, [ref]$smallHandle, 1)
+      $count = [OpenDockIconExtractor]::ExtractIconEx($iconPath, $iconIndex, [ref]$iconHandle, [ref]$smallHandle, 1)
       if ($count -gt 0 -and $iconHandle -ne [IntPtr]::Zero) { $icon = [System.Drawing.Icon]::FromHandle($iconHandle) }
     }
   }
@@ -2672,14 +2689,14 @@ $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
 [Console]::Out.Write([Convert]::ToBase64String($stream.ToArray()))
 $bitmap.Dispose()
 $stream.Dispose()
-if ($iconHandle -ne [IntPtr]::Zero) { $null = [FreezeIconExtractor]::DestroyIcon($iconHandle) }
-if ($smallHandle -ne [IntPtr]::Zero) { $null = [FreezeIconExtractor]::DestroyIcon($smallHandle) }
+if ($iconHandle -ne [IntPtr]::Zero) { $null = [OpenDockIconExtractor]::DestroyIcon($iconHandle) }
+if ($smallHandle -ne [IntPtr]::Zero) { $null = [OpenDockIconExtractor]::DestroyIcon($smallHandle) }
 "#;
         let output = quiet(&mut Command::new("powershell.exe"))
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .env("FREEZE_APP_PATH", &app)
+            .env("OPEN_DOCK_APP_PATH", &app)
             .env(
-                "FREEZE_USE_SHORTCUT_ICON",
+                "OPEN_DOCK_USE_SHORTCUT_ICON",
                 if use_shortcut_icon { "1" } else { "0" },
             )
             .output()
@@ -2730,7 +2747,7 @@ if ($smallHandle -ne [IntPtr]::Zero) { $null = [FreezeIconExtractor]::DestroyIco
                     })
             })
             .ok_or_else(|| "No .icns file was found in this app bundle".to_owned())?;
-        let temp = std::env::temp_dir().join(format!("freeze-icon-{}.png", rand::random::<u64>()));
+        let temp = std::env::temp_dir().join(format!("open-dock-icon-{}.png", rand::random::<u64>()));
         let converted = Command::new("/usr/bin/sips")
             .args(["-s", "format", "png", "--resampleWidth", "128"])
             .arg(&icon)
@@ -2766,9 +2783,9 @@ fn enable_android_usb(state: tauri::State<'_, Arc<AppState>>) -> Result<(), Stri
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are unavailable".to_owned())?;
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     fs::write(config_dir.join("android-usb-enabled"), "true")
         .map_err(|_| "Could not save the Android USB setting".to_owned())?;
     state.android_usb_enabled.store(true, Ordering::Relaxed);
@@ -2780,15 +2797,15 @@ fn rotate_pairing_key(state: tauri::State<'_, Arc<AppState>>) -> Result<(), Stri
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are unavailable".to_owned())?;
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     let token = create_pairing_key();
     save_pairing_key(&config_dir.join("pairing-key"), &token)?;
     *state
         .token
         .write()
-        .map_err(|_| "Freeze pairing key is unavailable".to_owned())? = token;
+        .map_err(|_| "Open Dock pairing key is unavailable".to_owned())? = token;
     state.session_epoch.fetch_add(1, Ordering::Relaxed);
     Ok(())
 }
@@ -2915,7 +2932,7 @@ fn machine_name() -> String {
                 .filter(|output| output.status.success())
                 .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
         })
-        .unwrap_or_else(|| "Freeze PC".to_owned());
+        .unwrap_or_else(|| "Open Dock PC".to_owned());
     let cleaned: String = name
         .trim()
         .chars()
@@ -2923,19 +2940,19 @@ fn machine_name() -> String {
         .take(64)
         .collect();
     if cleaned.is_empty() {
-        "Freeze PC".to_owned()
+        "Open Dock PC".to_owned()
     } else {
         cleaned
     }
 }
 
 fn save_pairing_key(path: &Path, token: &str) -> Result<(), String> {
-    fs::write(path, token).map_err(|_| "Could not save the Freeze pairing key".to_owned())?;
+    fs::write(path, token).map_err(|_| "Could not save the Open Dock pairing key".to_owned())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-            .map_err(|_| "Could not secure the Freeze pairing key".to_owned())?;
+            .map_err(|_| "Could not secure the Open Dock pairing key".to_owned())?;
     }
     Ok(())
 }
@@ -3669,6 +3686,27 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     next_playback_check = tokio::time::Instant::now() + Duration::from_millis(150);
                 }
             }
+            ClientMessage::Pointer { event } if authenticated => {
+                if event.is_valid() {
+                    remote::send_pointer(event);
+                }
+            }
+            ClientMessage::Signature { strokes } if authenticated => {
+                let result = if remote::signature_is_valid(&strokes) {
+                    tauri::async_runtime::spawn_blocking(move || remote::insert_signature(&strokes))
+                        .await
+                        .unwrap_or_else(|_| Err("Could not insert the signature".into()))
+                } else {
+                    Err("That signature is empty or too long".into())
+                };
+                let reply = match result {
+                    Ok(_) => serde_json::json!({ "type": "signature_result", "ok": true }),
+                    Err(error) => serde_json::json!({ "type": "signature_result", "ok": false, "error": error }),
+                };
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
             ClientMessage::PcStatsSubscribe { needs } if authenticated => {
                 pc_stats_needs = pc_stats::Needs::from_names(&needs[..needs.len().min(16)]);
                 state.pc_stats_demand.set(connection_id, pc_stats_needs, None);
@@ -3731,6 +3769,8 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
         }
     }
     if authenticated {
+        // A drag the phone started must not stay held after it drops.
+        remote::release_buttons();
         state.active_devices.fetch_sub(1, Ordering::Relaxed);
         if over_usb {
             state.usb_clients.fetch_sub(1, Ordering::Relaxed);
@@ -3788,9 +3828,9 @@ fn update_selection(
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are unavailable".to_owned())?;
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     save_deck_config_file(&config_dir.join("deck-config.json"), &config)?;
     let next = config.clone();
     drop(config);
@@ -3904,10 +3944,10 @@ fn run_deck_action(
             let config_dir = state
                 .config_dir
                 .read()
-                .map_err(|_| "Freeze settings are unavailable".to_owned())?
+                .map_err(|_| "Open Dock settings are unavailable".to_owned())?
                 .clone()
-                .ok_or_else(|| "Freeze settings are still starting".to_owned())?;
-            run_freeze_plugin_action(&config_dir, plugin_id, action_id, inputs)
+                .ok_or_else(|| "Open Dock settings are still starting".to_owned())?;
+            run_open_dock_plugin_action(&config_dir, plugin_id, action_id, inputs)
         }
         DeckAction::Sequence { steps } => {
             let mut actions = Vec::with_capacity(steps.len());
@@ -3956,6 +3996,7 @@ fn run_deck_action(
         }
         // The phone shows the folder itself; the PC has nothing to run.
         DeckAction::OpenFolder { .. } => Ok(()),
+        DeckAction::System { command } => remote::run_system_command(*command),
     }
 }
 
@@ -4121,7 +4162,7 @@ fn run_script(path: &str, args: &[String]) -> Result<(), String> {
         .map_err(|error| format!("Could not start script: {error}"))
 }
 
-fn run_freeze_plugin_action(
+fn run_open_dock_plugin_action(
     config_dir: &Path,
     plugin_id: &str,
     action_id: &str,
@@ -4130,8 +4171,8 @@ fn run_freeze_plugin_action(
     if !valid_plugin_id(plugin_id) || !valid_plugin_id(action_id) {
         return Err("This plugin action has an invalid identifier".into());
     }
-    let plugin_dir = freeze_plugins_path(config_dir).join(plugin_id);
-    let (manifest, _) = read_freeze_plugin_manifest(&plugin_dir)?;
+    let plugin_dir = open_dock_plugins_path(config_dir).join(plugin_id);
+    let (manifest, _) = read_open_dock_plugin_manifest(&plugin_dir)?;
     if manifest.id != plugin_id {
         return Err("Installed plugin id does not match its manifest".into());
     }
@@ -4255,21 +4296,21 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 [StructLayout(LayoutKind.Sequential)]
-public struct FreezeThumbnailSize { public int cx; public int cy; public FreezeThumbnailSize(int x, int y) { cx = x; cy = y; } }
+public struct OpenDockThumbnailSize { public int cx; public int cy; public OpenDockThumbnailSize(int x, int y) { cx = x; cy = y; } }
 [ComImport, Guid("BCC18B79-BA16-442F-80C4-8A59C30C463B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface FreezeShellItemImageFactory { [PreserveSig] int GetImage(FreezeThumbnailSize size, uint flags, out IntPtr bitmap); }
-public static class FreezeShellThumbnail {
+public interface OpenDockShellItemImageFactory { [PreserveSig] int GetImage(OpenDockThumbnailSize size, uint flags, out IntPtr bitmap); }
+public static class OpenDockShellThumbnail {
   [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
-  static extern int SHCreateItemFromParsingName(string path, IntPtr bindContext, ref Guid interfaceId, out FreezeShellItemImageFactory item);
+  static extern int SHCreateItemFromParsingName(string path, IntPtr bindContext, ref Guid interfaceId, out OpenDockShellItemImageFactory item);
   [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr handle);
   public static IntPtr Get(string path) {
-    FreezeShellItemImageFactory item = null;
+    OpenDockShellItemImageFactory item = null;
     IntPtr bitmap = IntPtr.Zero;
     Guid iid = new Guid("BCC18B79-BA16-442F-80C4-8A59C30C463B");
     int result = SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item);
     if (result < 0 || item == null) Marshal.ThrowExceptionForHR(result);
     try {
-      result = item.GetImage(new FreezeThumbnailSize(96, 96), 0, out bitmap);
+      result = item.GetImage(new OpenDockThumbnailSize(96, 96), 0, out bitmap);
       if (result < 0 || bitmap == IntPtr.Zero) Marshal.ThrowExceptionForHR(result);
       return bitmap;
     } finally {
@@ -4278,19 +4319,19 @@ public static class FreezeShellThumbnail {
   }
 }
 '@
-$path = $env:FREEZE_FILE_PATH
-$hbitmap = [FreezeShellThumbnail]::Get($path)
+$path = $env:OPEN_DOCK_FILE_PATH
+$hbitmap = [OpenDockShellThumbnail]::Get($path)
 $bitmap = [System.Drawing.Bitmap]::FromHbitmap($hbitmap)
 $stream = New-Object System.IO.MemoryStream
 $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
 [Console]::Out.Write([Convert]::ToBase64String($stream.ToArray()))
 $bitmap.Dispose()
 $stream.Dispose()
-$null = [FreezeShellThumbnail]::DeleteObject($hbitmap)
+$null = [OpenDockShellThumbnail]::DeleteObject($hbitmap)
 "#;
         let output = quiet(&mut Command::new("powershell.exe"))
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .env("FREEZE_FILE_PATH", &path)
+            .env("OPEN_DOCK_FILE_PATH", &path)
             .output()
             .map_err(|_| "Could not read a thumbnail from that file".to_owned())?;
         if !output.status.success() {
@@ -4305,7 +4346,7 @@ $null = [FreezeShellThumbnail]::DeleteObject($hbitmap)
     #[cfg(target_os = "macos")]
     {
         let directory =
-            std::env::temp_dir().join(format!("freeze-thumbnail-{}", rand::random::<u64>()));
+            std::env::temp_dir().join(format!("open-dock-thumbnail-{}", rand::random::<u64>()));
         fs::create_dir(&directory)
             .map_err(|_| "Could not prepare a thumbnail location".to_owned())?;
         let result = Command::new("/usr/bin/qlmanage")
@@ -4395,20 +4436,48 @@ fn parse_key(key: &str) -> Result<Key, String> {
     Ok(special)
 }
 
+/// Answers phones sweeping the network for Open Dock PCs. Gives the name only; pairing needs the PIN or QR code.
+async fn discover(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    axum::Json(serde_json::json!({ "app": "opendock", "name": state.device_name, "port": PORT }))
+}
+
+#[derive(Deserialize)]
+struct PairRequest {
+    pin: String,
+}
+
+/// Trades the PIN shown on the PC for the pairing key.
+async fn pair(State(state): State<Arc<AppState>>, axum::Json(request): axum::Json<PairRequest>) -> impl IntoResponse {
+    let accepted = request.pin.len() <= 16
+        && state.pin_pairing.lock().map(|mut pairing| pairing.check(&request.pin)).unwrap_or(false);
+    if !accepted {
+        // Slows guessing down further; the PIN also changes after 5 misses.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        return (axum::http::StatusCode::FORBIDDEN, axum::Json(serde_json::json!({ "error": "wrong_pin" })));
+    }
+    let token = state.token.read().map(|token| token.clone()).unwrap_or_default();
+    (
+        axum::http::StatusCode::OK,
+        axum::Json(serde_json::json!({ "token": token, "name": state.device_name, "port": PORT })),
+    )
+}
+
 async fn serve(state: Arc<AppState>) {
     let app = Router::new()
         .route("/ws", get(upgrade_socket))
+        .route("/discover", get(discover))
+        .route("/pair", axum::routing::post(pair))
         .with_state(state.clone());
     let listener = match TcpListener::bind(("0.0.0.0", PORT)).await {
         Ok(listener) => listener,
         Err(error) => {
-            eprintln!("Could not start the Freeze connection server: {error}");
+            eprintln!("Could not start the Open Dock connection server: {error}");
             return;
         }
     };
     state.server_online.store(true, Ordering::Relaxed);
     if let Err(error) = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await {
-        eprintln!("Freeze connection server stopped: {error}");
+        eprintln!("Open Dock connection server stopped: {error}");
         state.server_online.store(false, Ordering::Relaxed);
     }
 }
@@ -4460,9 +4529,9 @@ fn set_appearance(app: tauri::AppHandle, state: tauri::State<'_, Arc<AppState>>,
     let config_dir = state
         .config_dir
         .read()
-        .map_err(|_| "Freeze settings are unavailable".to_owned())?
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
-        .ok_or_else(|| "Freeze settings are unavailable".to_owned())?;
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
     fs::write(config_dir.join("appearance"), mode).map_err(|_| "Could not save the appearance setting".to_owned())?;
     if let Some(window) = app.get_webview_window("main") {
         apply_appearance(&window, mode);
@@ -4525,6 +4594,7 @@ pub fn run() {
         usb_retry: AtomicBool::new(false),
         session_epoch: AtomicUsize::new(0),
         widget_surface: RwLock::new(None),
+        pin_pairing: std::sync::Mutex::new(remote::PinPairing::new()),
     });
 
     tauri::Builder::default()
@@ -4538,9 +4608,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             connection_info,
             deck_config,
-            list_freeze_plugins,
-            install_freeze_plugin,
-            uninstall_freeze_plugin,
+            list_open_dock_plugins,
+            install_open_dock_plugin,
+            uninstall_open_dock_plugin,
             get_independent_navigation,
             set_independent_navigation,
             save_deck_config,
@@ -4570,11 +4640,11 @@ pub fn run() {
             *state
                 .token
                 .write()
-                .map_err(|_| std::io::Error::other("Freeze pairing key lock poisoned"))? = token;
+                .map_err(|_| std::io::Error::other("Open Dock pairing key lock poisoned"))? = token;
             *state
                 .config_dir
                 .write()
-                .map_err(|_| std::io::Error::other("Freeze settings directory lock poisoned"))? =
+                .map_err(|_| std::io::Error::other("Open Dock settings directory lock poisoned"))? =
                 Some(config_dir.clone());
 
             let independent_navigation =
@@ -4599,7 +4669,7 @@ pub fn run() {
             *state
                 .deck_config
                 .write()
-                .map_err(|_| std::io::Error::other("Freeze deck config lock poisoned"))? =
+                .map_err(|_| std::io::Error::other("Open Dock deck config lock poisoned"))? =
                 deck_config;
 
             let usb_enabled = fs::read_to_string(config_dir.join("android-usb-enabled"))
@@ -4632,9 +4702,9 @@ pub fn run() {
             }
 
             tauri::async_runtime::spawn(serve(state));
-            let open = MenuItem::with_id(app, "open", "Open Freeze", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Open Open Dock", true, None::<&str>)?;
             let updates = MenuItem::with_id(app, "updates", "Check for Updates…", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit Freeze", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit Open Dock", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &updates, &quit])?;
             let icon = app
                 .default_window_icon()
@@ -4675,7 +4745,7 @@ pub fn run() {
             }
         })
         .build(tauri::generate_context!())
-        .expect("error while building Freeze")
+        .expect("error while building Open Dock")
         .run(|_, event| {
             if let tauri::RunEvent::Exit = event {
                 system_media::shutdown();
@@ -4909,7 +4979,7 @@ mod installed_apps_tests {
 
     #[test]
     fn scans_bundles_and_skips_helpers() {
-        let root = std::env::temp_dir().join(format!("freeze-apps-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("open-dock-apps-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         for path in ["Alpha.app/Contents", "Utilities/Beta.app/Contents", "Deep/One/Two/Three/Gamma.app", "alpha.app", "Folder/Readme.app", "Uninstall Alpha.app"] {
             fs::create_dir_all(root.join(path)).unwrap();

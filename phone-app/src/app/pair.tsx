@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { usePcConnection } from '../connection';
 import { parsePairLink } from '../pairing-link';
 
-// Where `freeze://pair?...` lands. The PC sends it over the USB cable; it pairs and goes straight to the deck.
+// Where `opendock://pair?...` lands. The PC sends it over the USB cable; it pairs and goes straight to the deck.
 export default function PairLink() {
   const params = useLocalSearchParams();
   const router = useRouter();

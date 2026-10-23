@@ -4,7 +4,7 @@
 # reads macOS now playing, into pc-companion/src-tauri/mediaremote/ for the macOS release bundle
 # (src-tauri/tauri.macos-release.conf.json). MEDIAREMOTE_FULL_TEST=1 also runs the adapter's own
 # end-to-end test, which needs a logged-in session.
-# The adapter needs macOS 11 (UniformTypeIdentifiers). On 10.15 Freeze runs without now playing.
+# The adapter needs macOS 11 (UniformTypeIdentifiers). On 10.15 Open Dock runs without now playing.
 set -euo pipefail
 
 version=v0.7.7
@@ -20,15 +20,15 @@ if [ "$(git -C "$work/src" rev-parse HEAD)" != "$commit" ]; then
   echo "Tag $version no longer points at $commit; check the upstream release before updating" >&2
   exit 1
 fi
-# Freeze runs the adapter in /usr/bin/perl as its child. A child that touches AppKit (the adapter
+# Open Dock runs the adapter in /usr/bin/perl as its child. A child that touches AppKit (the adapter
 # watches NSWorkspace) is registered by macOS as another instance of the parent app, so the Dock
-# showed a second Freeze icon that bounced for as long as the stream ran, and came back when it was
+# showed a second Open Dock icon that bounced for as long as the stream ran, and came back when it was
 # force quit. Marking the process background-only before AppKit registers it keeps it out of the
 # Dock (LaunchServices reads the main bundle's in-memory Info dictionary). Priority 101 runs this
 # before the adapter's own constructor.
 cat >> "$work/src/src/adapter/globals.m" <<'OBJC'
 
-__attribute__((constructor(101))) static void freezeStayOutOfDock(void) {
+__attribute__((constructor(101))) static void openDockStayOutOfDock(void) {
     @autoreleasepool {
         @try {
             id info = [[NSBundle mainBundle] infoDictionary];
@@ -47,7 +47,7 @@ cmake --build "$work/build" --target MediaRemoteAdapter MediaRemoteAdapterTestCl
 rm -rf "$out"
 mkdir -p "$out"
 # The app ships the library under a plain name (a .framework folder inside the app's Resources would
-# be taken for nested code at signing); Freeze rebuilds the framework layout when it installs it.
+# be taken for nested code at signing); Open Dock rebuilds the framework layout when it installs it.
 cp -L "$work/build/MediaRemoteAdapter.framework/MediaRemoteAdapter" "$out/MediaRemoteAdapter.dylib"
 cp "$work/src/bin/mediaremote-adapter.pl" "$work/src/LICENSE" "$out/"
 codesign --force --sign - "$out/MediaRemoteAdapter.dylib"
@@ -58,7 +58,7 @@ if [ "$minos" != "11.0" ]; then
   exit 1
 fi
 
-# Check the library loads in the system perl the way Freeze runs it.
+# Check the library loads in the system perl the way Open Dock runs it.
 framework="$work/check/MediaRemoteAdapter.framework"
 mkdir -p "$framework"
 cp "$out/MediaRemoteAdapter.dylib" "$framework/MediaRemoteAdapter"

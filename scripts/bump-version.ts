@@ -24,7 +24,7 @@ const files = [
   lock('pc-companion/package-lock.json'),
   json('pc-companion/src-tauri/tauri.conf.json', (data) => { data.version = version; }),
   { path: 'pc-companion/src-tauri/Cargo.toml', edit: (text: string) => text.replace(/^version = ".*"$/m, `version = "${version}"`) },
-  { path: 'pc-companion/src-tauri/Cargo.lock', edit: (text: string) => text.replace(/(name = "freeze-pc"\r?\nversion = )".*"/, `$1"${version}"`) },
+  { path: 'pc-companion/src-tauri/Cargo.lock', edit: (text: string) => text.replace(/(name = "open-dock-pc"\r?\nversion = )".*"/, `$1"${version}"`) },
   json('phone-app/package.json', (data) => { data.version = version; }),
   lock('phone-app/package-lock.json'),
   json('phone-app/app.json', (data) => { data.expo.version = version; data.expo.android.versionCode = versionCode; }),

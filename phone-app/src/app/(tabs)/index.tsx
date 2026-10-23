@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
 import { BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Snowflake, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
+import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -13,6 +13,7 @@ import { LyricsWidget } from '../../lyrics-widget';
 import { WebWidgetLayer, type WebWidget } from '../../web-widgets';
 import { countRender, PerfOverlay } from '../../perf-overlay';
 import { useDeckScreenPower } from '../../screen-power';
+import { Wallpaper } from '../../wallpaper';
 import { buttonPlacement, surfaceOccupancy, type SurfaceItem } from '../../deck-layout';
 import { useStyles, useTheme, type Colors } from '../../theme';
 import { inkIcon } from '../../theme-colors';
@@ -20,6 +21,7 @@ import { TabBarHiddenContext } from '../../navigation/tab-bar-context';
 import { useTabBarClearance } from '../../tab-inset';
 import { MediaToastView, PlayerSheet, SourceChip, useMediaSource } from '../../media-source';
 import { playerColor, type PlayersState } from '../../media-players';
+const appIcon = require('../../../assets/favicon.png') as number;
 
 const shortcutIcons: Record<string, typeof Command> = {
   command: Command,
@@ -458,7 +460,7 @@ export default function DeckScreen() {
       reportWidgetSurface({ width: regularGridWidth, height: 0, gap: regularGap, inset: widgetKeyInset, fixedRowHeight: 100 });
     }
   }, [immersive, immersiveSurfaceHeight, immersiveSurfaceWidth, reportWidgetSurface, hasWidgets, regularGridWidth]);
-  const actionErrorText = actionError === 'accessibility_permission_required' ? 'Allow Freeze in Mac Accessibility settings'
+  const actionErrorText = actionError === 'accessibility_permission_required' ? 'Allow Open Dock in Mac Accessibility settings'
     : actionError === 'app_launch_failed' ? 'PC could not launch this app. Check its target path'
     : actionError === 'stale_revision' ? 'Deck changed. Wait for sync, then try again'
     : actionError === 'unknown_button' ? 'Button is out of date. Refresh the deck and try again'
@@ -566,6 +568,7 @@ export default function DeckScreen() {
         const { width, height } = event.nativeEvent.layout;
         setImmersiveSize((current) => current.width === width && current.height === height ? current : { width, height });
       }}>
+        <Wallpaper />
         <Pressable style={styles.immersiveBackdrop} onPress={revealImmersiveTools} accessibilityLabel="Deck background. Tap for controls" />
         <View style={styles.immersiveGrid} pointerEvents="box-none">
           {surface ? <View style={[styles.immersiveDeckCanvas, { top: 12, height: immersiveAvailableHeight }]} {...pageSwipeResponder.panHandlers}>
@@ -593,9 +596,10 @@ export default function DeckScreen() {
   return (
     <SafeAreaView {...power.touchProps} style={styles.safe} edges={['top']}>
       <StatusBar style="auto" />
+      <Wallpaper />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View style={styles.brand}><Snowflake size={19} color={colors.text} strokeWidth={1.8} /><Text style={styles.brandName}>Freeze</Text></View>
+          <View style={styles.brand}><Image source={appIcon} style={styles.brandIcon} accessibilityIgnoresInvertColors /><Text style={styles.brandName}>Open Dock</Text></View>
           <View style={styles.headerActions}>
           <Pressable style={styles.immersiveToggle} onPress={() => void enterImmersive()} accessibilityRole="button" accessibilityLabel="Enter immersive landscape deck"><Maximize2 size={17} color={colors.muted} /></Pressable>
           <Pressable style={styles.connectionPill} onPress={() => router.push('/connect')} accessibilityRole="button" accessibilityLabel={`PC ${connected ? 'connected' : 'disconnected'}. Open connection settings`}>
@@ -616,7 +620,7 @@ export default function DeckScreen() {
 
         {!connected && <Pressable style={styles.connectBanner} onPress={() => router.push('/connect')} accessibilityRole="button">
           <Monitor size={18} color={colors.muted} />
-          <View style={styles.bannerCopy}><Text style={styles.bannerTitle}>Connect your PC</Text><Text style={styles.bannerSub}>Scan the QR code in Freeze for desktop</Text></View>
+          <View style={styles.bannerCopy}><Text style={styles.bannerTitle}>Connect your PC</Text><Text style={styles.bannerSub}>Scan the QR code in Open Dock for desktop</Text></View>
           <ChevronRight size={16} color={colors.faint} />
         </Pressable>}
 
@@ -703,6 +707,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   headerActions: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   immersiveToggle: { flexShrink: 0, width: 34, height: 34, borderWidth: 1, borderColor: colors.border, borderRadius: 6, backgroundColor: colors.panel, alignItems: 'center', justifyContent: 'center' },
+  brandIcon: { width: 22, height: 22 },
   brand: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandName: { color: colors.text, fontWeight: '600', fontSize: 14 },
   connectionPill: { flexShrink: 1, minWidth: 0, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, borderRadius: 6, paddingHorizontal: 9, minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 7 },

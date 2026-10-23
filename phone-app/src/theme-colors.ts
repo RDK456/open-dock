@@ -40,6 +40,11 @@ export type Colors = {
   /** Floating controls over the deck. */
   float: string;
   floatSoft: string;
+  /** Frosted surfaces on the Touch screen. */
+  glass: string;
+  glassBorder: string;
+  /** The soft light under a finger on the touchpad. */
+  glow: string;
 };
 
 export const darkColors: Colors = {
@@ -72,6 +77,9 @@ export const darkColors: Colors = {
   tint: 'rgba(9, 9, 11, 0.78)',
   float: 'rgba(24,24,27,0.93)',
   floatSoft: 'rgba(24, 24, 27, 0.7)',
+  glass: 'rgba(255, 255, 255, 0.05)',
+  glassBorder: 'rgba(255, 255, 255, 0.1)',
+  glow: 'rgba(250, 250, 250, 0.14)',
 };
 
 export const lightColors: Colors = {
@@ -104,6 +112,9 @@ export const lightColors: Colors = {
   tint: 'rgba(255, 255, 255, 0.66)',
   float: 'rgba(255,255,255,0.93)',
   floatSoft: 'rgba(255, 255, 255, 0.7)',
+  glass: 'rgba(24, 24, 27, 0.04)',
+  glassBorder: 'rgba(24, 24, 27, 0.1)',
+  glow: 'rgba(24, 24, 27, 0.1)',
 };
 
 export function parseMode(value: unknown): ThemeMode {
@@ -114,3 +125,11 @@ export function parseMode(value: unknown): ThemeMode {
 export function inkIcon(svg: string, scheme: Scheme): string {
   return scheme === 'light' ? svg.replace(/stroke="#f4f4f5"/gi, 'stroke="#18181b"') : svg;
 }
+
+/** The phone wallpapers: three soft glows each, as color and where it sits (fractions of the screen). */
+export const wallpaperGlows: Record<'aurora' | 'ember' | 'ocean' | 'forest', [string, number, number][]> = {
+  aurora: [['#7c3aed', 0.15, 0.2], ['#06b6d4', 0.85, 0.45], ['#ec4899', 0.35, 0.9]],
+  ember: [['#f97316', 0.2, 0.15], ['#e11d48', 0.8, 0.55], ['#facc15', 0.3, 0.95]],
+  ocean: [['#2563eb', 0.2, 0.25], ['#14b8a6', 0.8, 0.6], ['#6366f1', 0.4, 0.95]],
+  forest: [['#16a34a', 0.2, 0.2], ['#84cc16', 0.85, 0.5], ['#0d9488', 0.3, 0.9]],
+};

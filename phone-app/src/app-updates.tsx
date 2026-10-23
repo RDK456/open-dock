@@ -5,10 +5,10 @@ import { File, Paths } from 'expo-file-system';
 import { startActivityAsync } from 'expo-intent-launcher';
 import { useStyles, type Colors } from './theme';
 
-// Android only: Freeze reads the latest GitHub release and hands its APK to Android's installer,
-// which refuses any APK not signed with Freeze's release key. iOS updates come from Apple.
-const RELEASES = 'https://github.com/naveen-devang/Freeze/releases/latest/download';
-const APK_URL = `${RELEASES}/Freeze.apk`;
+// Android only: Open Dock reads the latest GitHub release and hands its APK to Android's installer,
+// which refuses any APK not signed with Open Dock's release key. iOS updates come from Apple.
+const RELEASES = 'https://github.com/naveen-devang/Open Dock/releases/latest/download';
+const APK_URL = `${RELEASES}/OpenDock.apk`;
 const DAY = 24 * 60 * 60 * 1000;
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
 export const CURRENT_VERSION = Constants.expoConfig?.version ?? '0.0.0';
@@ -25,7 +25,7 @@ let state: UpdateState = { kind: 'idle' };
 let lastCheck = 0;
 let dismissed = '';
 const listeners = new Set<() => void>();
-const apkFile = () => new File(Paths.cache, 'Freeze.apk');
+const apkFile = () => new File(Paths.cache, 'OpenDock.apk');
 const set = (next: UpdateState) => { state = next; listeners.forEach((listener) => listener()); };
 
 export function isNewer(latest: string, current: string) {
@@ -60,7 +60,7 @@ export async function checkForUpdate() {
     const bytes = Number(head?.headers.get('content-length')) || null;
     set({ kind: 'available', version, notes: latest.notes ?? '', bytes });
   } catch {
-    set({ kind: 'error', message: "GitHub sent an update file Freeze couldn't read. Try again later." });
+    set({ kind: 'error', message: "GitHub sent an update file Open Dock couldn't read. Try again later." });
   }
 }
 
@@ -83,7 +83,7 @@ async function download() {
   }
 }
 
-// The first time, Android itself asks the user to allow installs from Freeze, then continues.
+// The first time, Android itself asks the user to allow installs from Open Dock, then continues.
 async function install() {
   if (state.kind !== 'ready') return;
   try {
@@ -121,18 +121,18 @@ export function AppUpdatesSection() {
   if (Platform.OS !== 'android') return null;
 
   const notes = current.kind === 'available' ? current.notes.split('\n').map((line) => line.replace(/^[-*]\s*/, '').trim()).filter(Boolean).slice(0, 3).join(', ') : '';
-  const title = current.kind === 'available' ? `Freeze ${current.version} is available`
-    : current.kind === 'downloading' ? `Downloading Freeze ${current.version}`
-    : current.kind === 'ready' ? `Freeze ${current.version} is ready to install`
-    : current.kind === 'error' ? "Couldn't update Freeze"
+  const title = current.kind === 'available' ? `Open Dock ${current.version} is available`
+    : current.kind === 'downloading' ? `Downloading Open Dock ${current.version}`
+    : current.kind === 'ready' ? `Open Dock ${current.version} is ready to install`
+    : current.kind === 'error' ? "Couldn't update Open Dock"
     : 'App updates';
   const detail = current.kind === 'checking' ? 'Checking for updates…'
-    : current.kind === 'current' ? `Freeze ${CURRENT_VERSION} is up to date`
+    : current.kind === 'current' ? `Open Dock ${CURRENT_VERSION} is up to date`
     : current.kind === 'available' ? [current.bytes ? megabytes(current.bytes) : '', notes].filter(Boolean).join(' · ')
     : current.kind === 'downloading' ? `${current.percent}% · You can keep using the deck`
     : current.kind === 'ready' ? 'Android asks you to confirm the update. Your decks and paired PCs stay.'
     : current.kind === 'error' ? current.message
-    : `Freeze ${CURRENT_VERSION}`;
+    : `Open Dock ${CURRENT_VERSION}`;
 
   return <View style={styles.card}>
     <Text style={styles.title}>{title}</Text>

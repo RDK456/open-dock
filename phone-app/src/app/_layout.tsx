@@ -8,7 +8,7 @@ import { setLyricsUserAgent } from '../lyrics';
 import { useTheme } from '../theme';
 
 if (Platform.OS === 'android') {
-  setLyricsUserAgent('Freeze/1.0 (https://github.com/naveen-devang/Freeze)');
+  setLyricsUserAgent('Open Dock/1.0 (https://github.com/naveen-devang/Open Dock)');
 }
 
 export default function RootLayout() {

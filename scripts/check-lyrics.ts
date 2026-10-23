@@ -353,7 +353,7 @@ assert.equal(pathaanText?.kind === 'plain' && pathaanText.versions?.[0].entries,
 
 // Reproduce LRCLIB rejecting Android's generic OkHttp identity, through the real lookup and retries.
 const originalFetch = globalThis.fetch;
-const clientUserAgent = 'Freeze/1.0 (https://github.com/naveen-devang/Freeze)';
+const clientUserAgent = 'Open Dock/1.0 (https://github.com/naveen-devang/Open Dock)';
 let transportUserAgent = 'okhttp/4.9.2';
 const requests: { path: string; headers: Headers }[] = [];
 globalThis.fetch = async (input, init) => {
@@ -376,7 +376,7 @@ globalThis.fetch = async (input, init) => {
   });
 };
 try {
-  const track = { title: 'Android request regression', artist: 'Freeze test', durationMs: 200_000 };
+  const track = { title: 'Android request regression', artist: 'Open Dock test', durationMs: 200_000 };
   const rejected = await fetchLyrics(track);
   assert.equal(rejected.kind, 'error');
   assert.equal(requests.length, 3, 'the generic Android identity must reproduce the three failed attempts');
@@ -384,11 +384,11 @@ try {
   requests.length = 0;
   setLyricsUserAgent(clientUserAgent);
   const recovered = await fetchLyrics(track);
-  assert.equal(recovered.kind, 'synced', 'identifying Freeze must recover the failed Android lookup');
+  assert.equal(recovered.kind, 'synced', 'identifying Open Dock must recover the failed Android lookup');
   assert.deepEqual(requests.map((request) => request.path), ['/api/get', '/api/search']);
   for (const { headers } of requests) {
     assert.equal(headers.get('User-Agent'), clientUserAgent);
-    assert.equal(headers.get('Lrclib-Client'), 'Freeze (https://github.com/naveen-devang/Freeze)');
+    assert.equal(headers.get('Lrclib-Client'), 'Open Dock (https://github.com/naveen-devang/Open Dock)');
   }
 
   // Without the Android opt-in, iOS and browser requests retain their transport's own User-Agent.

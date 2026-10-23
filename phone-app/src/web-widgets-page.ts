@@ -7,8 +7,8 @@
 //   { ack, needs, shown, errors }                 the widgets of request number `ack` are drawn: the
 //                                                 readings they need, how many are on screen, and any
 //                                                 widget that failed to draw (the others still draw)
-// The app calls window.freezeTheme(scheme, tile) when the page is ready and on every theme change, then
-// window.freezeWidgets(list, hour12, force, seq) and FreezeClock.setPaused(paused).
+// The app calls window.openDockTheme(scheme, tile) when the page is ready and on every theme change, then
+// window.openDockWidgets(list, hour12, force, seq) and OpenDockClock.setPaused(paused).
 
 /** Version of the messages above; the page announces it in { ready }. */
 export const PAGE_PROTOCOL = 1;
@@ -36,7 +36,7 @@ export function widgetPageHtml({ wakeCounterJs, background, clockFaces, pcStats,
 ${wakeCounterJs}
 ${clockFaces.replace(/<\/script/gi, '<\\/script')}
 ${pcStats.replace(/<\/script/gi, '<\\/script')}
-FreezeClock.setFrameRate(30);
+OpenDockClock.setFrameRate(30);
 var shown = {}, pending = null, fontsReady = false, panel = ${JSON.stringify(background)};
 function post(message) {
   try { window.ReactNativeWebView.postMessage(JSON.stringify(message)); return true; } catch (error) { return false; }
@@ -47,8 +47,8 @@ function mountOne(w, hour12) {
   document.body.appendChild(host);
   try {
     var handle = w.kind === 'clock'
-      ? FreezeClock.mount(host, { face: w.face || 'digital', color: w.color || null, width: w.width, height: w.height, hour12: hour12 })
-      : FreezeStats.mount(host, { style: w.face || 'ring', metric: w.metric || 'cpu', color: w.color || null, gpu: w.gpu || 'auto', background: panel, still: true, width: w.width, height: w.height, columns: w.columns, rows: w.rows });
+      ? OpenDockClock.mount(host, { face: w.face || 'digital', color: w.color || null, width: w.width, height: w.height, hour12: hour12 })
+      : OpenDockStats.mount(host, { style: w.face || 'ring', metric: w.metric || 'cpu', color: w.color || null, gpu: w.gpu || 'auto', background: panel, still: true, width: w.width, height: w.height, columns: w.columns, rows: w.rows });
     return { host: host, handle: handle };
   } catch (error) {
     host.remove();
@@ -66,7 +66,7 @@ function show(request) {
   (request.list || []).forEach(function (w) {
     try {
       keep[w.id] = true;
-      if (w.kind === 'stats') FreezeStats.needs(w.face || 'ring', w.metric || 'cpu', w.columns, w.rows).forEach(function (n) { needs[n] = true; });
+      if (w.kind === 'stats') OpenDockStats.needs(w.face || 'ring', w.metric || 'cpu', w.columns, w.rows).forEach(function (n) { needs[n] = true; });
       var key = JSON.stringify(w) + request.hour12;
       var item = shown[w.id];
       if (item && item.key === key && !request.force) return;
@@ -81,13 +81,13 @@ function show(request) {
   post({ ack: request.seq, needs: Object.keys(needs).sort(), shown: Object.keys(shown).length, errors: errors });
 }
 // The app's look, sent before the first widgets and again whenever it changes. Widgets on screen are updated in place.
-window.freezeTheme = function (scheme, tile) {
+window.openDockTheme = function (scheme, tile) {
   panel = tile;
   document.documentElement.style.colorScheme = scheme;
-  FreezeClock.setTheme(scheme);
-  FreezeStats.setTheme(scheme, tile);
+  OpenDockClock.setTheme(scheme);
+  OpenDockStats.setTheme(scheme, tile);
 };
-window.freezeWidgets = function (list, hour12, force, seq) {
+window.openDockWidgets = function (list, hour12, force, seq) {
   var request = { list: list, hour12: hour12, force: !!force, seq: seq };
   // Until the fonts are in, only the newest request is kept: stats widgets size their text by measuring it.
   if (!fontsReady) { pending = request; return; }

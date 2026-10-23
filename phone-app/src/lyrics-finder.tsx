@@ -6,7 +6,7 @@ import { guessFields, searchEntries, type EntryFields, type EntryList, type Lyri
 import { useStyles, useTheme, type Colors } from './theme';
 
 // The Find lyrics screen, shown in the lyrics details modal: search LRCLIB for a song, see every matching
-// entry with its length and timing, preview one, and use it for this song. The entry Freeze would pick is
+// entry with its length and timing, preview one, and use it for this song. The entry Open Dock would pick is
 // tagged Recommended, with the reason.
 export type FinderProps = {
   media: SystemMediaState;

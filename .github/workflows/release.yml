@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Freeze $GITHUB_REF_NAME" --generate-notes
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Open Dock $GITHUB_REF_NAME" --generate-notes
           echo "id=$(gh release view "$GITHUB_REF_NAME" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
 
   desktop:
@@ -85,7 +85,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && 'Freeze Self-Signed' || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && 'Open Dock Self-Signed' || '' }}
         with:
           projectPath: pc-companion
           releaseId: ${{ needs.draft.outputs.id }}
@@ -121,10 +121,10 @@ jobs:
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.p12"
           apksigner="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n1)/apksigner"
-          "$apksigner" sign --ks "$RUNNER_TEMP/release.p12" --ks-type PKCS12 --ks-key-alias freeze \
-            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --out Freeze.apk android/app/build/outputs/apk/release/app-release.apk
-          "$apksigner" verify --print-certs Freeze.apk
+          "$apksigner" sign --ks "$RUNNER_TEMP/release.p12" --ks-type PKCS12 --ks-key-alias opendock \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --out OpenDock.apk android/app/build/outputs/apk/release/app-release.apk
+          "$apksigner" verify --print-certs OpenDock.apk
           rm "$RUNNER_TEMP/release.p12"
-      - run: gh release upload "$GITHUB_REF_NAME" Freeze.apk
+      - run: gh release upload "$GITHUB_REF_NAME" OpenDock.apk
         env:
           GH_TOKEN: ${{ github.token }}

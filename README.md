@@ -1,14 +1,14 @@
-# Freeze
+# Open Dock
 
 Phone control deck and local PC companion.
 
 ## Download
 
-Get the latest installers from the [Releases page](https://github.com/naveen-devang/Freeze/releases/latest). After the first install, Freeze updates itself.
+Get the latest installers from the [Releases page](https://github.com/naveen-devang/Open Dock/releases/latest). After the first install, Open Dock updates itself.
 
-- **Windows:** `Freeze_*_x64-setup.exe`. Windows may say "Windows protected your PC" because the installer isn't signed; choose **More info → Run anyway**.
-- **macOS:** `Freeze_*_aarch64.dmg` for Apple silicon (M1 and later) or `Freeze_*_x64.dmg` for Intel. The app isn't notarized by Apple, so the first time, open **System Settings → Privacy & Security** and choose **Open Anyway** (on macOS 14 and earlier, right-click the app and choose **Open**).
-- **Android:** `Freeze.apk`. Allow installs from your browser or file manager when Android asks.
+- **Windows:** `Open Dock_*_x64-setup.exe`. Windows may say "Windows protected your PC" because the installer isn't signed; choose **More info → Run anyway**.
+- **macOS:** `Open Dock_*_aarch64.dmg` for Apple silicon (M1 and later) or `Open Dock_*_x64.dmg` for Intel. The app isn't notarized by Apple, so the first time, open **System Settings → Privacy & Security** and choose **Open Anyway** (on macOS 14 and earlier, right-click the app and choose **Open**).
+- **Android:** `OpenDock.apk`. Allow installs from your browser or file manager when Android asks.
 
 ## Run the PC companion (Windows or macOS)
 
@@ -18,7 +18,7 @@ npm install
 npm run tauri dev
 ```
 
-The Freeze desktop app listens on port `39421` and displays a pairing QR code. Keep both devices on the same Wi-Fi network. The macOS companion supports Catalina (10.15) and later and must be built on a Mac with Xcode Command Line Tools. On macOS, allow Freeze in **System Settings → Privacy & Security → Accessibility** so it can send media keys and shortcuts.
+The Open Dock desktop app listens on port `39421` and displays a pairing QR code. Keep both devices on the same Wi-Fi network. The macOS companion supports Catalina (10.15) and later and must be built on a Mac with Xcode Command Line Tools. On macOS, allow Open Dock in **System Settings → Privacy & Security → Accessibility** so it can send media keys and shortcuts.
 
 ## Run the phone app
 
@@ -28,9 +28,9 @@ npm install
 npm start
 ```
 
-Open the project in Expo Go on a phone on the same Wi-Fi. In the **Connect** tab, scan the Wi-Fi QR code in Freeze for desktop. Pairing details are stored securely on the phone. Use a trusted Wi-Fi network while connected. Manual entry remains available as a fallback.
+Open the project in Expo Go on a phone on the same Wi-Fi. In the **Connect** tab, scan the Wi-Fi QR code in Open Dock for desktop. Pairing details are stored securely on the phone. Use a trusted Wi-Fi network while connected. Manual entry remains available as a fallback.
 
-The phone deck supports multiple pages, custom keyboard shortcuts, app-launch buttons, ordered shortcut sequences, selectable Lucide icons, and per-page button ordering. Paired PCs are saved on the phone and can be switched from **Connect → Paired devices**. To use Android over USB, install Android SDK Platform-Tools, enable USB debugging, connect and authorize one phone, then select **Android USB** and **Set up USB** in the PC app. Scan once when pairing initially; afterward switch between Wi-Fi and USB from the phone's **Connect** screen. Freeze retains the PC's pairing key and restores ADB forwarding when the authorized phone reconnects.
+The phone deck supports multiple pages, custom keyboard shortcuts, app-launch buttons, ordered shortcut sequences, selectable Lucide icons, and per-page button ordering. Paired PCs are saved on the phone and can be switched from **Connect → Paired devices**. To use Android over USB, install Android SDK Platform-Tools, enable USB debugging, connect and authorize one phone, then select **Android USB** and **Set up USB** in the PC app. Scan once when pairing initially; afterward switch between Wi-Fi and USB from the phone's **Connect** screen. Open Dock retains the PC's pairing key and restores ADB forwarding when the authorized phone reconnects.
 
 iOS uses Wi-Fi. iOS does not provide a general-purpose USB data channel from an app to a PC; Apple's External Accessory framework is for compatible MFi accessories. [Apple External Accessory docs](https://developer.apple.com/documentation/externalaccessory)
 
@@ -40,10 +40,10 @@ The app uses the React Native WebSocket API and the companion protocol documente
 
 ## Release
 
-Run `bash scripts/setup-release-signing.sh` once to create the signing keys and store them as GitHub Actions secrets. Back up `~/.freeze-signing`: installed apps can't update without those keys.
+Run `bash scripts/setup-release-signing.sh` once to create the signing keys and store them as GitHub Actions secrets. Back up `~/.open-dock-signing`: installed apps can't update without those keys.
 
 To ship, run `node scripts/bump-version.ts 1.2.0`, commit, then `git tag v1.2.0 && git push origin v1.2.0`. The **Release** workflow builds Windows, macOS and Android into a draft GitHub release. Publish the draft to make it the latest release.
 
 ## License
 
-Freeze is free software under the [GNU General Public License v3.0](LICENSE). `phone-app/` also contains files from Expo's app template, which are MIT licensed (`phone-app/LICENSE`). macOS release builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause).
+Open Dock is free software under the [GNU General Public License v3.0](LICENSE). `phone-app/` also contains files from Expo's app template, which are MIT licensed (`phone-app/LICENSE`). macOS release builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause).

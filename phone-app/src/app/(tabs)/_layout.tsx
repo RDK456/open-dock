@@ -17,6 +17,10 @@ export default function TabLayout() {
           <NativeTabs.Trigger.Icon sf="square.grid.2x2" md="grid_view" />
           <NativeTabs.Trigger.Label>Deck</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="touch">
+          <NativeTabs.Trigger.Icon sf="hand.point.up.left" md="touch_app" />
+          <NativeTabs.Trigger.Label>Touch</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
         <NativeTabs.Trigger name="connect">
           <NativeTabs.Trigger.Icon sf="wifi" md="wifi" />
           <NativeTabs.Trigger.Label>Connect</NativeTabs.Trigger.Label>

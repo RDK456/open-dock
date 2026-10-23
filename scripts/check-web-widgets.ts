@@ -286,14 +286,14 @@ window.ReactNativeWebView = { postMessage: function (message) { window.__message
   var sleep = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
   var hosts = function () { return [].slice.call(document.body.children).filter(function (node) { return node.tagName === 'DIV'; }); };
   var W = function (id, kind, extra) { return Object.assign({ id: id, kind: kind, x: 0, y: 0, width: 100, height: 100 }, extra); };
-  FreezeStats.setHistory([{ cpu: 23, cputemp: 64, clock: 3.6, cores: [20, 30, 10, 40], ram: 51.4, ramUsed: 8, ramTotal: 16, disk: 70, diskUsed: 170, diskTotal: 237, diskio: 0.35, diskRead: 0.3, diskWrite: 0.05, net: 1.2, netUp: 0.024, gpus: [] }]);
+  OpenDockStats.setHistory([{ cpu: 23, cputemp: 64, clock: 3.6, cores: [20, 30, 10, 40], ram: 51.4, ramUsed: 8, ramTotal: 16, disk: 70, diskUsed: 170, diskTotal: 237, diskio: 0.35, diskRead: 0.3, diskWrite: 0.05, net: 1.2, netUp: 0.024, gpus: [] }]);
 
   // The page announces itself once, and answers only the newest of several requests sent before its fonts are in.
   check(messages.filter(function (m) { return m.ready; }).length === 1 && messages[0].ready === 1, 'the page announces itself exactly once');
   var list = [W('a', 'clock', { face: 'digital' }), W('s', 'stats', { face: 'ring', metric: 'cpu', columns: 1, rows: 1, x: 110 })];
-  window.freezeWidgets([], true, false, 1);
-  window.freezeWidgets(list.slice(0, 1), true, false, 2);
-  window.freezeWidgets(list, true, false, 3);
+  window.openDockWidgets([], true, false, 1);
+  window.openDockWidgets(list.slice(0, 1), true, false, 2);
+  window.openDockWidgets(list, true, false, 3);
   await sleep(400);
   var acks = messages.filter(function (m) { return 'ack' in m; });
   check(acks.length === 1 && acks[0].ack === 3, 'only the newest request sent before the fonts loaded is answered: ' + JSON.stringify(acks));
@@ -303,39 +303,39 @@ window.ReactNativeWebView = { postMessage: function (message) { window.__message
   // Later requests are answered at once, change only what changed, and an empty list clears the page.
   messages.length = 0;
   var before = hosts();
-  window.freezeWidgets(list, true, false, 4);
+  window.openDockWidgets(list, true, false, 4);
   check(messages.length === 1 && messages[0].ack === 4 && messages[0].shown === 2, 'an unchanged list is answered');
   check(hosts().every(function (host, i) { return host === before[i]; }), 'an unchanged list redraws nothing');
   messages.length = 0;
-  window.freezeWidgets(list.slice(0, 1), true, false, 5);
+  window.openDockWidgets(list.slice(0, 1), true, false, 5);
   check(messages[0].shown === 1 && hosts().length === 1 && messages[0].needs.length === 0, 'removing a widget removes its tile and its needs');
   messages.length = 0;
-  window.freezeWidgets([], true, false, 6);
+  window.openDockWidgets([], true, false, 6);
   check(messages[0].ack === 6 && messages[0].shown === 0 && hosts().length === 0, 'an empty list clears the page');
 
   // The page follows the app's look: widgets on screen change in place, and a scene face (a Nixie tube) stays dark.
   var rootOf = function (host) { return host.querySelector('.fc-root, .ps-root'); };
   var token = function (host, name) { return getComputedStyle(rootOf(host)).getPropertyValue(name).trim(); };
   messages.length = 0;
-  window.freezeWidgets([W('t1', 'clock', { face: 'analog' }), W('t2', 'clock', { face: 'nixie', x: 110 }), W('t3', 'stats', { face: 'ring', metric: 'cpu', columns: 1, rows: 1, x: 220 })], true, true, 8);
+  window.openDockWidgets([W('t1', 'clock', { face: 'analog' }), W('t2', 'clock', { face: 'nixie', x: 110 }), W('t3', 'stats', { face: 'ring', metric: 'cpu', columns: 1, rows: 1, x: 220 })], true, true, 8);
   check(messages[0].shown === 3 && messages[0].errors.length === 0, 'the theme widgets are drawn: ' + JSON.stringify(messages[0]));
   check(token(hosts()[0], '--fg') === '#ececef' && token(hosts()[2], '--fg') === '#ececef', 'widgets are drawn dark until told otherwise');
-  window.freezeTheme('light', '#fafafa');
+  window.openDockTheme('light', '#fafafa');
   check(token(hosts()[0], '--fg') === '#18181b', 'a clock face is redrawn in the light palette: ' + token(hosts()[0], '--fg'));
   check(token(hosts()[1], '--fg') === '#ececef', 'a scene face stays dark');
   check(token(hosts()[2], '--fg') === '#18181b' && /250/.test(rootOf(hosts()[2]).style.background), 'a stats widget takes the light palette and the new tile color');
   check(document.documentElement.style.colorScheme === 'light', 'the page color scheme follows the theme');
-  window.freezeWidgets([W('t4', 'clock', { face: 'analog' })], true, false, 9);
+  window.openDockWidgets([W('t4', 'clock', { face: 'analog' })], true, false, 9);
   check(token(hosts()[0], '--fg') === '#18181b', 'a widget drawn later uses the current theme');
-  window.freezeTheme('dark', '#111113');
+  window.openDockTheme('dark', '#111113');
   check(token(hosts()[0], '--fg') === '#ececef', 'and back to dark');
 
   // One widget that cannot be drawn is reported, and the others are still drawn.
-  var mount = FreezeClock.mount;
-  FreezeClock.mount = function (host, options) { if (options.face === 'boom') throw new Error('boom'); return mount.call(FreezeClock, host, options); };
+  var mount = OpenDockClock.mount;
+  OpenDockClock.mount = function (host, options) { if (options.face === 'boom') throw new Error('boom'); return mount.call(OpenDockClock, host, options); };
   messages.length = 0;
-  window.freezeWidgets([W('g1', 'clock', { face: 'digital' }), W('bad', 'clock', { face: 'boom', x: 110 }), W('g2', 'clock', { face: 'digital', x: 220 })], true, false, 7);
-  FreezeClock.mount = mount;
+  window.openDockWidgets([W('g1', 'clock', { face: 'digital' }), W('bad', 'clock', { face: 'boom', x: 110 }), W('g2', 'clock', { face: 'digital', x: 220 })], true, false, 7);
+  OpenDockClock.mount = mount;
   check(messages[0].shown === 2 && messages[0].errors.length === 1 && messages[0].errors[0].id === 'bad', 'a failing widget is reported and skipped: ' + JSON.stringify(messages[0]));
   check(hosts().length === 2, 'a failing widget leaves no empty tile behind');
 
@@ -345,7 +345,7 @@ window.ReactNativeWebView = { postMessage: function (message) { window.__message
   document.getElementById('result').textContent = JSON.stringify({ failures: failures });
 })();
 </script>`;
-  const dir = mkdtempSync(join(tmpdir(), 'freeze-web-widgets-'));
+  const dir = mkdtempSync(join(tmpdir(), 'open-dock-web-widgets-'));
   // The headless Edge profile is ~400 MB; remove it however the run ends.
   process.on('exit', () => rmSync(dir, { recursive: true, force: true, maxRetries: 5 }));
   const file = join(dir, 'page.html');

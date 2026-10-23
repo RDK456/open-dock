@@ -1,5 +1,5 @@
 // Whether an icon just read from the PC may still be put on a button. The button must still be there, still
-// point at the same app or file, and still show an icon Freeze chose (automatic, or a previous app icon),
+// point at the same app or file, and still show an icon Open Dock chose (automatic, or a previous app icon),
 // never one the user picked.
 export type IconTarget = { id: string; icon: string; action: { type: string; app?: string; path?: string } };
 

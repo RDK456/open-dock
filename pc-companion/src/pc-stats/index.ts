@@ -11,7 +11,7 @@ export type PcGpu = {
   state: 'ok' | 'sleeping' | 'no-driver'; tempApprox: boolean; memKind: string; sources?: Record<string, string>;
 } & Partial<Record<'load' | 'temp' | 'hotspot' | 'power' | 'powerLimit' | 'powerPercent' | 'fan' | 'fanRpm' | 'memUsed' | 'memTotal', number | null>>;
 export type PcStatsSample = { seq: number; cputemp?: number; cputempApprox: boolean; cputempSource?: string; gpus?: PcGpu[] };
-type FreezeStatsApi = {
+type OpenDockStatsApi = {
   metrics: PcStatsMetric[];
   styles: PcStatsStyle[];
   resolve(style: string, columns: number, rows: number): string;
@@ -23,15 +23,15 @@ type FreezeStatsApi = {
   mount(host: HTMLElement, options: { style: string; metric?: string; color?: string; gpu?: string; width: number; height: number; columns: number; rows: number }): { destroy(): void };
 };
 
-export const FreezeStats = (globalThis as unknown as { FreezeStats: FreezeStatsApi }).FreezeStats;
+export const OpenDockStats = (globalThis as unknown as { OpenDockStats: OpenDockStatsApi }).OpenDockStats;
 // Widgets follow the app's light or dark look, and change with it.
-FreezeStats.setTheme(currentTheme());
-onThemeChange(() => FreezeStats.setTheme(currentTheme()));
+OpenDockStats.setTheme(currentTheme());
+onThemeChange(() => OpenDockStats.setTheme(currentTheme()));
 export const PC_STATS_SIZES: [PcStatsSize, string][] = [['1x1', '1 × 1'], ['2x1', '2 × 1'], ['2x2', '2 × 2'], ['dash', 'Dashboards']];
 export const DEFAULT_PC_STATS_STYLE = 'ring';
 
 export function pcStatsStyle(id?: string): PcStatsStyle {
-  return FreezeStats.styles.find((style) => style.id === id) ?? FreezeStats.styles.find((style) => style.id === DEFAULT_PC_STATS_STYLE)!;
+  return OpenDockStats.styles.find((style) => style.id === id) ?? OpenDockStats.styles.find((style) => style.id === DEFAULT_PC_STATS_STYLE)!;
 }
 
 // Desktop previews draw this PC's real readings. Each mounted preview registers the readings it
@@ -51,8 +51,8 @@ function refresh() {
     if (!samples.length) return;
     // New samples continue from the last one seen; anything else (first poll, sampling restarted)
     // is the whole minute and replaces what we have.
-    if (lastSeq !== undefined && samples[0].seq === lastSeq + 1) samples.forEach((sample) => FreezeStats.push(sample));
-    else FreezeStats.setHistory(samples);
+    if (lastSeq !== undefined && samples[0].seq === lastSeq + 1) samples.forEach((sample) => OpenDockStats.push(sample));
+    else OpenDockStats.setHistory(samples);
     lastSeq = samples[samples.length - 1].seq;
     listeners.forEach((listener) => listener());
   }).catch(() => {});
@@ -79,5 +79,5 @@ export function usePcStatsFeed(needs: string[]) {
 /** The newest sample, re-rendering when a new one arrives. Keeps `needs` sampled while mounted. */
 export function usePcStatsSample(needs: string[]): PcStatsSample | null {
   usePcStatsFeed(needs);
-  return useSyncExternalStore((onChange) => { listeners.add(onChange); return () => listeners.delete(onChange); }, () => FreezeStats.latest());
+  return useSyncExternalStore((onChange) => { listeners.add(onChange); return () => listeners.delete(onChange); }, () => OpenDockStats.latest());
 }

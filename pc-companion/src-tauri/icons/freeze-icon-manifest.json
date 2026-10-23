@@ -1,8 +1,0 @@
-{
-  "default": "freeze.svg",
-  "bg_color": "#09090b",
-  "android_bg": "freeze-android-background.svg",
-  "android_fg": "freeze-android-foreground.svg",
-  "android_fg_scale": 100,
-  "android_monochrome": "freeze-android-foreground.svg"
-}

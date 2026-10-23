@@ -3,19 +3,20 @@ import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTabBarClearance } from '../../tab-inset';
-import { Camera, Check, ChevronDown, ChevronRight, Monitor, QrCode, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react-native';
+import { Camera, Check, ChevronDown, ChevronRight, Monitor, QrCode, Radar, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { connectionId, PcConnection, usePcConnection } from '../../connection';
+import { findPcs, pairWithPin, type FoundPc } from '../../discovery';
 import { useStyles, useTheme, type Colors } from '../../theme';
 import { AppearanceSection, ScreenSettingsSection } from '../../screen-power';
 import { AppUpdatesSection } from '../../app-updates';
 
-type PairingCode = PcConnection & { type: 'freeze-pair'; version: 1 };
+type PairingCode = PcConnection & { type: 'open-dock-pair'; version: 1 };
 
 function decodePairingCode(data: string): PcConnection | null {
   try {
     const code = JSON.parse(data) as Partial<PairingCode>;
     if (
-      code.type !== 'freeze-pair' ||
+      code.type !== 'open-dock-pair' ||
       code.version !== 1 ||
       typeof code.host !== 'string' ||
       !code.host ||
@@ -44,6 +45,11 @@ export default function ConnectScreen() {
   const [scanning, setScanning] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const scanLock = useRef(false);
+  const [searching, setSearching] = useState(false);
+  const [found, setFound] = useState<FoundPc[] | null>(null);
+  const [pinTarget, setPinTarget] = useState<FoundPc | null>(null);
+  const [pin, setPin] = useState('');
+  const [pairing, setPairing] = useState(false);
   const form = draft ?? { host: connection?.host ?? '', port: String(connection?.port ?? 39421), token: connection?.token ?? '', deviceName: connection?.deviceName ?? '' };
   const connected = status === 'connected';
   const connecting = status === 'connecting';
@@ -77,7 +83,7 @@ export default function ConnectScreen() {
     const next = decodePairingCode(data);
     setScanning(false);
     if (!next) {
-      setError('That QR code is not a valid Freeze pairing code.');
+      setError('That QR code is not a valid Open Dock pairing code.');
       return;
     }
     setError('');
@@ -86,6 +92,40 @@ export default function ConnectScreen() {
       await connect(next);
     } catch {
       setError('Could not save the connection on this phone. Try again.');
+    }
+  };
+
+  const search = async () => {
+    setError('');
+    setSearching(true);
+    setFound([]);
+    setPinTarget(null);
+    try {
+      const pcs = await findPcs((pc) => setFound((current) => [...(current ?? []), pc]));
+      if (pcs.length === 0) setError('No Open Dock PC answered on this Wi-Fi. Check that Open Dock is open on the PC, or scan its QR code.');
+      if (pcs.length === 1) setPinTarget(pcs[0]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pairFound = async () => {
+    if (!pinTarget || pin.replace(/\D/g, '').length !== 6) {
+      setError('Enter the 6-digit PIN shown in Open Dock on the PC.');
+      return;
+    }
+    setError('');
+    setPairing(true);
+    try {
+      const token = await pairWithPin(pinTarget, pin);
+      await connect({ host: pinTarget.host, port: pinTarget.port, token, deviceName: pinTarget.name, transport: 'wifi' });
+      setPinTarget(null);
+      setFound(null);
+      setPin('');
+    } catch (failure) {
+      setError(failure instanceof Error && failure.message === 'wrong_pin' ? 'That PIN is not right. Check the PIN in Open Dock on the PC; it changes after a few wrong tries.' : 'Could not reach that PC. Try again.');
+    } finally {
+      setPairing(false);
     }
   };
 
@@ -109,7 +149,7 @@ export default function ConnectScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Connect</Text>
-          <Text style={styles.description}>Pair this phone with the Freeze app running on your PC.</Text>
+          <Text style={styles.description}>Pair this phone with the Open Dock app running on your PC.</Text>
 
           <View style={[styles.statusCard, connected ? styles.statusGood : connecting ? styles.statusPending : styles.statusIdle]}>
             <Monitor size={17} color={connected ? colors.mint : colors.muted} />
@@ -144,6 +184,23 @@ export default function ConnectScreen() {
               <ChevronRight size={16} color={colors.faint} />
             </Pressable>
           )}
+
+          <Pressable style={({ pressed }) => [styles.scanButton, pressed && styles.pressed, searching && styles.disabled]} disabled={searching} onPress={() => void search()} accessibilityRole="button">
+            <Radar size={19} color={colors.text} strokeWidth={1.8} />
+            <View style={styles.scanCopy}><Text style={styles.scanTitle}>{searching ? 'Looking for PCs…' : 'Find my PC'}</Text><Text style={styles.scanSubtitle}>Pair with the PIN shown in Open Dock, no camera needed</Text></View>
+            <ChevronRight size={16} color={colors.faint} />
+          </Pressable>
+          {found && found.length > 0 ? <View style={styles.manualCard}>
+            {found.map((pc) => <Pressable key={pc.host} style={[styles.foundRow, pinTarget?.host === pc.host && styles.foundRowActive]} onPress={() => { setPinTarget(pc); setPin(''); }} accessibilityRole="button" accessibilityLabel={`Pair with ${pc.name}`}>
+              <Monitor size={16} color={colors.muted} />
+              <View style={styles.deviceCopy}><Text style={styles.deviceName} numberOfLines={1}>{pc.name}</Text><Text style={styles.deviceAddress}>{pc.host}</Text></View>
+            </Pressable>)}
+            {pinTarget ? <>
+              <Text style={[styles.label, styles.pinLabel]}>PIN shown in Open Dock on {pinTarget.name}</Text>
+              <TextInput value={pin} onChangeText={(text) => setPin(text.replace(/\D/g, '').slice(0, 6))} placeholder="000000" placeholderTextColor={colors.faint} keyboardType="number-pad" maxLength={6} autoFocus style={[styles.input, styles.pinInput]} accessibilityLabel="Pairing PIN" onSubmitEditing={() => void pairFound()} />
+              <Pressable style={({ pressed }) => [styles.primaryButton, (pressed || pairing) && styles.pressed]} disabled={pairing} onPress={() => void pairFound()} accessibilityRole="button"><Text style={styles.primaryText}>{pairing ? 'Pairing…' : 'Pair'}</Text></Pressable>
+            </> : null}
+          </View> : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -271,4 +328,8 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   permissionText: { color: colors.faint, fontSize: 12 },
   pressed: { opacity: 0.76 },
   disabled: { opacity: 0.5 },
+  foundRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, borderRadius: 6 },
+  foundRowActive: { backgroundColor: colors.pressed },
+  pinLabel: { marginTop: 10 },
+  pinInput: { fontSize: 22, letterSpacing: 8, textAlign: 'center', height: 50, fontVariant: ['tabular-nums'] },
 });

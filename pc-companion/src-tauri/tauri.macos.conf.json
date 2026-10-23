@@ -2,7 +2,7 @@
   "app": {
     "windows": [
       {
-        "title": "Freeze",
+        "title": "Open Dock",
         "width": 1080,
         "height": 760,
         "minWidth": 900,

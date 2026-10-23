@@ -5,7 +5,7 @@ import { PanelSection } from '../SettingsPanel';
 import { DeckSelect } from '../DeckSelect';
 import { DEFAULT_CLOCK_COLOR } from '../clock-faces';
 import { PcStatsPreview } from './PcStatsPreview';
-import { FreezeStats, PC_STATS_SIZES, pcStatsStyle, usePcStatsSample, type PcGpu, type PcStatsSample, type PcStatsSize } from '.';
+import { OpenDockStats, PC_STATS_SIZES, pcStatsStyle, usePcStatsSample, type PcGpu, type PcStatsSample, type PcStatsSize } from '.';
 
 type Block = { width: number; height: number };
 type Patch = { face?: string; metric?: string; color?: string; gpu?: string };
@@ -15,13 +15,13 @@ type Props = { style?: string; metric?: string; color?: string; gpu?: string; bl
 // where each reading comes from.
 export function PcStatsSettings({ style, metric, color, gpu, block, columns, rows, busy, onChange }: Props) {
   const info = pcStatsStyle(style);
-  const shown = pcStatsStyle(FreezeStats.resolve(info.id, columns, rows));
+  const shown = pcStatsStyle(OpenDockStats.resolve(info.id, columns, rows));
   const current = color ?? DEFAULT_CLOCK_COLOR;
   const [browsing, setBrowsing] = useState(false);
   // The Sensor sources panel and the GPU picker need GPU and CPU temperature readings.
   const sample = usePcStatsSample(['cputemp', 'gpu']);
   const gpus = sample?.gpus ?? [];
-  const usesGpu = shown.dashboard || !!FreezeStats.metrics.find((item) => item.id === (metric ?? 'cpu'))?.gpu;
+  const usesGpu = shown.dashboard || !!OpenDockStats.metrics.find((item) => item.id === (metric ?? 'cpu'))?.gpu;
   return <>
     <div className="panel-preview"><PcStatsPreview style={info.id} metric={metric} color={current} gpu={gpu} width={block.width} height={block.height} columns={columns} rows={rows} /></div>
     <PanelSection title="Appearance">
@@ -33,7 +33,7 @@ export function PcStatsSettings({ style, metric, color, gpu, block, columns, row
     </PanelSection>
     <PanelSection title="Data">
       {shown.dashboard ? <p className="panel-note">Dashboards show CPU, GPU, memory and temperatures together. On a PC with two GPUs, Overview shows both.</p> : <div className="panel-field"><span className="clock-settings-label">Reading</span>
-        <DeckSelect value={metric ?? 'cpu'} disabled={busy} options={FreezeStats.metrics.map((item) => ({ value: item.id, label: item.name }))} onChange={(value) => onChange({ metric: value })} />
+        <DeckSelect value={metric ?? 'cpu'} disabled={busy} options={OpenDockStats.metrics.map((item) => ({ value: item.id, label: item.name }))} onChange={(value) => onChange({ metric: value })} />
       </div>}
       {usesGpu && (gpus.length > 1 || (gpu && !gpus.some((item) => item.id === gpu))) ? <div className="panel-field"><span className="clock-settings-label">GPU</span>
         <DeckSelect value={gpu ?? 'auto'} disabled={busy} options={[{ value: 'auto', label: 'Automatic' }, ...gpus.map((item) => ({ value: item.id, label: gpuLabel(item) })), ...(gpu && !gpus.some((item) => item.id === gpu) ? [{ value: gpu, label: 'A GPU that isn’t in this PC now' }] : [])]} onChange={(value) => onChange({ gpu: value === 'auto' ? undefined : value })} />
@@ -104,7 +104,7 @@ function PcStatsBrowser({ selected, metric, color, gpu, block, columns, rows, on
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  const styles = useMemo(() => FreezeStats.styles.filter((style) => size === 'all' || style.size === size), [size]);
+  const styles = useMemo(() => OpenDockStats.styles.filter((style) => size === 'all' || style.size === size), [size]);
   const cell = { width: block.width / columns, height: block.height / rows };
   return <div className="clock-browser-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="clock-browser" role="dialog" aria-modal="true" aria-label="Choose a PC stats style">

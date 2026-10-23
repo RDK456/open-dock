@@ -180,19 +180,19 @@ finish() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────
-# STAGES: one-time creation of Freeze's release signing keys.
+# STAGES: one-time creation of Open Dock's release signing keys.
 # ──────────────────────────────────────────────────────────────────────────
 # Run from the repo root: bash scripts/setup-release-signing.sh
-# Keys live outside the repo in ~/.freeze-signing. Re-running never replaces an
+# Keys live outside the repo in ~/.open-dock-signing. Re-running never replaces an
 # existing key (a new key would break updates for every installed copy); it
 # only re-uploads the secrets.
 
 TOTAL_STAGES=5
-KEYS=$(cygpath -m "$HOME/.freeze-signing" 2>/dev/null || echo "$HOME/.freeze-signing") # C:/… form works for bash and native tools
+KEYS=$(cygpath -m "$HOME/.open-dock-signing" 2>/dev/null || echo "$HOME/.open-dock-signing") # C:/… form works for bash and native tools
 ENV_FILE="$KEYS/passwords.env"
 P12_OPTS=(-keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1) # readable by macOS `security import` and Java
 
-[[ -d .git && -d pc-companion ]] || { echo "Run this from the Freeze repo root."; exit 1; }
+[[ -d .git && -d pc-companion ]] || { echo "Run this from the Open Dock repo root."; exit 1; }
 [[ -t 0 ]] || { echo "Run this in a terminal window (Git Bash): it asks you to confirm steps."; exit 1; }
 command -v openssl >/dev/null || { echo "openssl is required (Git Bash ships it)."; exit 1; }
 gh auth status >/dev/null 2>&1 || { echo "Log in first: gh auth login"; exit 1; }
@@ -206,7 +206,7 @@ password() {
   printf -v "$1" '%s' "$value"
 }
 
-banner "Freeze release signing"
+banner "Open Dock release signing"
 
 stage "Desktop updater key"
 say "Installed desktop apps only accept updates signed with this key."
@@ -232,32 +232,32 @@ if [[ -f "$KEYS/android.p12" ]]; then
   password ANDROID_PASSWORD
 else
   password ANDROID_PASSWORD
-  MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 10000 -subj "/CN=Freeze" \
+  MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 10000 -subj "/CN=Open Dock" \
     -keyout "$KEYS/android.key.pem" -out "$KEYS/android.crt.pem" 2>/dev/null
-  openssl pkcs12 -export -name freeze "${P12_OPTS[@]}" -inkey "$KEYS/android.key.pem" -in "$KEYS/android.crt.pem" \
+  openssl pkcs12 -export -name opendock "${P12_OPTS[@]}" -inkey "$KEYS/android.key.pem" -in "$KEYS/android.crt.pem" \
     -out "$KEYS/android.p12" -passout "pass:$ANDROID_PASSWORD"
   rm "$KEYS/android.key.pem"
-  printf '  %s✓ created%s %s (alias: freeze)\n' "$GREEN" "$RESET" "$KEYS/android.p12"
+  printf '  %s✓ created%s %s (alias: opendock)\n' "$GREEN" "$RESET" "$KEYS/android.p12"
 fi
 set_secret ANDROID_KEYSTORE_BASE64 "$(openssl base64 -A -in "$KEYS/android.p12")"
 set_secret ANDROID_KEYSTORE_PASSWORD "$ANDROID_PASSWORD"
 pause
 
 stage "macOS code-signing certificate"
-say "Signing every build with this certificate keeps Freeze's Accessibility permission across updates."
+say "Signing every build with this certificate keeps Open Dock's Accessibility permission across updates."
 if [[ -f "$KEYS/macos.p12" ]]; then
   note "Found $KEYS/macos.p12, keeping it."
   password MACOS_PASSWORD
 else
   password MACOS_PASSWORD
-  MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 7300 -subj "/CN=Freeze Self-Signed" \
+  MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 7300 -subj "/CN=Open Dock Self-Signed" \
     -addext "basicConstraints=critical,CA:false" -addext "keyUsage=critical,digitalSignature" \
     -addext "extendedKeyUsage=critical,codeSigning" \
     -keyout "$KEYS/macos.key.pem" -out "$KEYS/macos.crt.pem" 2>/dev/null
-  openssl pkcs12 -export -name "Freeze Self-Signed" "${P12_OPTS[@]}" -inkey "$KEYS/macos.key.pem" -in "$KEYS/macos.crt.pem" \
+  openssl pkcs12 -export -name "Open Dock Self-Signed" "${P12_OPTS[@]}" -inkey "$KEYS/macos.key.pem" -in "$KEYS/macos.crt.pem" \
     -out "$KEYS/macos.p12" -passout "pass:$MACOS_PASSWORD"
   rm "$KEYS/macos.key.pem"
-  printf '  %s✓ created%s %s (identity: Freeze Self-Signed)\n' "$GREEN" "$RESET" "$KEYS/macos.p12"
+  printf '  %s✓ created%s %s (identity: Open Dock Self-Signed)\n' "$GREEN" "$RESET" "$KEYS/macos.p12"
 fi
 password KEYCHAIN_PASSWORD
 set_secret APPLE_CERTIFICATE "$(openssl base64 -A -in "$KEYS/macos.p12")"

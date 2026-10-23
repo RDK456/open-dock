@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useElementSize } from '../useElementSize';
-import { FreezeClock, HOUR12 } from '.';
+import { OpenDockClock, HOUR12 } from '.';
 
 type Props = {
   face: string; color?: string; width: number; height: number;
@@ -18,12 +18,12 @@ type Props = {
 export function ClockFacePreview({ face, color, width, height, live = true, pixelRatio = 2, background = true }: Props) {
   const [frameRef, box] = useElementSize<HTMLDivElement>();
   const hostRef = useRef<HTMLDivElement>(null);
-  const mounted = useRef<ReturnType<typeof FreezeClock.mount> | null>(null);
+  const mounted = useRef<ReturnType<typeof OpenDockClock.mount> | null>(null);
   const liveRef = useRef(live);
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const handle = FreezeClock.mount(host, { face, color, width, height, hour12: HOUR12, live: liveRef.current, pixelRatio, background });
+    const handle = OpenDockClock.mount(host, { face, color, width, height, hour12: HOUR12, live: liveRef.current, pixelRatio, background });
     mounted.current = handle;
     const frame = frameRef.current;
     const observer = frame ? new IntersectionObserver(([entry]) => handle.setVisible(entry.isIntersecting)) : null;

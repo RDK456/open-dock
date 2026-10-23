@@ -31,7 +31,7 @@ export function subscribePcStats(listener: Listener) {
 }
 
 // What the PC samples is what the stats widgets on screen show. Each web widget layer reports its
-// needs (from FreezeStats.needs in its WebView); the connection sends the PC their union, and an
+// needs (from OpenDockStats.needs in its WebView); the connection sends the PC their union, and an
 // empty list while none are on screen or the app is in the background.
 const needsByLayer = new Map<number, string[]>();
 let sendNeeds: ((needs: string[]) => void) | null = null;

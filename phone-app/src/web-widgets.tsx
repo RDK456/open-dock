@@ -43,8 +43,8 @@ export function WebWidgetLayer({ widgets, focused = true }: { widgets: WebWidget
   const hasWidgets = widgets.length > 0;
   const hasStats = widgets.some((widget) => widget.kind === 'stats');
   const { colors, scheme } = useTheme();
-  // The page is told the look before its first widgets, and again when it changes (`freezeTheme` in web-widgets-page.ts).
-  const themeCall = `window.freezeTheme(${JSON.stringify(scheme)}, ${JSON.stringify(colors.panel)});`;
+  // The page is told the look before its first widgets, and again when it changes (`openDockTheme` in web-widgets-page.ts).
+  const themeCall = `window.openDockTheme(${JSON.stringify(scheme)}, ${JSON.stringify(colors.panel)});`;
   const themeCallRef = useRef(themeCall);
   // Declared before the effects that send, so a send always carries the latest look.
   useEffect(() => { themeCallRef.current = themeCall; }, [themeCall]);
@@ -56,10 +56,10 @@ export function WebWidgetLayer({ widgets, focused = true }: { widgets: WebWidget
     for (const command of commands) {
       switch (command.type) {
         case 'send':
-          webView.current?.injectJavaScript(`${themeCallRef.current}window.freezeWidgets(${command.list}, ${command.hour12}, ${command.force}, ${command.seq});true;`);
+          webView.current?.injectJavaScript(`${themeCallRef.current}window.openDockWidgets(${command.list}, ${command.hour12}, ${command.force}, ${command.seq});true;`);
           break;
         case 'pause':
-          webView.current?.injectJavaScript(`FreezeClock.setPaused(${command.paused});true;`);
+          webView.current?.injectJavaScript(`OpenDockClock.setPaused(${command.paused});true;`);
           break;
         case 'needs':
           setLayerNeeds(layer, command.needs);
@@ -95,7 +95,7 @@ export function WebWidgetLayer({ widgets, focused = true }: { widgets: WebWidget
   useEffect(() => {
     if (!feeding) return;
     const send = (sample: Record<string, unknown> | null) => {
-      webView.current?.injectJavaScript(sample ? `FreezeStats.push(${JSON.stringify(sample)});true;` : `FreezeStats.setHistory(${JSON.stringify(pcStatsHistory())});true;`);
+      webView.current?.injectJavaScript(sample ? `OpenDockStats.push(${JSON.stringify(sample)});true;` : `OpenDockStats.setHistory(${JSON.stringify(pcStatsHistory())});true;`);
     };
     send(null);
     return subscribePcStats(send);

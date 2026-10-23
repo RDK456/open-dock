@@ -1,7 +1,7 @@
-// Freeze clock faces. Generated from the clock-faces design artifact; edit here, then run
+// Open Dock clock faces. Generated from the clock-faces design artifact; edit here, then run
 // `node scripts/sync-clock-faces.ts` to refresh the phone copy (phone-app/src/clock-faces-source.ts).
 // Plain browser JavaScript with no imports: the desktop imports it and the phone runs it inside a WebView.
-// It defines globalThis.FreezeClock = { faces, mount(host, options), setPaused, setBackgroundPaused, setFrameRate }.
+// It defines globalThis.OpenDockClock = { faces, mount(host, options), setPaused, setBackgroundPaused, setFrameRate }.
 (function () {
 'use strict';
 let HOUR12 = true;
@@ -1381,7 +1381,7 @@ function mount(host, { face, color, width, height, hour12 = true, live = true, p
   };
 }
 
-globalThis.FreezeClock = {
+globalThis.OpenDockClock = {
   faces: FACES.map((item) => ({ id: item.id, name: item.name, category: CATEGORY[item.id], color: item.color, blurb: item.blurb })),
   mount,
   setPaused(value) { paused = Boolean(value); wake(); },

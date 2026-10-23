@@ -7,7 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Theme = 'light' | 'dark';
 
-const KEY = 'freeze.appearance';
+const KEY = 'opendock.appearance';
 const THEME_COLOR = { light: '#ffffff', dark: '#09090b' } as const;
 
 export function parseMode(value: unknown): ThemeMode {

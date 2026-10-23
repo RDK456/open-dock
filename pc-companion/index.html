@@ -10,7 +10,7 @@
       (function () {
         var light = false;
         try {
-          var saved = localStorage.getItem("freeze.appearance");
+          var saved = localStorage.getItem("opendock.appearance");
           light = saved === "light" || (saved !== "dark" && window.matchMedia("(prefers-color-scheme: light)").matches);
         } catch (e) {
           try { light = window.matchMedia("(prefers-color-scheme: light)").matches; } catch (e2) { /* dark */ }
@@ -22,7 +22,7 @@
       html[data-theme="light"] { background: #ffffff; color-scheme: light; }
       html[data-theme="dark"] { background: #09090b; color-scheme: dark; }
     </style>
-    <title>Freeze</title>
+    <title>Open Dock</title>
   </head>
 
   <body>

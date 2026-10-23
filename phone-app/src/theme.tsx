@@ -8,7 +8,7 @@ export { type Colors, type Scheme, type ThemeMode } from './theme-colors';
 // Light, dark, or the phone's own setting. The choice is kept on this phone only. It is read synchronously when the
 // app starts, so the first frame already has the right look, and it is handed to React Native, so the parts the
 // system draws (status bar, keyboard, native tabs, dialogs) follow it too.
-const KEY = 'freeze.appearance';
+const KEY = 'opendock.appearance';
 
 function readMode(): ThemeMode {
   try { return parseMode(Storage.getItemSync(KEY)); } catch { return 'system'; }

@@ -21,7 +21,7 @@ type LrclibRecord = { id?: unknown; trackName?: unknown; artistName?: unknown; a
 
 const API = 'https://lrclib.net/api';
 // LRCLIB asks clients to identify themselves. Browsers can't set User-Agent, so use its alternative header.
-const HEADERS = { 'Lrclib-Client': 'Freeze (https://github.com/naveen-devang/Freeze)' };
+const HEADERS = { 'Lrclib-Client': 'Open Dock (https://github.com/naveen-devang/Open Dock)' };
 let lrclibUserAgent: string | undefined;
 // Android opts in at app startup: LRCLIB rejects OkHttp's generic User-Agent.
 // Other platforms retain their existing headers; this never changes global fetch.
@@ -546,7 +546,7 @@ const DEEZER = 'https://api.deezer.com';
 const MUSICBRAINZ = 'https://musicbrainz.org/ws/2';
 // MusicBrainz asks for an identifying User-Agent. Browsers (the desktop preview) don't allow setting one.
 const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
-const MUSICBRAINZ_HEADERS: Record<string, string> = IS_REACT_NATIVE ? { 'User-Agent': 'Freeze/1.0 (https://github.com/naveen-devang/Freeze)', Accept: 'application/json' } : { Accept: 'application/json' };
+const MUSICBRAINZ_HEADERS: Record<string, string> = IS_REACT_NATIVE ? { 'User-Agent': 'Open Dock/1.0 (https://github.com/naveen-devang/Open Dock)', Accept: 'application/json' } : { Accept: 'application/json' };
 
 // Built by hand: React Native's URLSearchParams has been incomplete across versions.
 const queryString = (params: Record<string, string>) => Object.entries(params).map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&');
@@ -1015,7 +1015,7 @@ function whyRecommended(entry: Draft, lengthKnown: boolean, video: boolean): str
 }
 
 // Sorts LRCLIB's results into the pick list for a song: rows for entries of this song, rows for other songs
-// that share its name, and the entry Freeze recommends, chosen from the rows on the list by the same
+// that share its name, and the entry Open Dock recommends, chosen from the rows on the list by the same
 // principles as the automatic lookup (see pickSearchResult).
 export function buildEntryList(found: LrclibRecord[], track: LyricsTrack, fields: EntryFields): EntryList {
   const song = fields.song.trim();

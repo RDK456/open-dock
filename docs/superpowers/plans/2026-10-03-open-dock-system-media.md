@@ -1,14 +1,14 @@
-# Freeze System Media Integration Implementation Plan
+# Open Dock System Media Integration Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove the Spotify-specific starter and show live system-wide now-playing metadata and artwork in Freeze's existing widget area on connected phones.
+**Goal:** Remove the Spotify-specific starter and show live system-wide now-playing metadata and artwork in Open Dock's existing widget area on connected phones.
 
-**Architecture:** A single Windows-native provider reads the system-selected Global System Media Transport Controls session and broadcasts a bounded live state over Freeze's authenticated WebSocket. The desktop editor adds a built-in widget type, and the phone renders it with a Freeze-owned adaptive card; no Spotify API credentials or runtime plugin code are involved.
+**Architecture:** A single Windows-native provider reads the system-selected Global System Media Transport Controls session and broadcasts a bounded live state over Open Dock's authenticated WebSocket. The desktop editor adds a built-in widget type, and the phone renders it with a Open Dock-owned adaptive card; no Spotify API credentials or runtime plugin code are involved.
 
 **Tech Stack:** Rust + Tauri, Windows Runtime APIs through the existing `windows` crate, Axum WebSocket, React + TypeScript, Expo React Native.
 
-**Spec:** `docs/superpowers/specs/2026-10-03-freeze-system-media-design.md`
+**Spec:** `docs/superpowers/specs/2026-10-03-open-dock-system-media-design.md`
 
 ## Global Constraints
 
@@ -20,7 +20,7 @@
 - Bound artwork size and update frequency; missing metadata/artwork and native API errors must fall back safely.
 - Keep the existing clock and plugin text widget JSON backward-compatible.
 - Remove the bundled and installed Spotify sample without deleting saved deck layouts or unrelated plugins.
-- Keep the Now Playing view Freeze-owned, responsive, and consistent in normal, widget-only, and immersive landscape modes.
+- Keep the Now Playing view Open Dock-owned, responsive, and consistent in normal, widget-only, and immersive landscape modes.
 - Do not add or run automated test suites; use the project's build/type checks and the focused manual runtime checklist below.
 
 ## File Map
@@ -28,15 +28,15 @@
 - Create `pc-companion/src-tauri/src/system_media.rs`: Windows-native session discovery, metadata/artwork extraction, snapshot comparison, and single monitor task.
 - Modify `pc-companion/src-tauri/src/lib.rs`: module registration, retained shared media state, monitor startup, and authenticated WebSocket media-state publishing.
 - Modify `pc-companion/src-tauri/Cargo.toml` and lockfile only if thumbnail stream reading or base64 encoding needs direct Windows/Rust dependencies.
-- Modify `pc-companion/src/App.tsx` and `pc-companion/src/App.css`: built-in widget type, add/picker flow, and an attractive responsive editor preview styled with existing Freeze tokens.
+- Modify `pc-companion/src/App.tsx` and `pc-companion/src/App.css`: built-in widget type, add/picker flow, and an attractive responsive editor preview styled with existing Open Dock tokens.
 - Modify `phone-app/src/connection.tsx`: Now Playing deck widget type, live state contract, validation, and connection-context state.
-- Modify `phone-app/src/app/(tabs)/index.tsx`: Freeze-styled responsive renderer for normal and immersive widget canvases.
-- Delete `pc-companion/plugins/freeze.spotify-controls/`: remove the Spotify-specific starter and its README/script.
-- Remove the installed `freeze.spotify-controls` package from the current companion plugin directory if present; retain deck configuration data.
+- Modify `phone-app/src/app/(tabs)/index.tsx`: Open Dock-styled responsive renderer for normal and immersive widget canvases.
+- Delete `pc-companion/plugins/opendock.spotify-controls/`: remove the Spotify-specific starter and its README/script.
+- Remove the installed `opendock.spotify-controls` package from the current companion plugin directory if present; retain deck configuration data.
 
 ## Review Focus
 
-1. **No session / unsupported media app:** the widget shows a stable Freeze-owned empty state, not stale previous-track content or an error screen.
+1. **No session / unsupported media app:** the widget shows a stable Open Dock-owned empty state, not stale previous-track content or an error screen.
 2. **Track/session switches:** title, artist, playback, source and artwork switch together; old artwork never appears with new metadata.
 3. **Absent, invalid, or oversized artwork:** the text remains readable and the neutral artwork fallback is used.
 4. **Connected-device boundaries:** unauthenticated sockets receive no media state; late/reconnected phones receive the latest state after authentication.
@@ -108,7 +108,7 @@
 
 - [ ] Add `NowPlaying` to Rust `DeckWidgetType`, validate it as a built-in with no plugin metadata, and extend the desktop TypeScript widget type while preserving all legacy clock/plugin shapes.
 - [ ] Add **Now Playing** beside **Add clock** and ensure empty cells and the existing widget picker can create it through first-free placement.
-- [ ] Render a polished editor preview using Freeze colors and a neutral cover-art placeholder; show a hierarchy of artwork, sample title/artist, and progress only when cell dimensions can support them.
+- [ ] Render a polished editor preview using Open Dock colors and a neutral cover-art placeholder; show a hierarchy of artwork, sample title/artist, and progress only when cell dimensions can support them.
 - [ ] Show selection and resizing with existing editor behavior; ensure labels stay legible and clipped/wrapped rather than changing grid placement.
 - [ ] Keep add/delete/drag/resize and save behavior identical to existing built-in widgets.
 - [ ] Run `npm run build` in `pc-companion`.
@@ -135,7 +135,7 @@
 - [ ] Do not write live media state or image bytes to SQLite KV storage or SecureStore.
 - [ ] Run `npx tsc --noEmit` in `phone-app` (use the package manager already used by the repository).
 
-### Task 5: Render the adaptive Freeze-style Now Playing widget on the phone
+### Task 5: Render the adaptive Open Dock-style Now Playing widget on the phone
 
 **Files:**
 - Modify: `phone-app/src/app/(tabs)/index.tsx`
@@ -147,7 +147,7 @@
 - [ ] Create one `NowPlayingWidget` component using existing colors, borders, spacing, and lucide icons; do not reproduce Spotify or Elgato artwork/UI.
 - [ ] In wide/roomy placements, use artwork as an anchor beside title/artist and show playback progress/time when timeline data exists.
 - [ ] In narrow/small/tall placements, use size-aware layout: crop/contain artwork safely, reduce text lines, and omit progress/source details before text or cover overflows.
-- [ ] Use a tasteful Freeze-branded neutral artwork fallback for no artwork/no session; clear old metadata immediately when the session is empty or changes.
+- [ ] Use a tasteful Open Dock-branded neutral artwork fallback for no artwork/no session; clear old metadata immediately when the session is empty or changes.
 - [ ] Keep artwork transitions and text updates atomic using stable track/session keys; do not allow stale image races.
 - [ ] Render properly in widget-only mode and landscape immersive mode, preserving the existing responsive cell sizing and page swipes.
 - [ ] Run `npx tsc --noEmit` in `phone-app`.
@@ -160,17 +160,17 @@
 ### Task 6: Remove the Spotify starter and verify the complete flow
 
 **Files:**
-- Delete: `pc-companion/plugins/freeze.spotify-controls/`
-- Remove if present: the installed `freeze.spotify-controls` package under the current user's Freeze plugin data directory
+- Delete: `pc-companion/plugins/opendock.spotify-controls/`
+- Remove if present: the installed `opendock.spotify-controls` package under the current user's Open Dock plugin data directory
 - Modify: any documentation/reference that specifically advertises the removed sample package
 
 **Interfaces:**
 - Existing saved deck data is retained.
-- Generic Freeze media actions remain available.
+- Generic Open Dock media actions remain available.
 - A saved reference to the removed plugin is displayed as unavailable until the user replaces it.
 
 - [ ] Search the repository for the removed plugin ID and Spotify-specific sample documentation; remove obsolete starter references without deleting general system media behavior.
-- [ ] Remove only the verified `freeze.spotify-controls` package directory from the user's Freeze plugin folder; preserve other plugins and all deck/configuration files.
+- [ ] Remove only the verified `opendock.spotify-controls` package directory from the user's Open Dock plugin folder; preserve other plugins and all deck/configuration files.
 - [ ] Confirm saved plugin references load and display an unavailable state; do not silently remove their buttons or widget placements.
 - [ ] Run `git diff --check`, `cargo check`, `npm run build`, and `npx tsc --noEmit`; capture each exit result.
 - [ ] Start or restart the desktop app and Expo mobile app. Keep both running for the user to test.

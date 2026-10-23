@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Freeze lets your phone connect to this computer over your local network so you can control it.</string>
+	<string>Open Dock lets your phone connect to this computer over your local network so you can control it.</string>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 import type { PcConnection } from './connection';
 
-// The PC opens `freeze://pair?...` on a phone that USB debugging trusts, so the phone pairs without a QR code.
+// The PC opens `opendock://pair?...` on a phone that USB debugging trusts, so the phone pairs without a QR code.
 // Only the USB route is accepted from a link, and its host only if it is on a local network: any app or web page on
 // the phone can open a link, and it must not be able to leave behind an address on the internet.
 // A real address on a private network, or a single-label mDNS name. A hostname that merely starts with digits

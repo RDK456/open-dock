@@ -23,7 +23,7 @@ assert.ok(!/color-mix|currentColor/.test(source), 'pc-stats.js uses color-mix() 
 
 runInThisContext(source);
 type Style = { id: string; span: [number, number] };
-const api = (globalThis as unknown as { FreezeStats: { styles: Style[]; metrics: { id: string }[]; resolve(id: string, columns: number, rows: number): string } }).FreezeStats;
+const api = (globalThis as unknown as { OpenDockStats: { styles: Style[]; metrics: { id: string }[]; resolve(id: string, columns: number, rows: number): string } }).OpenDockStats;
 const styles = api.styles.map((style) => style.id).sort();
 const metrics = api.metrics.map((metric) => metric.id).sort();
 assert.equal(new Set(styles).size, styles.length, 'duplicate style ids');
@@ -75,7 +75,7 @@ const browser = process.env.BROWSER || [
 if (!browser) {
   console.log('pc stats: no Chromium browser found, skipping the render check (set BROWSER to enable)');
 } else {
-  const dir = mkdtempSync(join(tmpdir(), 'freeze-pc-stats-'));
+  const dir = mkdtempSync(join(tmpdir(), 'open-dock-pc-stats-'));
   // The headless Edge profile is ~400 MB; remove it however the run ends.
   process.on('exit', () => rmSync(dir, { recursive: true, force: true, maxRetries: 5 }));
   const page = join(dir, 'render.html');
@@ -87,14 +87,14 @@ const failures = [];
 let tiles = 0;
 const host = document.getElementById('host');
 for (const scenario of scenarios) {
-  FreezeStats.setHistory(scenario.samples);
-  for (const style of FreezeStats.styles) {
-    for (const metric of style.dashboard ? ['cpu'] : FreezeStats.metrics.map((m) => m.id)) {
+  OpenDockStats.setHistory(scenario.samples);
+  for (const style of OpenDockStats.styles) {
+    for (const metric of style.dashboard ? ['cpu'] : OpenDockStats.metrics.map((m) => m.id)) {
       const el = document.createElement('div');
       host.append(el);
       const [columns, rows] = style.span;
       try {
-        FreezeStats.mount(el, { style: style.id, metric, color: '#93c5fd', gpu: scenario.gpu, width: columns * 90, height: rows * 90, columns, rows });
+        OpenDockStats.mount(el, { style: style.id, metric, color: '#93c5fd', gpu: scenario.gpu, width: columns * 90, height: rows * 90, columns, rows });
         const text = el.textContent;
         const where = scenario.name + ' / ' + style.id + ' / ' + metric;
         // Attributes included: a NaN size or path coordinate is as broken as NaN text.
@@ -110,10 +110,10 @@ for (const scenario of scenarios) {
   }
 }
 // The Overview shows both GPUs side by side on a two-GPU PC.
-FreezeStats.setHistory(${JSON.stringify([{ ...base, gpus: [intel, rtx] }])});
+OpenDockStats.setHistory(${JSON.stringify([{ ...base, gpus: [intel, rtx] }])});
 const overview = document.createElement('div');
 host.append(overview);
-FreezeStats.mount(overview, { style: 'overview', width: 380, height: 180, columns: 4, rows: 2 });
+OpenDockStats.mount(overview, { style: 'overview', width: 380, height: 180, columns: 4, rows: 2 });
 if (!(overview.textContent.includes('Intel') && overview.textContent.includes('NVIDIA'))) failures.push('overview: two GPUs not shown side by side: ' + overview.textContent);
 overview.remove();
 
@@ -121,10 +121,10 @@ overview.remove();
 // widget must look the same as from a full sample. FIELDS mirrors pc_stats::PcStats in Rust.
 const FIELDS = { cpu: ['cpu'], clock: ['clock'], cores: ['cores'], cputemp: ['cputemp', 'cputempSource'], gpu: ['gpus'], ram: ['ram', 'ramUsed', 'ramTotal'], disk: ['disk', 'diskUsed', 'diskTotal'], diskio: ['diskio', 'diskRead', 'diskWrite'], net: ['net', 'netUp'] };
 const full = ${JSON.stringify(Array.from({ length: 20 }, (_, i) => ({ ...base, seq: i, cputempApprox: true, cores: [10 + i, 20, 30, 40], gpus: [intel, rtx] })))};
-for (const style of FreezeStats.styles) for (const metric of style.dashboard ? ['cpu'] : FreezeStats.metrics.map((m) => m.id)) {
+for (const style of OpenDockStats.styles) for (const metric of style.dashboard ? ['cpu'] : OpenDockStats.metrics.map((m) => m.id)) {
   const [c, r] = style.span;
-  const keep = new Set(['seq', 'cputempApprox', ...FreezeStats.needs(style.id, metric, c, r).flatMap((n) => FIELDS[n])]);
-  const draw = (samples) => { const el = document.createElement('div'); host.append(el); FreezeStats.setHistory(samples); FreezeStats.mount(el, { style: style.id, metric, width: c * 120, height: r * 110, columns: c, rows: r }); const text = el.textContent; el.remove(); return text; };
+  const keep = new Set(['seq', 'cputempApprox', ...OpenDockStats.needs(style.id, metric, c, r).flatMap((n) => FIELDS[n])]);
+  const draw = (samples) => { const el = document.createElement('div'); host.append(el); OpenDockStats.setHistory(samples); OpenDockStats.mount(el, { style: style.id, metric, width: c * 120, height: r * 110, columns: c, rows: r }); const text = el.textContent; el.remove(); return text; };
   const all = draw(full), trimmed = draw(full.map((s) => Object.fromEntries(Object.entries(s).filter(([k]) => keep.has(k)))));
   if (all !== trimmed) failures.push('needs ' + style.id + '/' + metric + ' misses a reading: ' + JSON.stringify(all.slice(0, 80)) + ' vs ' + JSON.stringify(trimmed.slice(0, 80)));
 }
@@ -160,17 +160,17 @@ for (const surface of surfaces) for (let C = 1; C <= 6; C++) for (let R = 1; R <
   const w = Math.round(c * cw + (c - 1) * 10 - 10), h = Math.round(r * ch + (r - 1) * 10 - 10);
   sizes.set(c + 'x' + r + '@' + w + 'x' + h, { c, r, w, h });
 }
-FreezeStats.setHistory(${JSON.stringify(Array.from({ length: 60 }, (_, i) => ({ ...base, net: i % 9 === 0 ? 2.4 : 0.012, diskio: 12 + (i % 5), cputempApprox: true, gpus: [intel, gpu({ id: '10de-1f15-14421025-0', name: 'NVIDIA GPU', vendor: 'nvidia', kind: 'discrete', state: 'no-driver' })] })))});
+OpenDockStats.setHistory(${JSON.stringify(Array.from({ length: 60 }, (_, i) => ({ ...base, net: i % 9 === 0 ? 2.4 : 0.012, diskio: 12 + (i % 5), cputempApprox: true, gpus: [intel, gpu({ id: '10de-1f15-14421025-0', name: 'NVIDIA GPU', vendor: 'nvidia', kind: 'discrete', state: 'no-driver' })] })))});
 const drawn = new Set();
-for (const style of FreezeStats.styles) for (const { c, r, w, h } of sizes.values()) {
-  const actual = FreezeStats.resolve(style.id, c, r);
+for (const style of OpenDockStats.styles) for (const { c, r, w, h } of sizes.values()) {
+  const actual = OpenDockStats.resolve(style.id, c, r);
   for (const [metric, gpu] of style.dashboard ? [['cpu', 'auto']] : [['net', 'auto'], ['gputemp', 'auto'], ['gpu', '10de-1f15-14421025-0']]) {
     const key = actual + metric + gpu + w + 'x' + h;
     if (drawn.has(key)) continue;
     drawn.add(key);
     const el = document.createElement('div');
     host.append(el);
-    FreezeStats.mount(el, { style: style.id, metric, gpu, width: w, height: h, columns: c, rows: r });
+    OpenDockStats.mount(el, { style: style.id, metric, gpu, width: w, height: h, columns: c, rows: r });
     const { tile, texts, zones } = boxes(el);
     const where = actual + ' ' + c + 'x' + r + ' (' + w + 'x' + h + ') ' + metric + ': ';
     for (const t of texts) {

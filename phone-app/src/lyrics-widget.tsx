@@ -70,7 +70,7 @@ function useAppActive() {
 // `title` is a song name typed in the panel, for songs the PC reports under a name LRCLIB doesn't use.
 type SyncChoice = { offsetMs: number; versionFirstMs?: number; versionLastMs?: number; lrclibId?: number; title?: string };
 type StoredSyncChoice = SyncChoice & { at: number };
-const SYNC_CHOICES_KEY = 'freeze.lyrics-sync';
+const SYNC_CHOICES_KEY = 'opendock.lyrics-sync';
 const MAX_SYNC_CHOICES = 300;
 // Music videos can run a story for minutes before the song starts.
 const MAX_OFFSET_MS = 10 * 60_000;

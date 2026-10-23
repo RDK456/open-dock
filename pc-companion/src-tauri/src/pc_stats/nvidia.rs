@@ -4,7 +4,7 @@ use nvml_wrapper::{enum_wrappers::device::TemperatureSensor, Nvml};
 use std::time::{Duration, Instant};
 
 /// After NVML fails to start (no driver yet), try again this often, so installing the driver works
-/// without restarting Freeze.
+/// without restarting Open Dock.
 const RETRY_EVERY: Duration = Duration::from_secs(60);
 
 pub(super) struct Nvidia {

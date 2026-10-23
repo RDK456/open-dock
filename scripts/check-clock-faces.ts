@@ -10,7 +10,7 @@ const phone = readFileSync(new URL('../phone-app/src/clock-faces-source.ts', imp
 assert.ok(phone.includes(JSON.stringify(source)), 'phone-app/src/clock-faces-source.ts is stale: run node scripts/sync-clock-faces.ts');
 
 runInThisContext(source);
-const faces = (globalThis as unknown as { FreezeClock: { faces: { id: string; category: string }[] } }).FreezeClock.faces;
+const faces = (globalThis as unknown as { OpenDockClock: { faces: { id: string; category: string }[] } }).OpenDockClock.faces;
 const ids = faces.map((face) => face.id).sort();
 assert.equal(new Set(ids).size, ids.length, 'duplicate face ids');
 assert.ok(faces.every((face) => ['classic', 'retro', 'ambient', 'kinetic'].includes(face.category)), 'every face needs a category');

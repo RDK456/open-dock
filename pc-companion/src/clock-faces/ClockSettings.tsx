@@ -3,9 +3,9 @@ import { Check, Search, X } from 'lucide-react';
 import { ClockFacePreview } from './ClockFacePreview';
 import { PanelSection } from '../SettingsPanel';
 import { useTheme } from '../theme';
-import { CLOCK_CATEGORIES, CLOCK_COLOR_PRESETS, ClockCategory, clockFace, DEFAULT_CLOCK_COLOR, FreezeClock } from '.';
+import { CLOCK_CATEGORIES, CLOCK_COLOR_PRESETS, ClockCategory, clockFace, DEFAULT_CLOCK_COLOR, OpenDockClock } from '.';
 
-const RECENT_KEY = 'freeze.recent-clock-colors';
+const RECENT_KEY = 'opendock.recent-clock-colors';
 const HEX = /^#[0-9a-f]{6}$/i;
 function readRecent(): string[] {
   try {
@@ -54,12 +54,12 @@ export function ColorField({ color, busy, onPick }: { color: string; busy: boole
   };
   return <div className="clock-settings-color">
     <span className="clock-settings-label">Color</span>
-    <div className="clock-swatches">{CLOCK_COLOR_PRESETS.map((swatch) => <button key={swatch} type="button" className={`clock-swatch ${swatch === color ? 'selected' : ''}`} style={{ background: FreezeClock.tint(swatch) }} aria-label={`Use ${swatch}`} aria-pressed={swatch === color} disabled={busy} onClick={() => pick(swatch)} />)}</div>
+    <div className="clock-swatches">{CLOCK_COLOR_PRESETS.map((swatch) => <button key={swatch} type="button" className={`clock-swatch ${swatch === color ? 'selected' : ''}`} style={{ background: OpenDockClock.tint(swatch) }} aria-label={`Use ${swatch}`} aria-pressed={swatch === color} disabled={busy} onClick={() => pick(swatch)} />)}</div>
     <div className="clock-custom-color">
       <input type="color" aria-label="Custom color" value={color} disabled={busy} onChange={(event) => pick(event.target.value)} onBlur={(event) => pick(event.target.value, true)} />
       <input className="clock-hex" aria-label="Hex color" value={hex} spellCheck={false} disabled={busy} onChange={(event) => setHex(event.target.value)} onBlur={() => HEX.test(hex) ? pick(hex, true) : setHex(color)} onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }} />
     </div>
-    {recent.length ? <div className="clock-recent"><span>Recent</span>{recent.map((swatch) => <button key={swatch} type="button" className={`clock-swatch small ${swatch === color ? 'selected' : ''}`} style={{ background: FreezeClock.tint(swatch) }} aria-label={`Use ${swatch}`} disabled={busy} onClick={() => pick(swatch)} />)}</div> : null}
+    {recent.length ? <div className="clock-recent"><span>Recent</span>{recent.map((swatch) => <button key={swatch} type="button" className={`clock-swatch small ${swatch === color ? 'selected' : ''}`} style={{ background: OpenDockClock.tint(swatch) }} aria-label={`Use ${swatch}`} disabled={busy} onClick={() => pick(swatch)} />)}</div> : null}
   </div>;
 }
 
@@ -71,15 +71,15 @@ function ClockFaceBrowser({ selected, color, block, onClose, onChoose }: { selec
   const [hovered, setHovered] = useState<string | null>(null);
   // The editor's own faces sit behind this dialog, so they stop drawing while it is open.
   useEffect(() => {
-    FreezeClock.setBackgroundPaused(true);
-    return () => FreezeClock.setBackgroundPaused(false);
+    OpenDockClock.setBackgroundPaused(true);
+    return () => OpenDockClock.setBackgroundPaused(false);
   }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  const faces = useMemo(() => FreezeClock.faces.filter((face) => (category === 'all' || face.category === category)
+  const faces = useMemo(() => OpenDockClock.faces.filter((face) => (category === 'all' || face.category === category)
     && `${face.name} ${face.blurb}`.toLowerCase().includes(query.trim().toLowerCase())), [category, query]);
   // Tiles keep the widget's shape, capped so tall widgets don't make giant tiles.
   const tileHeight = Math.min(150, Math.max(70, 220 * block.height / block.width));

@@ -3,7 +3,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { invoke } from "@tauri-apps/api/core";
 import { version } from "../package.json";
 
-// Freeze checks GitHub's latest release (tauri.conf.json → plugins.updater), downloads in the
+// Open Dock checks GitHub's latest release (tauri.conf.json → plugins.updater), downloads in the
 // background, and waits for Restart because a restart drops connected phones for a few seconds.
 export type UpdateState =
   | { kind: "idle" | "checking" }
@@ -13,7 +13,7 @@ export type UpdateState =
   | { kind: "error"; message: string };
 
 const DAY = 24 * 60 * 60 * 1000;
-const AUTO_KEY = "freeze.autoUpdate";
+const AUTO_KEY = "opendock.autoUpdate";
 
 export function useUpdater() {
   const [state, setState] = useState<UpdateState>({ kind: "idle" });
@@ -49,7 +49,7 @@ export function useUpdater() {
     }
   }, []);
 
-  // On Windows install() hands over to the installer, which closes and reopens Freeze itself.
+  // On Windows install() hands over to the installer, which closes and reopens Open Dock itself.
   const restart = useCallback(async () => {
     try { await ready.current?.install(); await invoke("restart_app"); }
     catch (error) { setState({ kind: "error", message: String(error) }); }
@@ -80,13 +80,13 @@ export function UpdatesSetting({ updater }: { updater: ReturnType<typeof useUpda
   const [, tick] = useState(0);
   useEffect(() => { const timer = setInterval(() => tick((n) => n + 1), 60000); return () => clearInterval(timer); }, []);
 
-  const title = state.kind === "ready" ? `Freeze ${state.version} is ready` : "Updates";
+  const title = state.kind === "ready" ? `Open Dock ${state.version} is ready` : "Updates";
   const detail = state.kind === "checking" ? "Checking for updates…"
-    : state.kind === "current" ? `Freeze ${version} is up to date. Checked ${checkedAgo(state.checkedAt)}.`
-    : state.kind === "downloading" ? `Downloading Freeze ${state.version}… ${state.percent}%`
+    : state.kind === "current" ? `Open Dock ${version} is up to date. Checked ${checkedAgo(state.checkedAt)}.`
+    : state.kind === "downloading" ? `Downloading Open Dock ${state.version}… ${state.percent}%`
     : state.kind === "ready" ? "Restart to finish. Connected phones reconnect on their own in a few seconds."
-    : state.kind === "error" ? `Couldn't update Freeze ${version}. Check your internet connection, then try again.`
-    : `Freeze ${version}`;
+    : state.kind === "error" ? `Couldn't update Open Dock ${version}. Check your internet connection, then try again.`
+    : `Open Dock ${version}`;
   const notes = state.kind === "ready" ? state.notes.split("\n").map((line) => line.replace(/^[-*]\s*/, "").trim()).filter(Boolean).slice(0, 6) : [];
 
   return <section className="device-navigation-setting updates-setting">

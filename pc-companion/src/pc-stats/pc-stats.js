@@ -1,7 +1,7 @@
-// Freeze PC stats widgets. Edit here, then run `node scripts/sync-pc-stats.ts` to refresh the phone copy
+// Open Dock PC stats widgets. Edit here, then run `node scripts/sync-pc-stats.ts` to refresh the phone copy
 // (phone-app/src/pc-stats-source.ts). Plain browser JavaScript with no imports: the desktop imports it and
 // the phone runs it inside a WebView, like the clock faces.
-// It defines globalThis.FreezeStats = { metrics, styles, resolve, needs, setHistory, push, latest, mount(host, options) }.
+// It defines globalThis.OpenDockStats = { metrics, styles, resolve, needs, setHistory, push, latest, mount(host, options) }.
 // Samples come from the PC (pc-companion/src-tauri/src/pc_stats). GPU readings are per GPU (sample.gpus);
 // each widget follows one GPU (options.gpu: an id, or "auto"). A reading the PC can't measure is null:
 // the widget shows a short reason ("No sensor", "No driver", "Asleep") instead of a number, and
@@ -687,8 +687,8 @@ function styleRoot(entry) {
 }
 
 function injectCss() {
-  if (typeof document === 'undefined' || document.getElementById('freeze-pc-stats-css')) return;
-  const style = document.createElement('style'); style.id = 'freeze-pc-stats-css'; style.textContent = CSS; document.head.append(style);
+  if (typeof document === 'undefined' || document.getElementById('open-dock-pc-stats-css')) return;
+  const style = document.createElement('style'); style.id = 'open-dock-pc-stats-css'; style.textContent = CSS; document.head.append(style);
 }
 
 // Draws a style into `host` at width × height px. columns/rows are the widget's grid span, used to pick a fitting style.
@@ -713,7 +713,7 @@ function mount(host, { style, metric, color, gpu, background, still = false, wid
 }
 const redraw = () => mounted.forEach((update) => update());
 
-globalThis.FreezeStats = {
+globalThis.OpenDockStats = {
   metrics: METRICS,
   styles: STYLES.map(({ id, size, span, name, blurb, dashboard }) => ({ id, size, span, name, blurb, dashboard: !!dashboard })),
   resolve: (id, columns, rows) => resolve(id, columns, rows).id,
