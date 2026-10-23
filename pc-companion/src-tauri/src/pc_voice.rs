@@ -23,8 +23,23 @@ fn explain(error: windows::core::Error) -> String {
     }
 }
 
+/// Whether "Online speech recognition" is on: without it Windows' dictation fails with only "Internal Speech Error".
+fn online_speech_on() -> bool {
+    use windows::core::w;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+    let mut value = 0u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    let read = unsafe {
+        RegGetValueW(HKEY_CURRENT_USER, w!("Software\\Microsoft\\Speech_OneCore\\Settings\\OnlineSpeechPrivacy"), w!("HasAccepted"), RRF_RT_REG_DWORD, None, Some((&mut value as *mut u32).cast()), Some(&mut size))
+    };
+    read.is_ok() && value == 1
+}
+
 /// Listens for one sentence and returns it ("" when nothing was said). Blocks, so run it off the async runtime.
 pub fn listen_once() -> Result<String, String> {
+    if !online_speech_on() {
+        return Err("Turn on Online speech recognition in Windows Settings, under Privacy & security, Speech.".into());
+    }
     let recognizer = SpeechRecognizer::new().map_err(explain)?;
     if let Ok(timeouts) = recognizer.Timeouts() {
         let _ = timeouts.SetInitialSilenceTimeout(seconds(6.0));
