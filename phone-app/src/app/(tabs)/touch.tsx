@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
-import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View, type GestureResponderEvent } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CornerDownLeft, Delete, Gauge, Grab, Keyboard, Monitor, MousePointer2, PenLine } from 'lucide-react-native';
 import { SignaturePad } from '../../signature-pad';
@@ -37,6 +37,9 @@ export default function TouchScreen() {
   const router = useRouter();
   const focused = useIsFocused();
   const bottomClearance = useTabBarClearance();
+  const window = useWindowDimensions();
+  // Sideways, the buttons stand in a column beside the pad so the pad keeps the full height.
+  const wide = window.width > window.height;
   const { status, sendPointer } = usePcConnection();
   const connected = status === 'connected';
   const [speedIndex, setSpeedIndex] = useState(1);
@@ -172,9 +175,11 @@ export default function TouchScreen() {
       <Wallpaper />
       <View style={styles.header}>
         <Text style={styles.title}>Touch</Text>
-        <Text style={styles.subtitle}>{connected ? signing ? 'Sign with your finger, then paste it on the PC' : 'One finger moves · tap clicks · two fingers scroll · pinch zooms · two-finger tap right-clicks' : 'Connect to a PC to use the touchpad'}</Text>
+        {wide ? null : <Text style={styles.subtitle}>{connected ? signing ? 'Sign with your finger, then paste it on the PC' : 'One finger moves · tap clicks · two fingers scroll · pinch zooms · two-finger tap right-clicks' : 'Connect to a PC to use the touchpad'}</Text>}
       </View>
 
+      <View style={[styles.body, wide && styles.bodyWide, { marginBottom: bottomClearance }]}>
+      <View style={styles.main}>
       {signing ? <View style={styles.signWrap}><SignaturePad /></View> : <View style={styles.padWrap}>
         <View ref={padRef} style={[styles.pad, !connected && styles.padDisabled]} onLayout={() => padRef.current?.measure((_x, _y, _w, _h, pageX, pageY) => { origin.current = { x: pageX, y: pageY }; })} {...(connected ? responder.panHandlers : {})} accessibilityLabel="Touchpad">
           {glow.map((point, index) => <Animated.View key={index} pointerEvents="none" style={[styles.glow, { opacity: glowOpacity, transform: [{ translateX: Animated.subtract(point.x, 60) }, { translateY: Animated.subtract(point.y, 60) }] }]} />)}
@@ -187,14 +192,16 @@ export default function TouchScreen() {
           {Icon ? <Icon size={15} color={colors.text} /> : <Text style={styles.keyChipText}>{label}</Text>}
         </Pressable>)}
       </View> : null}
+      </View>
 
-      <View style={[styles.bar, { marginBottom: bottomClearance }]}>
-        <Pressable style={({ pressed }) => [styles.barButton, styles.barWide, pressed && styles.barPressed]} disabled={!connected} onPress={() => send({ kind: 'click', button: 'left' })} accessibilityRole="button"><Text style={styles.barText}>Left</Text></Pressable>
-        <Pressable style={({ pressed }) => [styles.barButton, styles.barWide, pressed && styles.barPressed]} disabled={!connected} onPress={() => send({ kind: 'click', button: 'right' })} accessibilityRole="button"><Text style={styles.barText}>Right</Text></Pressable>
+      <View style={[styles.bar, wide && styles.barWide]}>
+        <Pressable style={({ pressed }) => [styles.barButton, styles.barMain, pressed && styles.barPressed]} disabled={!connected} onPress={() => send({ kind: 'click', button: 'left' })} accessibilityRole="button"><Text style={styles.barText}>Left</Text></Pressable>
+        <Pressable style={({ pressed }) => [styles.barButton, styles.barMain, pressed && styles.barPressed]} disabled={!connected} onPress={() => send({ kind: 'click', button: 'right' })} accessibilityRole="button"><Text style={styles.barText}>Right</Text></Pressable>
         <Pressable style={({ pressed }) => [styles.barButton, dragging && styles.barActive, pressed && styles.barPressed]} disabled={!connected} onPress={toggleDrag} accessibilityRole="button" accessibilityLabel={dragging ? 'Release drag' : 'Hold left button to drag'} accessibilityState={{ selected: dragging }}><Grab size={17} color={dragging ? colors.onAccent : colors.text} /></Pressable>
         <Pressable style={({ pressed }) => [styles.barButton, typing && styles.barActive, pressed && styles.barPressed]} disabled={!connected} onPress={toggleKeyboard} accessibilityRole="button" accessibilityLabel="Keyboard" accessibilityState={{ selected: typing }}><Keyboard size={17} color={typing ? colors.onAccent : colors.text} /></Pressable>
         <Pressable style={({ pressed }) => [styles.barButton, signing && styles.barActive, pressed && styles.barPressed]} onPress={() => setSigning(!signing)} accessibilityRole="button" accessibilityLabel="Signature" accessibilityState={{ selected: signing }}><PenLine size={17} color={signing ? colors.onAccent : colors.text} /></Pressable>
         <Pressable style={({ pressed }) => [styles.barButton, pressed && styles.barPressed]} onPress={() => setSpeedIndex((index) => (index + 1) % SPEEDS.length)} accessibilityRole="button" accessibilityLabel={`Pointer speed ${speedIndex + 1} of ${SPEEDS.length}`}><Gauge size={15} color={colors.text} /><Text style={styles.speedText}>{speedIndex + 1}</Text></Pressable>
+      </View>
       </View>
 
       {/* Typed text goes straight to the PC; the field itself stays empty. */}
@@ -219,7 +226,7 @@ export default function TouchScreen() {
 
 const makeStyles = (colors: Colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 18, paddingTop: 17 },
+  header: { paddingHorizontal: 18, paddingTop: 12 },
   title: { color: colors.text, fontSize: 23, fontWeight: '600', letterSpacing: -0.3 },
   subtitle: { color: colors.muted, fontSize: 13, lineHeight: 17, marginTop: 5 },
   padWrap: { flex: 1, padding: 14 },
@@ -236,7 +243,11 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   keyChipText: { color: colors.text, fontSize: 13, fontWeight: '500' },
   bar: { flexDirection: 'row', gap: 6, paddingHorizontal: 14, paddingBottom: 10 },
   barButton: { flex: 1, minWidth: 0, height: 48, paddingHorizontal: 4, borderRadius: 14, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder },
-  barWide: { flex: 1.4 },
+  barMain: { flex: 1.4 },
+  barWide: { flexDirection: 'column', width: 76, paddingHorizontal: 0, paddingTop: 14, paddingRight: 14 },
+  body: { flex: 1 },
+  bodyWide: { flexDirection: 'row' },
+  main: { flex: 1 },
   barActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   barPressed: { transform: [{ scale: 0.96 }], backgroundColor: colors.pressed },
   barText: { color: colors.text, fontSize: 14, fontWeight: '600' },

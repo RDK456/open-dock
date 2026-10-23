@@ -1845,7 +1845,11 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
     <div className="deck-main">
       <div className="deck-main-head">
         <button type="button" className="secondary-button deck-rail-toggle" aria-expanded={railOpen} aria-haspopup="true" onClick={() => setRailOpen(!railOpen)}><Layers size={14} /><span>{profile.name} › {page.name}</span><ChevronDown size={13} /></button>
-        <div className={`deck-crumb ${folder ? 'in-folder' : ''}`}><strong>{folder ? folder.name : page.name}</strong><span>{folder ? `${profile.name} › ${page.name} › folder` : profile.name}</span></div>
+        {/* Pages one click away; the menu above still holds profiles, renaming and moving. */}
+        {folder ? <div className="deck-crumb in-folder"><strong>{folder.name}</strong><span>{`${profile.name} › ${page.name} › folder`}</span></div> : <div className="deck-page-tabs" role="tablist" aria-label={`${profile.name} pages`}>
+          {profile.pages.map((entry) => <button type="button" role="tab" key={entry.id} aria-selected={entry.id === page.id} className={entry.id === page.id ? 'active' : ''} disabled={busy} onClick={() => selectPage(profile, entry)}>{entry.name}</button>)}
+          <button type="button" className="deck-page-add" aria-label="Add page" disabled={busy || profile.pages.length >= 8} onClick={() => addPageTo(profile)}><Plus size={13} /></button>
+        </div>}
         {folder ? <button type="button" className="secondary-button" data-deck-back onClick={closeFolder}><ArrowLeft size={13} /> Back to {page.name}</button> : null}
         <button type="button" className="secondary-button deck-panel-toggle" aria-expanded={sidePanelOpen} onClick={() => setSidePanelOpen(!sidePanelOpen)}><PanelRight size={14} /> {hasSelection ? 'Settings' : 'Add'}</button>
         <span className={`deck-save-state ${savedLabel === 'All changes saved' ? 'saved' : savedLabel === 'Could not save' ? 'failed' : ''}`} role="status"><i />{savedLabel}</span>
@@ -1853,6 +1857,8 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
       {deck.migrationNotes?.length ? <div className="deck-notice" role="status"><div><strong>Your deck was updated.</strong> Widgets now sit on the page grid next to your buttons.<ul>{deck.migrationNotes.map((note) => <li key={note}>{note}</li>)}</ul></div><button type="button" className="secondary-button" onClick={() => void save({ ...deck, migrationNotes: [] })}>Got it</button></div> : null}
       {error ? <p className="usb-error deck-error" role="alert">{error}<button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setError('')}>✕</button></p> : null}
       <div className="deck-main-scroll">
+        {/* The next pages peek out behind this one, like the phone's card stack; click one to deal it. */}
+        {folder ? null : profile.pages.slice(profile.pages.indexOf(page) + 1, profile.pages.indexOf(page) + 3).reverse().map((entry, at, list) => <button type="button" key={entry.id} className="deck-ghost" style={{ marginInline: (list.length - at) * 16 }} disabled={busy} onClick={() => selectPage(profile, entry)}>{entry.name}</button>)}
         <div className="deck-canvas-wrap" onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
           <div className="deck-canvas-heading">
             <div><h2>{folder ? folder.name : page.name}</h2><p>{widgetScreen.buttons.length + widgetScreen.widgets.length} items · {widgetOccupied.size} of {widgetScreen.rows * widgetScreen.columns} cells · Drag to move or resize{folder ? ' · Drop on Back to move out' : ''}</p></div>
@@ -1861,7 +1867,7 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
               <label className="grid-size-control">Columns<DeckSelect value={String(widgetScreen.columns)} disabled={busy} options={Array.from({ length: 6 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))} onChange={(value) => resizeGrid('columns', value)} /></label>
             </div>
           </div>
-          <div ref={widgetCanvasRef} className="deck-canvas widget-canvas" style={{ gridTemplateColumns: `repeat(${widgetScreen.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${widgetScreen.rows}, minmax(100px, auto))` }} onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
+          <div ref={widgetCanvasRef} key={folder?.id ?? page.id} className={`deck-canvas widget-canvas ${folder ? "enter-folder" : "enter-page"}`} style={{ gridTemplateColumns: `repeat(${widgetScreen.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${widgetScreen.rows}, minmax(100px, auto))` }} onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
             {Array.from({ length: widgetScreen.rows * widgetScreen.columns }, (_, index) => {
               const row = Math.floor(index / widgetScreen.columns);
               const column = index % widgetScreen.columns;

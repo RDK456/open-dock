@@ -4081,12 +4081,18 @@ fn invoke_button(
         .iter()
         .find(|page| page.id == page_id)
         .ok_or_else(|| "unknown_page".to_owned())?;
-    let button = page
-        .buttons
-        .iter()
-        .chain(page.folders.iter().flat_map(|folder| &folder.buttons))
-        .find(|button| button.id == button_id)
+    let page_buttons = |page: &'_ DeckPage| {
+        page.buttons
+            .iter()
+            .chain(page.folders.iter().flat_map(|folder| &folder.buttons))
+            .find(|button| button.id == button_id)
+            .cloned()
+    };
+    // The phone pins buttons from any page of the profile to its always-visible rail.
+    let button = page_buttons(page)
+        .or_else(|| profile.pages.iter().find_map(|page| page_buttons(page)))
         .ok_or_else(|| "unknown_button".to_owned())?;
+    let button = &button;
     let changed_selection = matches!(
         &button.action,
         DeckAction::SelectProfile { .. } | DeckAction::SelectPage { .. }

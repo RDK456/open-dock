@@ -816,3 +816,26 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 @media (max-width: 1250px) {
   .glass-window.app-shell { grid-template-columns: 84px minmax(0, 1fr); }
 }
+
+/* Deck as a stack of cards: next pages peek above the canvas; keys are glass tiles that lift on hover. */
+.deck-ghost { position: relative; z-index: 0; display: block; width: auto; height: 34px; margin-bottom: -34px; /* -20px overlap after the scroller's 14px gap */ padding: 0 18px 14px; border: 1px solid var(--hairline); border-radius: 18px 18px 0 0; background: var(--card-raised); color: var(--subtle); font-size: 11px; font-weight: 600; text-align: left; cursor: pointer; opacity: .7; transition-property: opacity, transform; transition-duration: 160ms; transition-timing-function: ease-out; }
+.deck-ghost:hover:not(:disabled) { opacity: 1; transform: translateY(-3px); }
+.deck-ghost + .deck-ghost { opacity: .85; }
+.deck-canvas-wrap { position: relative; z-index: 1; }
+.deck-canvas { gap: 12px; }
+.deck-button { border-color: var(--hairline); border-radius: 14px; background: var(--card-raised); box-shadow: 0 1px 2px var(--shadow); transition-property: transform, box-shadow, border-color; transition-duration: 160ms; transition-timing-function: ease-out; }
+.deck-button:hover { transform: translateY(-2px); box-shadow: 0 8px 18px var(--shadow); }
+
+/* Page tabs in the deck header: every page of the profile is one click away. */
+.deck-page-tabs { min-width: 0; flex: 1; display: flex; align-items: center; gap: 4px; padding: 3px; overflow-x: auto; border: 1px solid var(--hairline); border-radius: 12px; background: var(--z950); scrollbar-width: none; }
+.deck-page-tabs button { flex: none; height: 30px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; transition-property: background-color, color; transition-duration: 140ms; }
+.deck-page-tabs button:hover:not(:disabled) { background: var(--card-raised); color: var(--foreground); }
+.deck-page-tabs button.active { background: var(--accent); color: var(--accent-text); }
+.deck-page-tabs .deck-page-add { width: 30px; padding: 0; display: grid; place-items: center; }
+
+/* The canvas re-enters on every page change: pages deal up from the stack, folders zoom open. */
+@keyframes deck-deal { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+@keyframes deck-open { from { opacity: 0; transform: scale(.9); } }
+.deck-canvas.enter-page { animation: deck-deal 280ms cubic-bezier(.2, .8, .2, 1); }
+.deck-canvas.enter-folder { animation: deck-open 260ms cubic-bezier(.2, .8, .2, 1); transform-origin: 50% 30%; }
+@media (prefers-reduced-motion: reduce) { .deck-canvas.enter-page, .deck-canvas.enter-folder { animation: none; } }

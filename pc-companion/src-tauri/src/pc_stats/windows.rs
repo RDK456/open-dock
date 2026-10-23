@@ -105,6 +105,11 @@ impl Sensors {
             .map(|(_, value)| value)
             .fold(f64::NAN, f64::max);
         let kelvin = if tenths { raw / 10.0 } else { raw };
+        // Desktop boards without a real CPU sensor report a fixed 301 K (27.85 °C) zone; it is never
+        // the CPU. ponytail: a real package reading needs MSR access through a driver, like QuickCPU.
+        if (kelvin - 301.0).abs() < 0.05 {
+            return None;
+        }
         let celsius = (kelvin - 273.15) as f32;
         if !(1.0..=125.0).contains(&celsius) {
             return None;
