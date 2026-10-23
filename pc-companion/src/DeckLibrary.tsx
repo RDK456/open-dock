@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { AppWindow, Clock, File, FolderClosed, FolderOpen, Gauge, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, Terminal } from 'lucide-react';
+import { AppWindow, Clock, File, FolderClosed, FolderOpen, Gauge, Globe, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, Terminal, TextCursorInput } from 'lucide-react';
 
 export type WidgetChoice = { kind: 'clock' } | { kind: 'now_playing' } | { kind: 'lyrics' } | { kind: 'pc_stats' } | { kind: 'plugin'; pluginId: string; widgetId: string };
-export type ButtonPreset = 'hotkey' | 'media' | 'launch_app' | 'launch_file' | 'launch_folder' | 'run_script' | 'sequence' | 'select_page' | 'select_profile';
+export type ButtonPreset = 'hotkey' | 'media' | 'launch_app' | 'launch_file' | 'launch_folder' | 'type_text' | 'open_url' | 'run_script' | 'sequence' | 'select_page' | 'select_profile';
 export type LibraryChoice = WidgetChoice | { kind: 'button'; preset: ButtonPreset } | { kind: 'plugin_action'; pluginId: string; actionId: string } | { kind: 'folder' };
 
 type Entry = { key: string; icon: React.ReactNode; title: string; detail: string; choice: LibraryChoice; disabled?: string };
@@ -28,6 +28,8 @@ export function DeckLibrary({ pluginActions, pluginWidgets, targetLabel, inFolde
     { key: 'launch_app', icon: <AppWindow size={16} />, title: 'Open app', detail: 'Choose an application', choice: { kind: 'button', preset: 'launch_app' } },
     { key: 'launch_file', icon: <File size={16} />, title: 'Open file', detail: 'Choose a file', choice: { kind: 'button', preset: 'launch_file' } },
     { key: 'launch_folder', icon: <FolderOpen size={16} />, title: 'Open folder', detail: 'Choose a folder on this PC', choice: { kind: 'button', preset: 'launch_folder' } },
+    { key: 'type_text', icon: <TextCursorInput size={16} />, title: 'Type text', detail: 'A snippet, signature or reply', choice: { kind: 'button', preset: 'type_text' } },
+    { key: 'open_url', icon: <Globe size={16} />, title: 'Open website', detail: 'A page in your browser', choice: { kind: 'button', preset: 'open_url' } },
     { key: 'run_script', icon: <Terminal size={16} />, title: 'Run script', detail: 'A local script on this PC', choice: { kind: 'button', preset: 'run_script' } },
     { key: 'sequence', icon: <ListOrdered size={16} />, title: 'Sequence', detail: 'Several steps in a row', choice: { kind: 'button', preset: 'sequence' } },
     { key: 'select_page', icon: <Layers size={16} />, title: 'Switch page', detail: 'Jump to another page', choice: { kind: 'button', preset: 'select_page' }, disabled: canSwitchPage ? undefined : 'Needs a second page' },

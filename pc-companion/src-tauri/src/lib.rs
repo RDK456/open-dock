@@ -461,6 +461,14 @@ enum DeckAction {
     System {
         command: remote::SystemCommand,
     },
+    /// Types a text snippet into whatever has focus on the PC.
+    TypeText {
+        text: String,
+    },
+    /// Opens a web page in the default browser.
+    OpenUrl {
+        url: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -471,6 +479,9 @@ enum DeckStep {
     LaunchApp { app: String },
     LaunchFile { path: String },
     LaunchFolder { path: String },
+    TypeText { text: String },
+    OpenUrl { url: String },
+    Delay { ms: u32 },
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1229,6 +1240,8 @@ fn validate_action(action: &DeckAction) -> Result<(), String> {
         DeckAction::LaunchFile { path } => validate_file_target(path),
         DeckAction::LaunchFolder { path } => validate_file_target(path),
         DeckAction::RunScript { path, .. } => validate_script_target(path),
+        DeckAction::TypeText { text } => validate_snippet(text),
+        DeckAction::OpenUrl { url } => validate_url(url),
         DeckAction::PluginAction {
             plugin_id,
             action_id,
@@ -1244,9 +1257,20 @@ fn validate_action(action: &DeckAction) -> Result<(), String> {
             if steps.is_empty() || steps.len() > 10 {
                 return Err("A sequence must contain 1–10 steps".into());
             }
+            let mut waited = 0;
             for step in steps {
                 match step {
                     DeckStep::Media { .. } => (),
+                    DeckStep::TypeText { text } => validate_snippet(text)?,
+                    DeckStep::OpenUrl { url } => validate_url(url)?,
+                    DeckStep::Delay { ms } => {
+                        // ponytail: a sequence runs on its phone's connection task, so waits are capped to keep
+                        // that phone responsive; run sequences on their own thread if longer waits are needed.
+                        waited += ms;
+                        if !(50..=5_000).contains(ms) || waited > 10_000 {
+                            return Err("A delay must be 50–5000 ms, and 10 seconds at most per sequence".into());
+                        }
+                    }
                     DeckStep::Hotkey { keys } => validate_hotkey(keys)?,
                     DeckStep::LaunchApp { app, .. } => validate_app_target(app)?,
                     DeckStep::LaunchFile { path } => validate_file_target(path)?,
@@ -1279,6 +1303,31 @@ fn validate_app_target(app: &str) -> Result<(), String> {
         Err("Enter a valid app name or path".into())
     } else {
         Ok(())
+    }
+}
+
+fn validate_snippet(text: &str) -> Result<(), String> {
+    // Line breaks and tabs are typed as Enter and Tab; other control characters are refused.
+    if text.trim().is_empty()
+        || text.len() > 2_000
+        || text.chars().any(|c| c.is_control() && c != '\n' && c != '\t')
+    {
+        Err("Enter the text to type (up to 2000 characters)".into())
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_url(url: &str) -> Result<(), String> {
+    let lower = url.to_ascii_lowercase();
+    let rest = lower.strip_prefix("https://").or_else(|| lower.strip_prefix("http://"));
+    if rest.is_some_and(|rest| !rest.is_empty())
+        && url.len() <= 2_048
+        && !url.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"')
+    {
+        Ok(())
+    } else {
+        Err("Enter a web address starting with https://".into())
     }
 }
 
@@ -1893,6 +1942,8 @@ enum ClientAction {
     LaunchApp { app: String },
     LaunchFile { path: String },
     LaunchFolder { path: String },
+    TypeText { text: String },
+    OpenUrl { url: String },
     Sequence { actions: Vec<SequenceAction> },
 }
 
@@ -1902,6 +1953,9 @@ enum SequenceAction {
     LaunchApp { app: String },
     LaunchFile { path: String },
     LaunchFolder { path: String },
+    TypeText { text: String },
+    OpenUrl { url: String },
+    Delay { ms: u32 },
 }
 
 /// PC stats samples for the desktop previews, oldest first: the last minute, or only those after
@@ -3972,6 +4026,9 @@ fn run_deck_action(
                     DeckStep::LaunchFolder { path } => {
                         SequenceAction::LaunchFolder { path: path.clone() }
                     }
+                    DeckStep::TypeText { text } => SequenceAction::TypeText { text: text.clone() },
+                    DeckStep::OpenUrl { url } => SequenceAction::OpenUrl { url: url.clone() },
+                    DeckStep::Delay { ms } => SequenceAction::Delay { ms: *ms },
                 });
             }
             run_action(ClientAction::Sequence { actions })
@@ -4007,6 +4064,8 @@ fn run_deck_action(
         // The phone shows the folder itself; the PC has nothing to run.
         DeckAction::OpenFolder { .. } => Ok(()),
         DeckAction::System { command } => remote::run_system_command(*command),
+        DeckAction::TypeText { text } => run_action(ClientAction::TypeText { text: text.clone() }),
+        DeckAction::OpenUrl { url } => run_action(ClientAction::OpenUrl { url: url.clone() }),
     }
 }
 
@@ -4110,6 +4169,12 @@ fn run_action(action: ClientAction) -> Result<(), String> {
         ClientAction::LaunchApp { app } => launch_app(&app)?,
         ClientAction::LaunchFile { path } => launch_file(&path)?,
         ClientAction::LaunchFolder { path } => launch_file(&path)?,
+        ClientAction::TypeText { text } => {
+            validate_snippet(&text)?;
+            let mut enigo = Enigo::new(&Settings::default()).map_err(|error| error.to_string())?;
+            enigo.text(&text).map_err(|error| error.to_string())?;
+        }
+        ClientAction::OpenUrl { url } => open_url(&url)?,
         ClientAction::Sequence { actions } => {
             if actions.is_empty() || actions.len() > 10 {
                 return Err("An action sequence must contain between 1 and 10 steps".into());
@@ -4124,6 +4189,12 @@ fn run_action(action: ClientAction) -> Result<(), String> {
                     SequenceAction::LaunchApp { app } => ClientAction::LaunchApp { app },
                     SequenceAction::LaunchFile { path } => ClientAction::LaunchFile { path },
                     SequenceAction::LaunchFolder { path } => ClientAction::LaunchFolder { path },
+                    SequenceAction::TypeText { text } => ClientAction::TypeText { text },
+                    SequenceAction::OpenUrl { url } => ClientAction::OpenUrl { url },
+                    SequenceAction::Delay { ms } => {
+                        thread::sleep(Duration::from_millis(u64::from(ms.min(5_000))));
+                        continue;
+                    }
                 };
                 run_action(action)?;
             }
@@ -4261,6 +4332,24 @@ fn launch_app(app: &str) -> Result<(), String> {
     result
         .map(|_| ())
         .map_err(|error| format!("Could not launch app: {error}"))
+}
+
+fn open_url(url: &str) -> Result<(), String> {
+    validate_url(url)?;
+    // url.dll hands the address to the default browser without a shell parsing it.
+    #[cfg(windows)]
+    let result = Command::new("rundll32.exe")
+        .args(["url.dll,FileProtocolHandler", url])
+        .spawn();
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(url).spawn();
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let result: Result<std::process::Child, std::io::Error> = Err(std::io::Error::other(
+        "Opening websites is supported on Windows and macOS",
+    ));
+    result
+        .map(|_| ())
+        .map_err(|error| format!("Could not open the website: {error}"))
 }
 
 fn launch_file(path: &str) -> Result<(), String> {
@@ -4803,6 +4892,24 @@ mod playback_timing {
 mod deck_layout_tests {
     use super::*;
     use serde_json::{json, Value};
+
+    #[test]
+    fn text_url_and_delay_actions_are_checked() {
+        let action = |value: Value| validate_action(&serde_json::from_value::<DeckAction>(value).unwrap());
+        assert!(action(json!({ "type": "type_text", "text": "Thanks,\nRDK" })).is_ok());
+        assert!(action(json!({ "type": "type_text", "text": "  " })).is_err());
+        assert!(action(json!({ "type": "open_url", "url": "https://example.com/a?b=c" })).is_ok());
+        assert!(action(json!({ "type": "open_url", "url": "https://" })).is_err());
+        assert!(action(json!({ "type": "open_url", "url": "file:///C:/Windows" })).is_err());
+        assert!(action(json!({ "type": "open_url", "url": "https://a.com\" & calc" })).is_err());
+        let sequence = |waits: &[u32]| {
+            let steps: Vec<Value> = waits.iter().map(|ms| json!({ "type": "delay", "ms": ms })).collect();
+            action(json!({ "type": "sequence", "steps": steps }))
+        };
+        assert!(sequence(&[500, 5_000]).is_ok());
+        assert!(sequence(&[10]).is_err());
+        assert!(sequence(&[5_000, 5_000, 500]).is_err());
+    }
 
     fn button(id: &str, row: u8, column: u8) -> Value {
         json!({ "id": id, "label": id, "icon": "command", "placement": { "row": row, "column": column, "rowSpan": 1, "columnSpan": 1 }, "action": { "type": "media", "command": "play_pause" } })

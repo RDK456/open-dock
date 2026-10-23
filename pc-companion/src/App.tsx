@@ -53,6 +53,8 @@ import {
   Sun,
   SunDim,
   Camera,
+  Globe,
+  TextCursorInput,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -92,7 +94,7 @@ type ConnectionInfo = {
 type SystemCommand = 'lock' | 'sleep' | 'restart' | 'shutdown' | 'sign_out' | 'brightness_up' | 'brightness_down' | 'screenshot';
 const SYSTEM_COMMANDS: [SystemCommand, string][] = [['screenshot', 'Screenshot'], ['lock', 'Lock'], ['sleep', 'Sleep'], ['brightness_up', 'Brightness up'], ['brightness_down', 'Brightness down'], ['sign_out', 'Sign out'], ['restart', 'Restart'], ['shutdown', 'Shut down']];
 type MediaCommand = 'play_pause' | 'next_track' | 'previous_track' | 'volume_up' | 'volume_down' | 'mute';
-type DeckStep = { type: 'media'; command: MediaCommand } | { type: 'hotkey'; keys: string[] } | { type: 'launch_app'; app: string } | { type: 'launch_file'; path: string } | { type: 'launch_folder'; path: string };
+type DeckStep = { type: 'media'; command: MediaCommand } | { type: 'hotkey'; keys: string[] } | { type: 'launch_app'; app: string } | { type: 'launch_file'; path: string } | { type: 'launch_folder'; path: string } | { type: 'type_text'; text: string } | { type: 'open_url'; url: string } | { type: 'delay'; ms: number };
 type DeckAction = DeckStep | { type: 'run_script'; path: string; allowOnPc: boolean } | { type: 'plugin_action'; pluginId: string; actionId: string; allowOnPc: boolean; inputs: Record<string, string> } | { type: 'launch_app'; app: string } | { type: 'sequence'; steps: DeckStep[] } | { type: 'select_profile'; profileId: string } | { type: 'select_page'; pageId: string } | { type: 'open_folder'; folderId: string } | { type: 'system'; command: SystemCommand };
 type OpenDockPluginInput = { id: string; label: string; type: 'text' | 'number' | 'select'; default: string; options: string[]; optionLabels: string[] };
 type OpenDockPluginWidget = { id: string; name: string; description: string; type: 'text'; inputs: OpenDockPluginInput[] };
@@ -1020,6 +1022,8 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
       const spec = (label: string, action: DeckAction) => finishAddRef.current?.({ label, action }, cell, folderId);
       if (preset === 'hotkey') return spec('Shortcut', { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] });
       if (preset === 'media') return spec('Play / Pause', { type: 'media', command: 'play_pause' });
+      if (preset === 'type_text') return spec('Type text', { type: 'type_text', text: 'Hello from Open Dock' });
+      if (preset === 'open_url') return spec('Website', { type: 'open_url', url: 'https://www.google.com' });
       if (preset === 'sequence') return spec('Sequence', { type: 'sequence', steps: [{ type: 'media', command: 'play_pause' }] });
       if (preset === 'select_page') {
         const other = profile.pages.find((item) => item.id !== page.id);
@@ -2038,7 +2042,7 @@ function buttonSummary(button: DeckButton, page: DeckPage): string {
     const count = (entry?.buttons.length ?? 0) + (entry?.widgets.length ?? 0);
     return `Folder · ${count} item${count === 1 ? '' : 's'}`;
   }
-  return ({ media: 'Media control', hotkey: 'Keyboard shortcut', launch_app: 'Opens an app on this PC', launch_file: 'Opens a file on this PC', launch_folder: 'Opens a folder on this PC', run_script: 'Runs a script on this PC', plugin_action: 'Plugin action', sequence: 'Runs steps in order', select_profile: 'Switches profile', select_page: 'Switches page', system: 'System & power' } as Record<string, string>)[action.type] ?? 'Button';
+  return ({ media: 'Media control', hotkey: 'Keyboard shortcut', launch_app: 'Opens an app on this PC', launch_file: 'Opens a file on this PC', launch_folder: 'Opens a folder on this PC', run_script: 'Runs a script on this PC', plugin_action: 'Plugin action', sequence: 'Runs steps in order', select_profile: 'Switches profile', select_page: 'Switches page', system: 'System & power', type_text: 'Types text on this PC', open_url: 'Opens a website' } as Record<string, string>)[action.type] ?? 'Button';
 }
 
 function buttonLabel(button: DeckButton, playback: PlaybackState) {
@@ -2066,6 +2070,8 @@ function autoIcon(action: DeckAction, playback: PlaybackState) {
   if (action.type === 'open_folder') return FolderClosed;
   if (action.type === 'select_profile') return Layers2;
   if (action.type === 'select_page') return PanelsTopLeft;
+  if (action.type === 'type_text') return TextCursorInput;
+  if (action.type === 'open_url') return Globe;
   if (action.type === 'system') return ({ lock: Lock, sleep: Moon, restart: RotateCcw, shutdown: Power, sign_out: LogOut, brightness_up: Sun, brightness_down: SunDim, screenshot: Camera } as const)[action.command];
   return Keyboard;
 }
@@ -2206,14 +2212,14 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
     }
   }
   const isWindowsShortcut = !isMacos && app.toLowerCase().endsWith('.lnk');
-  const actionOptions = [['media', 'Media'], ['hotkey', 'Keyboard shortcut'], ['launch_app', 'Launch app'], ['launch_file', 'Launch file'], ['launch_folder', 'Launch folder'], ['run_script', 'Run local script'], ['sequence', 'Sequence'], ['select_profile', 'Select profile'], ['select_page', 'Select page'], ['system', 'System & power']].map(([value, label]) => ({ value, label }));
+  const actionOptions = [['media', 'Media'], ['hotkey', 'Keyboard shortcut'], ['launch_app', 'Launch app'], ['launch_file', 'Launch file'], ['launch_folder', 'Launch folder'], ['type_text', 'Type text'], ['open_url', 'Open website'], ['run_script', 'Run local script'], ['sequence', 'Sequence'], ['select_profile', 'Select profile'], ['select_page', 'Select page'], ['system', 'System & power']].map(([value, label]) => ({ value, label }));
   actionOptions.push(...plugins.flatMap((plugin) => plugin.actions.map((pluginAction) => ({ value: `plugin:${plugin.id}:${pluginAction.id}`, label: `${plugin.name} / ${pluginAction.name}` }))));
   const setKind = (value: string) => {
     thumbnailRequestRef.current += 1;
     setExtractingThumbnail(false);
     const pluginTarget = value.startsWith('plugin:') ? value.slice(7).split(':') : [];
     const selectedPluginAction = pluginTarget.length === 2 ? plugins.find((plugin) => plugin.id === pluginTarget[0])?.actions.find((item) => item.id === pluginTarget[1]) : undefined;
-    const next: DeckAction = pluginTarget.length === 2 ? { type: 'plugin_action', pluginId: pluginTarget[0], actionId: pluginTarget[1], allowOnPc: false, inputs: Object.fromEntries((selectedPluginAction?.inputs ?? []).map((input) => [input.id, input.default || (input.type === 'select' ? input.options[0] ?? '' : '')])) } : value === 'media' ? { type: 'media', command: 'play_pause' } : value === 'launch_app' ? { type: 'launch_app', app: '' } : value === 'launch_file' ? { type: 'launch_file', path: '' } : value === 'launch_folder' ? { type: 'launch_folder', path: '' } : value === 'run_script' ? { type: 'run_script', path: '', allowOnPc: false } : value === 'sequence' ? { type: 'sequence', steps: [{ type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] }, { type: 'hotkey', keys: ['CTRL', 'S'] }] } : value === 'select_profile' ? { type: 'select_profile', profileId: profiles[0]?.id ?? '' } : value === 'select_page' ? { type: 'select_page', pageId: pages[0]?.id ?? '' } : value === 'system' ? { type: 'system', command: 'screenshot' } : { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] };
+    const next: DeckAction = pluginTarget.length === 2 ? { type: 'plugin_action', pluginId: pluginTarget[0], actionId: pluginTarget[1], allowOnPc: false, inputs: Object.fromEntries((selectedPluginAction?.inputs ?? []).map((input) => [input.id, input.default || (input.type === 'select' ? input.options[0] ?? '' : '')])) } : value === 'media' ? { type: 'media', command: 'play_pause' } : value === 'launch_app' ? { type: 'launch_app', app: '' } : value === 'launch_file' ? { type: 'launch_file', path: '' } : value === 'launch_folder' ? { type: 'launch_folder', path: '' } : value === 'run_script' ? { type: 'run_script', path: '', allowOnPc: false } : value === 'sequence' ? { type: 'sequence', steps: [{ type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] }, { type: 'hotkey', keys: ['CTRL', 'S'] }] } : value === 'select_profile' ? { type: 'select_profile', profileId: profiles[0]?.id ?? '' } : value === 'select_page' ? { type: 'select_page', pageId: pages[0]?.id ?? '' } : value === 'system' ? { type: 'system', command: 'screenshot' } : value === 'type_text' ? { type: 'type_text', text: 'Hello from Open Dock' } : value === 'open_url' ? { type: 'open_url', url: 'https://www.google.com' } : { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] };
     onChange({ action: next, ...(value === 'launch_app' ? {} : { icon: 'auto', iconSvg: undefined, appIconData: undefined }) });
   };
   return <>
@@ -2228,6 +2234,8 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
       {kind === 'launch_app' && action.type === 'launch_app' ? <><label>App path or name<div className="app-path-picker"><input value={app} onChange={(event) => setAppTarget(event.target.value)} placeholder="Application, shortcut, or app name" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for an application" title="Browse for an application" disabled={busy} onClick={() => void browseApp()}><FolderOpen size={15} /></button></div></label></> : null}
       {kind === 'launch_file' && action.type === 'launch_file' ? <><label>File path<div className="app-path-picker"><input value={filePath} onChange={(event) => setFileTarget(event.target.value)} placeholder="Choose a file" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a file" title="Browse for a file" disabled={busy} onClick={() => void browseFileOrFolder(false)}><File size={15} /></button></div></label></> : null}
       {kind === 'launch_folder' && action.type === 'launch_folder' ? <><label>Folder path<div className="app-path-picker"><input value={folderPath} onChange={(event) => setFolderTarget(event.target.value)} placeholder="Choose a folder" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a folder" title="Browse for a folder" disabled={busy} onClick={() => void browseFileOrFolder(true)}><FolderOpen size={15} /></button></div></label></> : null}
+      {action.type === 'type_text' ? <><label>Text<textarea rows={4} value={action.text} maxLength={2000} disabled={busy} onChange={(event) => onChange({ action: { type: 'type_text', text: event.target.value } })} /></label><small>Types into whatever has focus on the PC. Line breaks press Enter.</small></> : null}
+      {action.type === 'open_url' ? <label>Web address<input type="url" value={action.url} maxLength={2048} disabled={busy} placeholder="https://" onChange={(event) => onChange({ action: { type: 'open_url', url: event.target.value.trim() } })} /></label> : null}
       {kind === 'sequence' && action.type === 'sequence' ? <SequenceEditor steps={action.steps} disabled={busy} isMacos={isMacos} onChange={(steps) => onChange({ action: { type: 'sequence', steps } })} /> : null}
       {kind === 'select_profile' && action.type === 'select_profile' ? <label>Profile<DeckSelect value={action.profileId} options={profiles.map((item) => ({ value: item.id, label: item.name }))} onChange={(profileId) => onChange({ action: { type: 'select_profile', profileId } })} disabled={busy} /></label> : null}
       {kind === 'select_page' && action.type === 'select_page' ? <label>Page<DeckSelect value={action.pageId} options={pages.map((item) => ({ value: item.id, label: item.name }))} onChange={(pageId) => onChange({ action: { type: 'select_page', pageId } })} disabled={busy} /></label> : null}
@@ -2296,7 +2304,7 @@ function SequenceEditor({ steps, disabled, isMacos, onChange }: { steps: DeckSte
     {draft.map((step, index) => <section className="sequence-step" key={index} aria-label={`Sequence step ${index + 1}`}>
       <div className="sequence-step-heading">
         <span className="sequence-step-number">{index + 1}</span>
-        <div className="sequence-step-type"><DeckSelect value={step.type} disabled={disabled} options={[['hotkey', 'Keyboard shortcut'], ['media', 'Media command'], ['launch_app', 'Launch app'], ['launch_file', 'Launch file'], ['launch_folder', 'Launch folder']].map(([value, label]) => ({ value, label }))} onChange={(value) => changeStep(index, value === 'media' ? { type: 'media', command: 'play_pause' } : value === 'launch_app' ? { type: 'launch_app', app: '' } : value === 'launch_file' ? { type: 'launch_file', path: '' } : value === 'launch_folder' ? { type: 'launch_folder', path: '' } : { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] })} /></div>
+        <div className="sequence-step-type"><DeckSelect value={step.type} disabled={disabled} options={[...[['hotkey', 'Keyboard shortcut'], ['media', 'Media command'], ['launch_app', 'Launch app'], ['launch_file', 'Launch file'], ['launch_folder', 'Launch folder']], ['type_text', 'Type text'], ['open_url', 'Open website'], ['delay', 'Wait']].map(([value, label]) => ({ value, label }))} onChange={(value) => changeStep(index, value === 'media' ? { type: 'media', command: 'play_pause' } : value === 'type_text' ? { type: 'type_text', text: 'Hello' } : value === 'open_url' ? { type: 'open_url', url: 'https://www.google.com' } : value === 'delay' ? { type: 'delay', ms: 500 } : value === 'launch_app' ? { type: 'launch_app', app: '' } : value === 'launch_file' ? { type: 'launch_file', path: '' } : value === 'launch_folder' ? { type: 'launch_folder', path: '' } : { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] })} /></div>
         <button type="button" className="sequence-order-button" aria-label={`Move step ${index + 1} up`} title="Move up" disabled={disabled || index === 0} onClick={() => moveStep(index, -1)}><ChevronUp size={14} /></button>
         <button type="button" className="sequence-order-button" aria-label={`Move step ${index + 1} down`} title="Move down" disabled={disabled || index === draft.length - 1} onClick={() => moveStep(index, 1)}><ChevronDown size={14} /></button>
         <button type="button" className="sequence-order-button sequence-remove-button" aria-label={`Remove step ${index + 1}`} title="Remove step" disabled={disabled || draft.length === 1} onClick={() => commit(draft.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={14} /></button>
@@ -2323,6 +2331,17 @@ function SequenceEditor({ steps, disabled, isMacos, onChange }: { steps: DeckSte
         next[index] = { type: step.type, path: event.target.value };
         setDraft(next);
       }} onBlur={() => changeStep(index, step)} /><button type="button" className="app-browse-button" aria-label={`Browse for ${step.type === 'launch_file' ? 'file' : 'folder'} in step ${index + 1}`} title={`Browse for a ${step.type === 'launch_file' ? 'file' : 'folder'}`} disabled={disabled} onClick={() => void browseFileOrFolder(index, step.type === 'launch_folder')}>{step.type === 'launch_file' ? <File size={15} /> : <FolderOpen size={15} />}</button></div></label> : null}
+      {step.type === 'type_text' ? <label>Text<textarea rows={2} value={step.text} maxLength={2000} disabled={disabled} onChange={(event) => {
+        const next = [...draft];
+        next[index] = { type: 'type_text', text: event.target.value };
+        setDraft(next);
+      }} onBlur={() => changeStep(index, step)} /></label> : null}
+      {step.type === 'open_url' ? <label>Web address<input type="url" value={step.url} maxLength={2048} disabled={disabled} placeholder="https://" onChange={(event) => {
+        const next = [...draft];
+        next[index] = { type: 'open_url', url: event.target.value.trim() };
+        setDraft(next);
+      }} onBlur={() => changeStep(index, step)} /></label> : null}
+      {step.type === 'delay' ? <label>Wait<DeckSelect value={String(step.ms)} disabled={disabled} options={[100, 250, 500, 1000, 2000, 3000, 5000].map((ms) => ({ value: String(ms), label: ms < 1000 ? `${ms} ms` : `${ms / 1000} s` }))} onChange={(value) => changeStep(index, { type: 'delay', ms: Number(value) })} /></label> : null}
     </section>)}
     {draft.length < 10 ? <button type="button" className="secondary-button sequence-add-button" disabled={disabled} onClick={() => commit([...draft, { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] }])}><Plus size={14} /> Add step</button> : null}
     {error ? <small className="form-error">{error}</small> : null}

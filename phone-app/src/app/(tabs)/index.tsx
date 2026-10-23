@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ComponentPro
 import { useIsFocused, useRouter } from 'expo-router';
 import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
+import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -64,6 +64,8 @@ function controlIcon(button: DeckButton, playback: PlaybackState) {
   if (action.type === 'select_profile') return Layers2;
   if (action.type === 'select_page') return PanelsTopLeft;
   if (action.type === 'open_folder') return FolderClosed;
+  if (action.type === 'type_text') return TextCursorInput;
+  if (action.type === 'open_url') return Globe;
   return Keyboard;
 }
 
