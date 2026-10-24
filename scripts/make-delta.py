@@ -106,7 +106,11 @@ def release(source, old_setup, new_setup, old_apk, new_apk, latest_path):
         old_exe = installed_exe(old_setup, os.path.join(work, 'old'))
         new_exe_path = os.path.join(work, 'new', 'open-dock-pc.exe')
         new_exe = installed_exe(new_setup, os.path.join(work, 'new'))
-        subprocess.run('npx tauri signer sign "' + new_exe_path + '"', cwd=os.path.join(REPO, 'pc-companion'), shell=True, check=True, stdout=subprocess.DEVNULL)
+        key = os.environ.get('TAURI_SIGNING_PRIVATE_KEY', '')
+        # The build also takes a key file's path there; the signer wants a path as -f instead.
+        env = {k: v for k, v in os.environ.items() if not (k == 'TAURI_SIGNING_PRIVATE_KEY' and os.path.isfile(key))}
+        key_file = f' -f "{key}"' if os.path.isfile(key) else ''
+        subprocess.run(f'npx tauri signer sign{key_file} "{new_exe_path}"', cwd=os.path.join(REPO, 'pc-companion'), env=env, shell=True, check=True, stdout=subprocess.DEVNULL)
         signature = open(new_exe_path + '.sig', encoding='utf8').read().strip()
         for platform, old, new, name, extra in (
             ('android', open(old_apk, 'rb').read(), open(new_apk, 'rb').read(), 'OpenDock', {}),
