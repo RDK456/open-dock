@@ -477,6 +477,70 @@ pub(super) fn best_match<'a>(name: &str, candidates: impl Iterator<Item = (&'a s
         .map(|(_, _, id)| id)
 }
 
+// The wake phrase ("hey dock") for hands-free listening on the PC: the same rules as the phone's
+// phone-app/src/wake-phrase.ts, so both hear it alike.
+const GREETINGS: [&str; 9] = ["hey", "hi", "hay", "a", "ok", "okay", "hello", "yo", "he"];
+
+fn wake_words(text: &str) -> Vec<String> {
+    let plain: String = text.to_lowercase().chars().map(|c| if c.is_alphanumeric() { c } else { ' ' }).collect();
+    plain.split_whitespace().map(str::to_owned).collect()
+}
+
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut previous = row[0];
+        row[0] = i + 1;
+        for j in 1..=b.len() {
+            let kept = row[j];
+            row[j] = (row[j] + 1).min(row[j - 1] + 1).min(previous + usize::from(ca != b[j - 1]));
+            previous = kept;
+        }
+    }
+    row[b.len()]
+}
+
+// Recognizers spell a short word the way it sounded: "dock" comes back as doc, docks, dog or duck.
+fn sound(word: &str) -> String {
+    let mut sound = word.replace("ck", "k").replace('c', "k");
+    if sound.ends_with('g') {
+        sound.pop();
+        sound.push('k');
+    }
+    let mut sound = sound.replace("ph", "f");
+    if sound.chars().count() > 1 && sound.ends_with('s') {
+        sound.pop();
+    }
+    sound
+}
+
+fn same_word(heard: &str, wanted: &str) -> bool {
+    heard == wanted
+        || (GREETINGS.contains(&heard) && GREETINGS.contains(&wanted))
+        || (wanted.chars().count() >= 3 && edit_distance(&sound(heard), &sound(wanted)) <= 1)
+}
+
+/// The words after the wake phrase ("" when it was said alone), or None when the phrase is not in `text`.
+pub(super) fn after_wake_phrase(text: &str, phrase: &str) -> Option<String> {
+    let heard = wake_words(text);
+    let wanted = wake_words(phrase);
+    if wanted.is_empty() {
+        return None;
+    }
+    for start in 0..(heard.len() + 1).saturating_sub(wanted.len()) {
+        if wanted.iter().enumerate().all(|(index, word)| same_word(&heard[start + index], word)) {
+            return Some(heard[start + wanted.len()..].join(" "));
+        }
+    }
+    // The greeting can be lost before the recognizer starts hearing: "dock, lights on" counts too.
+    let core: Vec<&String> = wanted.iter().filter(|word| !GREETINGS.contains(&word.as_str())).collect();
+    if !core.is_empty() && core.len() < wanted.len() && core.len() <= heard.len() && core.iter().enumerate().all(|(index, word)| same_word(&heard[index], word)) {
+        return Some(heard[core.len()..].join(" "));
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -541,5 +605,20 @@ mod tests {
         assert_eq!(best_match("word", list(), true), Some("e"));
         assert_eq!(best_match("chrome", list(), true), None);
         assert_eq!(best_match("tify", list(), false), None);
+    }
+
+    #[test]
+    fn hears_the_wake_phrase() {
+        let after = |text| after_wake_phrase(text, "hey dock");
+        assert_eq!(after("hey dock open spotify").as_deref(), Some("open spotify"));
+        assert_eq!(after("Hey, Dock.").as_deref(), Some(""));
+        assert_eq!(after("hi doc volume up").as_deref(), Some("volume up"));
+        assert_eq!(after("a duck next track").as_deref(), Some("next track"));
+        assert_eq!(after("okay docks lock pc").as_deref(), Some("lock pc"));
+        assert_eq!(after("dock open chrome").as_deref(), Some("open chrome"));
+        assert_eq!(after("the dog is barking"), None);
+        assert_eq!(after("open spotify"), None);
+        assert_eq!(after("hey there"), None);
+        assert_eq!(after("hey"), None);
     }
 }

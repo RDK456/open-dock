@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { askToRunUnrestricted, askToShowIsland, canShowIsland, moveToBack, runsUnrestricted, setIsland, startKeepAlive, stopKeepAlive, type IslandState } from '../modules/keep-alive';
 import { usePcConnection } from './connection';
-import { afterWakePhrase } from './wake-phrase';
+import { afterWakePhrase, pickTranscript } from './wake-phrase';
 
 const PHRASE_KEY = 'opendock.wake-phrase';
 const ENABLED_KEY = 'opendock.hands-free';
@@ -149,7 +149,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     };
     const subscriptions = [
       ExpoSpeechRecognitionModule.addListener('result', (event) => {
-        const text = (event.results[0]?.transcript ?? '').trim();
+        const text = pickTranscript(event.results.map((result) => result.transcript.trim()), latest.current.phrase);
         if (!event.isFinal) {
           if (text) {
             pending.current = text;

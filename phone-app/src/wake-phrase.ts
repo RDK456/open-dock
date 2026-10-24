@@ -41,3 +41,8 @@ export function afterWakePhrase(text: string, phrase: string): string | null {
   }
   return null;
 }
+
+/** Which of the recognizer's guesses to use: its first one that holds the wake phrase, else its best one. Its best is
+ * often a real word that sounds alike ("headache open brave"), with "hey dog open brave" further down. */
+export const pickTranscript = (transcripts: string[], phrase: string) =>
+  transcripts.find((text) => afterWakePhrase(text, phrase) !== null) ?? transcripts[0] ?? '';

@@ -37,21 +37,34 @@ fn online_speech_on() -> bool {
     read.is_ok() && value == 1
 }
 
-/// Listens for one sentence and returns it ("" when nothing was said). Blocks, so run it off the async runtime.
-pub fn listen_once() -> Result<String, String> {
-    if online_speech_on() { listen_online() } else { listen_offline() }
+/// What the island shows of words still being heard: all of them, or, listening for `wake`, only once it was said.
+fn follow(wake: Option<&str>, text: &str) {
+    match wake {
+        None => island::show("listening", text),
+        Some(phrase) => {
+            if let Some(rest) = crate::voice::after_wake_phrase(text, phrase) {
+                island::show("listening", &rest);
+            }
+        }
+    }
 }
 
-fn listen_online() -> Result<String, String> {
+/// Listens for one sentence and returns it ("" when nothing was said). Blocks, so run it off the async runtime.
+pub fn listen_once(wake: Option<String>) -> Result<String, String> {
+    // Windows' dictation also refuses elevated apps (like this one) with "Internal Speech Error", so fall back then too.
+    if online_speech_on() { listen_online(wake.clone()).or_else(|_| listen_offline(wake)) } else { listen_offline(wake) }
+}
+
+fn listen_online(wake: Option<String>) -> Result<String, String> {
     let recognizer = SpeechRecognizer::new().map_err(explain)?;
     if let Ok(timeouts) = recognizer.Timeouts() {
         let _ = timeouts.SetInitialSilenceTimeout(seconds(6.0));
         let _ = timeouts.SetEndSilenceTimeout(seconds(0.9));
     }
     let _ = recognizer.HypothesisGenerated(&TypedEventHandler::new(
-        |_: Ref<SpeechRecognizer>, args: Ref<SpeechRecognitionHypothesisGeneratedEventArgs>| {
+        move |_: Ref<SpeechRecognizer>, args: Ref<SpeechRecognitionHypothesisGeneratedEventArgs>| {
             if let Ok(text) = args.ok().and_then(|args| args.Hypothesis()).and_then(|hypothesis| hypothesis.Text()) {
-                island::show("listening", &text.to_string());
+                follow(wake.as_deref(), &text.to_string());
             }
             Ok(())
         },
@@ -70,7 +83,7 @@ fn listen_online() -> Result<String, String> {
 }
 
 /// The desktop recognizer: it hears less well than the online one, but needs no setting and nothing leaves this PC.
-fn listen_offline() -> Result<String, String> {
+fn listen_offline(wake: Option<String>) -> Result<String, String> {
     use windows::core::{Interface, PCWSTR};
     use windows::Win32::Media::Speech::{
         ISpObjectToken, ISpObjectTokenCategory, ISpRecoResult, ISpRecognizer, SpInprocRecognizer, SpObjectToken, SpObjectTokenCategory,
@@ -123,7 +136,7 @@ fn listen_offline() -> Result<String, String> {
                 match event._bitfield & 0xffff {
                     id if id == SPEI_HYPOTHESIS.0 => {
                         speaking = true;
-                        island::show("listening", &said);
+                        follow(wake.as_deref(), &said);
                     }
                     id if id == SPEI_RECOGNITION.0 => return Ok(said),
                     // Noise it could not make words of.

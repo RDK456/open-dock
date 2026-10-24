@@ -4447,32 +4447,72 @@ async fn run_voice(
 }
 
 static VOICE_ON: AtomicBool = AtomicBool::new(false);
+static VOICE_RUN: AtomicU64 = AtomicU64::new(0);
+/// Hands-free: only what follows this phrase is a command. Empty runs every sentence.
+static WAKE_PHRASE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+/// When the wake phrase was said alone, or the mic button was clicked during hands-free (ms since 1970): the next
+/// sentence soon after is the command.
+static ARMED_AT: AtomicU64 = AtomicU64::new(0);
+const ARMED_MS: u64 = 8000;
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64)
+}
+
+fn voice_armed() -> bool {
+    now_ms().saturating_sub(ARMED_AT.load(Ordering::SeqCst)) < ARMED_MS
+}
 
 /// Voice commands said into the PC's own mic, one after another until `stop_voice`: each sentence runs like one
-/// from the phone, and the voice island shows each step. Ends with an error only when the PC cannot listen.
+/// from the phone, and the voice island shows each step. With `wake` (hands-free), only sentences that start with
+/// it run, and the island stays away until it is said. Called again while listening, it only changes `wake`.
+/// Ends with an error only when the PC cannot listen.
 #[tauri::command]
-async fn listen_voice(state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+async fn listen_voice(state: tauri::State<'_, Arc<AppState>>, wake: Option<String>) -> Result<(), String> {
+    *WAKE_PHRASE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = wake.unwrap_or_default().trim().to_owned();
     if VOICE_ON.swap(true, Ordering::SeqCst) {
         return Ok(());
     }
-    while VOICE_ON.load(Ordering::SeqCst) {
-        island::show("listening", "");
+    // A listen stopped a moment ago may still be hearing its last sentence; it ends there instead of carrying on
+    // beside this one.
+    let run = VOICE_RUN.fetch_add(1, Ordering::SeqCst) + 1;
+    let current = || VOICE_ON.load(Ordering::SeqCst) && VOICE_RUN.load(Ordering::SeqCst) == run;
+    while current() {
+        let phrase = WAKE_PHRASE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone();
+        let wake = (!phrase.is_empty() && !voice_armed()).then(|| phrase.clone());
+        island::show(if wake.is_some() { "idle" } else { "listening" }, "");
         #[cfg(windows)]
-        let heard = tauri::async_runtime::spawn_blocking(pc_voice::listen_once).await.map_err(|_| "Could not listen".to_owned()).and_then(|heard| heard);
+        let heard = tauri::async_runtime::spawn_blocking(move || pc_voice::listen_once(wake)).await.map_err(|_| "Could not listen".to_owned()).and_then(|heard| heard);
         #[cfg(not(windows))]
-        let heard: Result<String, String> = Err("Voice on this PC needs Windows".into());
+        let heard: Result<String, String> = { let _ = wake; Err("Voice on this PC needs Windows".into()) };
         let heard = match heard {
             Ok(text) if text.trim().is_empty() => continue,
             Ok(text) => text,
             Err(error) => {
-                VOICE_ON.store(false, Ordering::SeqCst);
-                island::show("failed", &error);
+                if current() {
+                    VOICE_ON.store(false, Ordering::SeqCst);
+                    island::show("failed", &error);
+                }
                 return Err(error);
             }
         };
-        if !VOICE_ON.load(Ordering::SeqCst) {
-            break;
+        if !current() {
+            return Ok(());
         }
+        let heard = if phrase.is_empty() || voice_armed() {
+            heard
+        } else {
+            match voice::after_wake_phrase(&heard, &phrase) {
+                None => continue,
+                // The phrase alone: the next sentence is the command.
+                Some(rest) if rest.is_empty() => {
+                    ARMED_AT.store(now_ms(), Ordering::SeqCst);
+                    continue;
+                }
+                Some(rest) => rest,
+            }
+        };
+        ARMED_AT.store(0, Ordering::SeqCst);
         island::show("working", &heard);
         let (mut profile_id, mut page_id) = (String::new(), String::new());
         match run_voice(&heard, &state, false, &mut profile_id, &mut page_id).await {
@@ -4494,6 +4534,13 @@ async fn listen_voice(state: tauri::State<'_, Arc<AppState>>) -> Result<(), Stri
 fn stop_voice() {
     VOICE_ON.store(false, Ordering::SeqCst);
     island::show("idle", "");
+}
+
+/// During hands-free, a click on the mic: the next sentence is the command without the wake phrase.
+#[tauri::command]
+fn arm_voice() {
+    ARMED_AT.store(now_ms(), Ordering::SeqCst);
+    island::show("listening", "");
 }
 
 /// The deck button on the phone's current profile whose label matches `name`: (id, label).
@@ -5053,7 +5100,8 @@ pub fn run() {
             rotate_pairing_key,
             restart_app,
             listen_voice,
-            stop_voice
+            stop_voice,
+            arm_voice
         ])
         .setup(move |app| {
             let config_dir = app.path().app_config_dir()?;

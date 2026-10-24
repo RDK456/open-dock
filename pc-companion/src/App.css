@@ -396,6 +396,9 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .open-dock-plugin-format code { margin-top: 9px; padding: 10px; display: block; border: 1px solid var(--border); border-radius: 6px; background: var(--z950); color: var(--foreground); white-space: pre-wrap; }
 .open-dock-plugin-format span { margin-top: 6px; display: block; }
 .plugin-action-info span { color: var(--subtle); font-size: 11px; font-weight: 400; line-height: 1.4; }
+.voice-phrase { flex-basis: 100%; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.voice-phrase input { height: 38px; flex: 1; max-width: 280px; min-width: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--z950); color: var(--foreground); font-size: 13px; }
+.voice-phrase input:focus { border-color: var(--z500); outline: 2px solid var(--z700); outline-offset: 1px; }
 .setting-error { flex-basis: 100%; margin: -7px 0 0; color: var(--red); font-size: 12px; }
 .updates-setting { margin-bottom: 14px; }
 .update-progress { flex-basis: 100%; height: 4px; overflow: hidden; border-radius: 999px; background: var(--border); }

@@ -184,17 +184,7 @@ function App() {
   const [adbProgress, setAdbProgress] = useState('');
   const [pairingError, setPairingError] = useState('');
   const [screen, setScreen] = useState<'overview' | 'deck' | 'settings'>('overview');
-  // Voice commands into this PC's mic, one after another until clicked again; the voice island at the top of the
-  // screen shows how each goes.
-  const [listening, setListening] = useState(false);
-  const listenVoice = () => {
-    if (listening) {
-      void invoke('stop_voice');
-      return;
-    }
-    setListening(true);
-    invoke('listen_voice').catch(() => { /* the island already said why */ }).finally(() => setListening(false));
-  };
+  const voice = usePcVoice();
   // Switching pages glides the sidebar's selected pill to its new item (a view transition), where the browser can.
   const go = (next: typeof screen) => {
     if (next === screen) return;
@@ -435,9 +425,9 @@ function App() {
           <button className={`nav-item ${screen === 'settings' ? 'selected' : ''}`} title="Settings" aria-label="Settings" aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => go('settings')}>
             <Settings size={16} strokeWidth={1.8} /><span>Settings</span>
           </button>
-          <button className={`nav-item ${listening ? 'selected' : ''}`} title="Say a command" aria-label={listening ? 'Listening' : 'Say a command'} aria-pressed={listening} onClick={listenVoice}>
-            <Mic size={16} strokeWidth={1.8} /><span>{listening ? 'Listening…' : 'Voice'}</span>
-          </button>
+          {voice.button ? <button className={`nav-item ${voice.listening ? 'selected' : ''}`} title="Say a command" aria-label={voice.listening ? 'Listening' : 'Say a command'} aria-pressed={voice.listening} onClick={voice.tap}>
+            <Mic size={16} strokeWidth={1.8} /><span>{voice.listening ? 'Listening…' : 'Voice'}</span>
+          </button> : null}
         </nav>
 
         <div className="sidebar-bottom">
@@ -461,10 +451,11 @@ function App() {
             {importError ? <p className="usb-error" role="alert">{importError}</p> : null}
           </section> : null}
           {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} onSaved={setDeckConfig} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={openDockPlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'settings' ? <>
-          <div className="page-heading"><div><h1>Settings</h1><p>Manage updates, device navigation and Open Dock plugins.</p></div></div>
+          <div className="page-heading"><div><h1>Settings</h1><p>Manage updates, voice, device navigation and Open Dock plugins.</p></div></div>
           <AppearanceSetting />
           <UpdatesSetting updater={updater} />
           <StartWithWindowsSetting />
+          <VoiceSettings voice={voice} />
           <section className="device-navigation-setting">
             <div className="device-navigation-copy"><h2>Independent device navigation</h2><p>Let each connected phone use its own profile and page. Turn this off to mirror navigation across all phones.</p></div>
             <button className={`setting-switch ${independentNavigation ? 'enabled' : ''}`} type="button" role="switch" aria-checked={independentNavigation} aria-label="Independent device navigation" disabled={navigationSettingBusy} onClick={() => void saveIndependentNavigation(!independentNavigation)}><span /></button>
@@ -2386,6 +2377,80 @@ function parseShortcut(value: string): string[] | null {
 }
 
 export default App;
+
+const VOICE_BUTTON_KEY = 'opendock.pc-voice-button';
+const HANDS_FREE_KEY = 'opendock.pc-hands-free';
+const WAKE_PHRASE_KEY = 'opendock.pc-wake-phrase';
+const DEFAULT_WAKE_PHRASE = 'hey dock';
+const readSetting = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+const saveSetting = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* the choice lasts until the app closes */ } };
+
+/** Voice into this PC's mic, as on the phone: the sidebar's mic button (command after command until clicked again)
+ * and hands-free, which listens all the time and runs what follows the wake phrase. The voice island at the top of
+ * the screen shows how each goes. */
+function usePcVoice() {
+  const [button, setButtonState] = useState(() => readSetting(VOICE_BUTTON_KEY) !== 'off');
+  const [handsFree, setHandsFreeState] = useState(() => readSetting(HANDS_FREE_KEY) === 'on');
+  const [phrase, setPhraseState] = useState(() => readSetting(WAKE_PHRASE_KEY) || DEFAULT_WAKE_PHRASE);
+  const [listening, setListening] = useState(false);
+  const [error, setError] = useState('');
+
+  // Also on each change of the phrase: called while listening, listen_voice only swaps the phrase.
+  useEffect(() => {
+    if (!handsFree) return;
+    invoke('listen_voice', { wake: phrase.trim() || DEFAULT_WAKE_PHRASE }).catch((failure) => {
+      setError(String(failure));
+      setHandsFreeState(false);
+    });
+  }, [handsFree, phrase]);
+
+  const setButton = (on: boolean) => {
+    setButtonState(on);
+    saveSetting(VOICE_BUTTON_KEY, on ? 'on' : 'off');
+  };
+  const setHandsFree = (on: boolean) => {
+    setError('');
+    setHandsFreeState(on);
+    saveSetting(HANDS_FREE_KEY, on ? 'on' : 'off');
+    if (!on) void invoke('stop_voice');
+  };
+  const setPhrase = (next: string) => {
+    setPhraseState(next);
+    saveSetting(WAKE_PHRASE_KEY, next);
+  };
+  // With hands-free on, a click takes the next sentence without the wake phrase.
+  const tap = () => {
+    if (handsFree) {
+      void invoke('arm_voice');
+      return;
+    }
+    if (listening) {
+      void invoke('stop_voice');
+      return;
+    }
+    setListening(true);
+    invoke('listen_voice').catch(() => { /* the island already said why */ }).finally(() => setListening(false));
+  };
+  return { button, setButton, handsFree, setHandsFree, phrase, setPhrase, listening, error, tap };
+}
+
+function VoiceSettings({ voice }: { voice: ReturnType<typeof usePcVoice> }) {
+  const phrase = voice.phrase.trim() || DEFAULT_WAKE_PHRASE;
+  return (
+    <>
+      <section className="device-navigation-setting">
+        <div className="device-navigation-copy"><h2>Voice button</h2><p>Show Voice in the sidebar. Click it, then say commands into this PC’s mic until you click it again.</p></div>
+        <button className={`setting-switch ${voice.button ? 'enabled' : ''}`} type="button" role="switch" aria-checked={voice.button} aria-label="Voice button" onClick={() => voice.setButton(!voice.button)}><span /></button>
+      </section>
+      <section className="device-navigation-setting">
+        <div className="device-navigation-copy"><h2>Hands-free “{phrase}”</h2><p>Listen all the time and run what you say after the wake phrase, like “{phrase}, open Spotify”. Anything else is ignored.</p></div>
+        <button className={`setting-switch ${voice.handsFree ? 'enabled' : ''}`} type="button" role="switch" aria-checked={voice.handsFree} aria-label="Hands-free" onClick={() => voice.setHandsFree(!voice.handsFree)}><span /></button>
+        <label className="voice-phrase">Wake phrase<input value={voice.phrase} maxLength={40} placeholder={DEFAULT_WAKE_PHRASE} onChange={(event) => voice.setPhrase(event.target.value)} /></label>
+        {voice.error ? <p className="setting-error" role="alert">{voice.error}</p> : null}
+      </section>
+    </>
+  );
+}
 
 /** Starts Open Dock when you sign in to Windows, waiting in the tray so the phone connects without opening anything. */
 function StartWithWindowsSetting() {
