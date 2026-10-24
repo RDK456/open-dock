@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Mic, Send } from 'lucide-react-native';
@@ -15,6 +15,9 @@ export default function VoiceScreen() {
   const { colors, heading } = useTheme();
   const styles = useStyles(makeStyles);
   const bottomClearance = useTabBarClearance();
+  // Sideways the screen splits in two: the mic and typing on the left, hands-free and examples on the right.
+  const window = useWindowDimensions();
+  const wide = window.width > window.height;
   const { status, sendVoice } = usePcConnection();
   const connected = status === 'connected';
   const [typed, setTyped] = useState('');
@@ -64,10 +67,12 @@ export default function VoiceScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Wallpaper />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} keyboardShouldPersistTaps="handled">
+        <View style={wide && styles.columns}>
+        <View style={wide && styles.column}>
         <Text style={[styles.title, heading]}>Voice</Text>
         <Text style={styles.subtitle}>{!connected ? 'Connect to your PC to use voice commands.' : listening ? 'Listening. Say the command.' : handsFree.enabled ? `Say “${handsFree.phrase}” and a command, or tap the mic.` : 'Tap the mic and say what the PC should do.'}</Text>
 
-        <View style={styles.micArea}>
+        <View style={[styles.micArea, wide && styles.micAreaWide]}>
           <Animated.View pointerEvents="none" style={[styles.ring, { opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }), transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] }) }] }]} />
           <Pressable
             style={({ pressed }) => [styles.mic, listening && styles.micArmed, !connected && styles.disabled, pressed && styles.pressed]}
@@ -103,9 +108,11 @@ export default function VoiceScreen() {
             <Send size={18} color={colors.text} />
           </Pressable>
         </View>
+        </View>
 
+        <View style={wide && styles.column}>
         {Platform.OS === 'android' ? (
-          <View style={styles.handsFree}>
+          <View style={[styles.handsFree, wide && styles.firstInColumn]}>
             <View style={styles.handsFreeRow}>
               <View style={styles.handsFreeText}>
                 <Text style={styles.handsFreeTitle}>Hands-free</Text>
@@ -156,6 +163,8 @@ export default function VoiceScreen() {
             </Pressable>
           ))}
         </View>
+        </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -166,7 +175,11 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   content: { paddingHorizontal: 18, paddingTop: 12 },
   title: { color: colors.text, fontSize: 23, fontWeight: '600', letterSpacing: -0.3 },
   subtitle: { color: colors.muted, fontSize: 13, lineHeight: 17, marginTop: 5 },
+  columns: { flexDirection: 'row', gap: 24 },
+  column: { flex: 1 },
+  firstInColumn: { marginTop: 0 },
   micArea: { alignItems: 'center', justifyContent: 'center', height: 220 },
+  micAreaWide: { height: 180 },
   ring: { position: 'absolute', width: 132, height: 132, borderRadius: 66, backgroundColor: colors.accent },
   micArmed: { borderWidth: 4, borderColor: colors.text },
   handsFree: { marginTop: 18, padding: 14, gap: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass },
