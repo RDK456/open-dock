@@ -10,4 +10,6 @@
     ExecWait '"$INSTDIR\PawnIO_setup.exe" -install'
     opendock_skip_pawnio:
   ${EndIf}
+  ; Windows keeps showing an icon it cached for this path (the taskbar kept the old one after 1.4.0); refresh it.
+  ExecWait '"$SYSDIR\ie4uinit.exe" -show'
 !macroend

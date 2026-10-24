@@ -20,8 +20,8 @@ function readLook(): Look {
 
 let mode: ThemeMode = readMode();
 let look: Look = readLook();
-// A designed look is light or dark by nature; Classic follows the light/dark choice.
-const nativeScheme = () => (look === 'classic' ? (mode === 'system' ? 'unspecified' : mode) : LOOK_THEMES[look].scheme);
+// Every look follows the light/dark choice.
+const nativeScheme = () => (mode === 'system' ? 'unspecified' : mode);
 Appearance.setColorScheme(nativeScheme());
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
@@ -49,10 +49,9 @@ export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; l
   const current = useLook();
   const system = useColorScheme();
   return useMemo(() => {
-    const designed = current === 'classic' ? null : LOOK_THEMES[current];
-    const scheme: Scheme = designed?.scheme ?? (chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen);
-    const colors = designed?.colors ?? (scheme === 'light' ? lightColors : darkColors);
-    return { colors, scheme, mode: chosen, look: current, key: keyLook(current, colors), heading: headingLook(current), surface: surfaceLook(current) };
+    const scheme: Scheme = chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen;
+    const colors = current === 'classic' ? (scheme === 'light' ? lightColors : darkColors) : LOOK_THEMES[current][scheme];
+    return { colors, scheme, mode: chosen, look: current, key: keyLook(current, colors, scheme), heading: headingLook(current), surface: surfaceLook(current) };
   }, [chosen, current, system]);
 }
 

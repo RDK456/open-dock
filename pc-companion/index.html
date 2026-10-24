@@ -12,11 +12,10 @@
         try {
           var saved = localStorage.getItem("opendock.appearance");
           light = saved === "light" || (saved !== "dark" && window.matchMedia("(prefers-color-scheme: light)").matches);
-          // A designed look is light or dark by nature (LOOK_SCHEME in theme.tsx).
+          // Every look comes in light and dark (theme.tsx).
           var look = localStorage.getItem("opendock.look");
           look = { console: "signal", bento: "studio", desk: "atelier" }[look] || look;
-          var scheme = { studio: "dark", atelier: "light", signal: "dark", glass: "dark", funk: "dark" }[look];
-          if (scheme) { light = scheme === "light"; document.documentElement.setAttribute("data-look", look); }
+          if (/^(studio|atelier|signal|glass|funk)$/.test(look)) document.documentElement.setAttribute("data-look", look);
         } catch (e) {
           try { light = window.matchMedia("(prefers-color-scheme: light)").matches; } catch (e2) { /* dark */ }
         }

@@ -116,10 +116,10 @@ export function AppearanceSection() {
     <Text style={styles.label}>Look</Text>
     <Choice options={LOOKS} value={look} onChange={setLook} />
     <Text style={styles.hint}>{LOOK_HINTS[look]}</Text>
-    {look === 'classic' ? <>
     <Text style={styles.label}>Light or dark</Text>
     <Choice options={options} value={mode} onChange={setThemeMode} />
     <Text style={styles.hint}>{"System follows this phone's setting. Your PC has its own."}</Text>
+    {look === 'classic' ? <>
     <Text style={styles.label}>Wallpaper</Text>
     <Choice options={WALLPAPERS} value={wallpaper} onChange={(value) => setWallpaperSettings({ wallpaper: value })} />
     <Text style={styles.label}>Wallpaper motion</Text>

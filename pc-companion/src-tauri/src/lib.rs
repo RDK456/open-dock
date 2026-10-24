@@ -94,6 +94,9 @@ struct WidgetSurface {
     gap: f64,
     inset: f64,
     fixed_row_height: Option<f64>,
+    /// The phone is held upright, so the desktop draws its deck preview tall.
+    #[serde(default)]
+    portrait: bool,
 }
 
 impl WidgetSurface {
@@ -885,6 +888,7 @@ fn validate_deck_button(
         let lower = svg.to_ascii_lowercase();
         if button.icon == "auto"
             || button.icon == "app-icon"
+            || button.icon == "image"
             || svg.len() > 8_192
             || !svg.starts_with("<svg")
             || !svg.ends_with("</svg>")
@@ -931,14 +935,17 @@ fn validate_deck_button(
     if let Some(data) = &button.app_icon_data {
         if data.len() > 65_536
             || !data.starts_with("data:image/png;base64,")
-            || button.icon != "app-icon"
-            || !supports_extracted_icon
+            || !(button.icon == "image" || (button.icon == "app-icon" && supports_extracted_icon))
         {
             return Err("A button contains an invalid extracted icon".into());
         }
     }
     if button.icon == "app-icon" && (button.app_icon_data.is_none() || !supports_extracted_icon) {
         return Err("An extracted icon requires a launch action".into());
+    }
+    // An image the user chose for the key, on any action.
+    if button.icon == "image" && button.app_icon_data.is_none() {
+        return Err("A button's image icon is missing".into());
     }
     validate_action(&button.action)
 }
@@ -1206,7 +1213,7 @@ fn normalize_button_placements(buttons: &mut [DeckButton], rows: u8, columns: u8
 }
 
 fn valid_icon_name(value: &str) -> bool {
-    matches!(value, "auto" | "app-icon")
+    matches!(value, "auto" | "app-icon" | "image")
         || [
             "command",
             "monitor",
@@ -4735,16 +4742,26 @@ fn launch_file(path: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn extract_file_thumbnail(path: String) -> Result<String, String> {
+async fn extract_file_thumbnail(path: String, size: Option<u32>) -> Result<String, String> {
+    // File keys use 96 px; an image chosen as a key's icon asks for more so it can fill the key, stepping down
+    // until the PNG fits the 64 KB a button may carry.
+    let size = size.unwrap_or(96).clamp(32, 256);
     tauri::async_runtime::spawn_blocking(move || {
-        let key = path.clone();
-        cached_icon(&key, false, || read_file_thumbnail(path))
+        let key = if size == 96 { path.clone() } else { format!("{size}:{path}") };
+        cached_icon(&key, false, || {
+            let mut result = read_file_thumbnail(path.clone(), size);
+            for smaller in [160, 96] {
+                if result.is_ok() || smaller >= size { break; }
+                result = read_file_thumbnail(path.clone(), smaller);
+            }
+            result
+        })
     })
     .await
     .map_err(|_| "Could not read a thumbnail from that file".to_owned())?
 }
 
-fn read_file_thumbnail(path: String) -> Result<String, String> {
+fn read_file_thumbnail(path: String, size: u32) -> Result<String, String> {
     validate_file_target(&path)?;
     let path = PathBuf::from(path.trim());
     if !path.exists() {
@@ -4792,7 +4809,7 @@ $stream.Dispose()
 $null = [OpenDockShellThumbnail]::DeleteObject($hbitmap)
 "#;
         let output = quiet(&mut Command::new("powershell.exe"))
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script.replace("(96, 96)", &format!("({size}, {size})"))])
             .env("OPEN_DOCK_FILE_PATH", &path)
             .output()
             .map_err(|_| "Could not read a thumbnail from that file".to_owned())?;
@@ -4812,7 +4829,7 @@ $null = [OpenDockShellThumbnail]::DeleteObject($hbitmap)
         fs::create_dir(&directory)
             .map_err(|_| "Could not prepare a thumbnail location".to_owned())?;
         let result = Command::new("/usr/bin/qlmanage")
-            .args(["-t", "-s", "96", "-o"])
+            .args(["-t", "-s", &size.to_string(), "-o"])
             .arg(&directory)
             .arg(&path)
             .output();
@@ -5206,6 +5223,11 @@ pub fn run() {
                 .default_window_icon()
                 .ok_or("missing default window icon")?
                 .clone();
+            // Give every window the icon itself: without one the taskbar takes Windows' cached icon for the
+            // exe's path, which kept showing the pre-1.4 icon after an update.
+            for window in app.webview_windows().values() {
+                let _ = window.set_icon(icon.clone());
+            }
 
             TrayIconBuilder::new()
                 .icon(icon)

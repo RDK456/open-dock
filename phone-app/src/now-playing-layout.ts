@@ -80,7 +80,7 @@ export function nowPlayingLayout(width: number, height: number): NowPlayingLayou
 }
 
 // The phone's widget area, as reported to the desktop so its preview can size blocks the same way.
-export type WidgetSurface = { width: number; height: number; gap: number; inset: number; fixedRowHeight: number | null };
+export type WidgetSurface = { width: number; height: number; gap: number; inset: number; fixedRowHeight: number | null; portrait?: boolean };
 
 // Pixel size of a widget's content box for a span, given the grid the phone displays.
 export function widgetBlockSize(surface: WidgetSurface, columns: number, rows: number, columnSpan: number, rowSpan: number) {
@@ -90,4 +90,10 @@ export function widgetBlockSize(surface: WidgetSurface, columns: number, rows: n
     width: Math.max(1, columnSpan * cellWidth + (columnSpan - 1) * surface.gap - 2 * surface.inset),
     height: Math.max(1, rowSpan * cellHeight + (rowSpan - 1) * surface.gap - 2 * surface.inset),
   };
+}
+
+// The whole grid as the phone draws it (width over height), and whether the phone is held upright.
+export function phoneGridShape(surface: WidgetSurface, columns: number, rows: number) {
+  const grid = widgetBlockSize(surface, columns, rows, columns, rows);
+  return { aspect: (grid.width + 2 * surface.inset) / (grid.height + 2 * surface.inset), portrait: surface.portrait === true };
 }

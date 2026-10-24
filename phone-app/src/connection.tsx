@@ -689,8 +689,18 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       return false;
     }
   }, [status]);
-  const selectProfile = useCallback((profileId: string) => sendRequest('select_profile', 'profileId', profileId), [sendRequest]);
-  const selectPage = useCallback((pageId: string) => sendRequest('select_page', 'pageId', pageId), [sendRequest]);
+  // Without the PC, the phone still moves through its saved copy of the deck; the PC's next snapshot takes over again.
+  const navigateLocally = useCallback((profileId: string | null, pageId: string | null) => {
+    const profile = deckConfig?.profiles.find((item) => profileId ? item.id === profileId : item.pages.some((page) => page.id === pageId));
+    if (!deckConfig || !profile) return false;
+    const page = pageId ?? profile.activePageId;
+    setDeckConfig({ ...deckConfig, activeProfileId: profile.id, profiles: deckConfig.profiles.map((item) => item.id === profile.id ? { ...item, activePageId: page } : item) });
+    setSelectedProfileId(profile.id);
+    setSelectedPageId(page);
+    return true;
+  }, [deckConfig]);
+  const selectProfile = useCallback((profileId: string) => sendRequest('select_profile', 'profileId', profileId) || (status !== 'connected' && navigateLocally(profileId, null)), [sendRequest, navigateLocally, status]);
+  const selectPage = useCallback((pageId: string) => sendRequest('select_page', 'pageId', pageId) || (status !== 'connected' && navigateLocally(null, pageId)), [sendRequest, navigateLocally, status]);
   // Tells the desktop how big the phone's widget area is, so its Now Playing preview matches.
   // The latest value is resent after every reconnect.
   const reportWidgetSurface = useCallback((surface: WidgetSurface) => {

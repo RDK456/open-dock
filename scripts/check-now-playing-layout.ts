@@ -1,7 +1,7 @@
 // Run: node scripts/check-now-playing-layout.ts
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { nowPlayingLayout, widgetBlockSize, type WidgetSurface } from '../phone-app/src/now-playing-layout.ts';
+import { nowPlayingLayout, phoneGridShape, widgetBlockSize, type WidgetSurface } from '../phone-app/src/now-playing-layout.ts';
 
 assert.equal(
   readFileSync(new URL('../phone-app/src/now-playing-layout.ts', import.meta.url), 'utf8'),
@@ -47,4 +47,7 @@ assert.deepEqual(nowPlayingLayout(790, 48).show, ['title', 'detail', 'progress']
 assert.deepEqual(nowPlayingLayout(115, 48).show, ['title', 'detail', 'progress']);
 // Big blocks stack.
 assert.equal(nowPlayingLayout(780, 375).mode, 'stack');
+// The desktop draws the grid in the phone's own proportions: upright 3x4 keys of 150 px are taller than wide.
+assert.ok(phoneGridShape({ width: 360, height: 0, gap: 9, inset: 5, fixedRowHeight: 150, portrait: true }, 3, 4).aspect < 1);
+assert.ok(Math.abs(phoneGridShape({ width: 790, height: 385, gap: 10, inset: 5, fixedRowHeight: null }, 3, 2).aspect - 790 / 385) < 1e-9);
 console.log(`now-playing layout: ${checked} blocks ok`);

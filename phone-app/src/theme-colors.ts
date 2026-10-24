@@ -122,8 +122,8 @@ export function parseMode(value: unknown): ThemeMode {
 }
 
 /**
- * The deck's look. Classic is the plain light or dark design above. The others are complete designs with their
- * own palette and key shape, each either light or dark by nature, so they ignore the light/dark choice.
+ * The deck's look. Classic is the plain design above. The others are complete designs with their own palette and
+ * key shape. Every look comes in light and dark and follows the light/dark choice.
  */
 export type Look = 'classic' | 'studio' | 'atelier' | 'signal' | 'glass' | 'funk';
 export const LOOKS: [Look, string][] = [['classic', 'Classic'], ['studio', 'Studio'], ['atelier', 'Atelier'], ['signal', 'Signal'], ['glass', 'Glass'], ['funk', 'Funk']];
@@ -211,27 +211,70 @@ const funkColors: Colors = {
   glass: '#251845', glassBorder: '#0b0618', glow: 'rgba(198,255,61,0.2)',
 };
 
-/** Each designed look's palette and whether it is light or dark. */
-export const LOOK_THEMES: Record<Exclude<Look, 'classic'>, { colors: Colors; scheme: Scheme }> = {
-  studio: { colors: studioColors, scheme: 'dark' },
-  atelier: { colors: atelierColors, scheme: 'light' },
-  signal: { colors: signalColors, scheme: 'dark' },
-  glass: { colors: glassColors, scheme: 'dark' },
-  funk: { colors: funkColors, scheme: 'dark' },
+// Each look's other half, for the other light/dark choice (the PC's match is in App.css).
+const studioLight: Colors = {
+  bg: '#f7f7f8', panel: '#ffffff', panelRaised: '#f1f1f3', pressed: '#e6e7ea', border: '#e3e4e8', borderStrong: '#d2d4d9',
+  borderActive: '#a9acb4', borderFocus: '#4f57e0', text: '#0e0f11', onAccent: '#ffffff', muted: '#4b4e56', faint: '#5b5f68',
+  accent: '#3d44c4', mint: '#12703a', onMint: '#ffffff', red: '#b91c1c', blue: '#4b53d6', artOpacity: 0.38, star: '#d99a06',
+  warn: '#8a5300', warnFill: '#f5c451', warnBorder: '#e0b64a', goodBg: '#ecfdf3', goodBorder: '#b7e4c7', playingBorder: '#86d9a5',
+  scrim: 'rgba(14,15,17,0.4)', tint: 'rgba(247,247,248,0.72)', float: 'rgba(255,255,255,0.94)', floatSoft: 'rgba(255,255,255,0.74)',
+  glass: '#ffffff', glassBorder: '#e3e4e8', glow: 'rgba(79,87,224,0.14)',
+};
+const atelierDark: Colors = {
+  bg: '#16130f', panel: '#1e1a15', panelRaised: '#26211b', pressed: '#2e2820', border: '#3a3228', borderStrong: '#4a4034',
+  borderActive: '#6b5d4a', borderFocus: '#d2a86a', text: '#f3ece0', onAccent: '#16130f', muted: '#c2b6a2', faint: '#a99c87',
+  accent: '#d2a86a', mint: '#8cc79a', onMint: '#0f2416', red: '#f08a76', blue: '#8fb3d9', artOpacity: 0.3, star: '#d9a441',
+  warn: '#e0b25a', warnFill: '#d9a441', warnBorder: '#4a3f10', goodBg: '#17201a', goodBorder: '#2b3a2f', playingBorder: '#3f6b4a',
+  scrim: 'rgba(0,0,0,0.6)', tint: 'rgba(22,19,15,0.8)', float: 'rgba(30,26,21,0.96)', floatSoft: 'rgba(30,26,21,0.78)',
+  glass: '#1e1a15', glassBorder: '#463c2f', glow: 'rgba(210,168,106,0.16)',
+};
+const signalLight: Colors = {
+  bg: '#f2f2f2', panel: '#ffffff', panelRaised: '#ebebeb', pressed: '#e0e0e0', border: '#d6d6d6', borderStrong: '#c4c4c4',
+  borderActive: '#9a9a9a', borderFocus: '#000000', text: '#000000', onAccent: '#ffffff', muted: '#474747', faint: '#5c5c5c',
+  accent: '#000000', mint: '#12703a', onMint: '#ffffff', red: '#c8102e', blue: '#1f5fbf', artOpacity: 0.38, star: '#000000',
+  warn: '#7a4a00', warnFill: '#ffd23f', warnBorder: '#e0b64a', goodBg: '#eef5ef', goodBorder: '#c9dccb', playingBorder: '#000000',
+  scrim: 'rgba(0,0,0,0.35)', tint: 'rgba(242,242,242,0.8)', float: 'rgba(255,255,255,0.96)', floatSoft: 'rgba(255,255,255,0.78)',
+  glass: '#ffffff', glassBorder: '#d0d0d0', glow: 'rgba(0,0,0,0.1)',
+};
+const glassLight: Colors = {
+  bg: '#eef1f8', panel: '#ffffff', panelRaised: '#f0f2f8', pressed: '#e1e5f0', border: '#d9deea', borderStrong: '#c5cbdc',
+  borderActive: '#9aa2bb', borderFocus: '#3b4aa8', text: '#10131f', onAccent: '#ffffff', muted: '#464c63', faint: '#575d75',
+  accent: '#2f3c8e', mint: '#0f7a55', onMint: '#ffffff', red: '#b4234a', blue: '#3657c7', artOpacity: 0.38, star: '#c98a00',
+  warn: '#855000', warnFill: '#ffd166', warnBorder: '#e0b64a', goodBg: '#e6f6ef', goodBorder: '#b6e0cc', playingBorder: '#6cc2a0',
+  scrim: 'rgba(16,19,31,0.35)', tint: 'rgba(238,241,248,0.7)', float: 'rgba(255,255,255,0.8)', floatSoft: 'rgba(255,255,255,0.6)',
+  glass: 'rgba(255,255,255,0.55)', glassBorder: 'rgba(255,255,255,0.85)', glow: 'rgba(59,74,168,0.22)',
+};
+const funkLight: Colors = {
+  bg: '#fff6e0', panel: '#fffaf0', panelRaised: '#fdeecf', pressed: '#f6e4bd', border: '#e6d3a8', borderStrong: '#d4bd8a',
+  borderActive: '#a8915e', borderFocus: '#6a2cf0', text: '#1a1033', onAccent: '#ffffff', muted: '#4a3d6b', faint: '#5a4c7a',
+  accent: '#5a1fe0', mint: '#0f7a4f', onMint: '#ffffff', red: '#c2185b', blue: '#0067a3', artOpacity: 0.38, star: '#c77700',
+  warn: '#8a4b00', warnFill: '#ffb84d', warnBorder: '#e0a64a', goodBg: '#e3f5e9', goodBorder: '#b5dfc3', playingBorder: '#2a8a62',
+  scrim: 'rgba(26,16,51,0.4)', tint: 'rgba(255,246,224,0.78)', float: 'rgba(255,250,240,0.96)', floatSoft: 'rgba(255,250,240,0.78)',
+  glass: '#fffaf0', glassBorder: '#1a1033', glow: 'rgba(106,44,240,0.16)',
 };
 
-export function keyLook(look: Look, colors: Colors): KeyLook {
+/** Each designed look's palette in light and in dark. */
+export const LOOK_THEMES: Record<Exclude<Look, 'classic'>, Record<Scheme, Colors>> = {
+  studio: { dark: studioColors, light: studioLight },
+  atelier: { dark: atelierDark, light: atelierColors },
+  signal: { dark: signalColors, light: signalLight },
+  glass: { dark: glassColors, light: glassLight },
+  funk: { dark: funkColors, light: funkLight },
+};
+
+export function keyLook(look: Look, colors: Colors, scheme: Scheme): KeyLook {
+  const light = scheme === 'light';
   switch (look) {
     case 'studio':
-      return { radius: 12, borderWidth: 1, bg: '#0f1011', border: 'rgba(255,255,255,0.08)', shadow: 'inset 0px 1px 0px rgba(255,255,255,0.05)', ink: '#f7f8f8', labelSize: 13, labelWeight: '500', iconStroke: 1.5, motion: 'glide' };
+      return { radius: 12, borderWidth: 1, bg: colors.panel, border: light ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)', shadow: light ? '0px 1px 2px rgba(0,0,0,0.06)' : 'inset 0px 1px 0px rgba(255,255,255,0.05)', ink: colors.text, labelSize: 13, labelWeight: '500', iconStroke: 1.5, motion: 'glide' };
     case 'atelier':
-      return { radius: 3, borderWidth: 1, bg: '#faf7f1', border: '#d4c6ab', shadow: '0px 1px 0px rgba(58,44,20,0.06)', ink: '#1c1813', labelSize: 15, labelWeight: '500', font: 'serif', iconStroke: 1.2, motion: 'slow' };
+      return { radius: 3, borderWidth: 1, bg: colors.panel, border: colors.glassBorder, shadow: light ? '0px 1px 0px rgba(58,44,20,0.06)' : '0px 1px 0px rgba(0,0,0,0.3)', ink: colors.text, labelSize: 15, labelWeight: '500', font: 'serif', iconStroke: 1.2, motion: 'slow' };
     case 'signal':
-      return { radius: 20, borderWidth: 1, bg: '#0b0b0b', border: '#2a2a2a', ink: '#ffffff', labelSize: 11, labelWeight: '500', font: 'monospace', caps: true, tracking: 1.2, iconStroke: 2, motion: 'step' };
+      return { radius: 20, borderWidth: 1, bg: colors.panel, border: colors.glassBorder, ink: colors.text, labelSize: 11, labelWeight: '500', font: 'monospace', caps: true, tracking: 1.2, iconStroke: 2, motion: 'step' };
     case 'glass':
-      return { radius: 20, borderWidth: 1, bg: colors.glass, border: colors.glassBorder, shadow: '0px 8px 24px rgba(0, 0, 0, 0.35)', ink: colors.text, labelSize: 13, labelWeight: '600', iconStroke: 1.7, motion: 'spring', touchLight: 'rgba(205, 215, 255, 0.55)' };
+      return { radius: 20, borderWidth: 1, bg: colors.glass, border: colors.glassBorder, shadow: light ? '0px 8px 24px rgba(40, 50, 90, 0.12)' : '0px 8px 24px rgba(0, 0, 0, 0.35)', ink: colors.text, labelSize: 13, labelWeight: '600', iconStroke: 1.7, motion: 'spring', touchLight: light ? 'rgba(120, 140, 255, 0.35)' : 'rgba(205, 215, 255, 0.55)' };
     case 'funk':
-      return { radius: 16, borderWidth: 3, bg: '#251845', border: '#0b0618', shadow: '0px 5px 0px #0b0618', ink: '#fbf6ea', labelSize: 13, labelWeight: '800', iconStroke: 2.2, motion: 'spring',
+      return { radius: 16, borderWidth: 3, bg: colors.panel, border: colors.glassBorder, shadow: `0px 5px 0px ${colors.glassBorder}`, ink: colors.text, labelSize: 13, labelWeight: '800', iconStroke: 2.2, motion: 'spring',
         tiles: [['#c6ff3d', '#16200a'], ['#3fd9ff', '#04202b'], ['#ff4fd8', '#2b0024'], ['#ffa53d', '#2a1500'], ['#d9ccff', '#1a1033']] };
     default:
       return { radius: 16, borderWidth: 1, bg: colors.glass, border: colors.glassBorder, ink: colors.text, labelSize: 13, labelWeight: '500', iconStroke: 1.7, motion: 'spring' };
@@ -294,7 +337,7 @@ export function inkIcon(svg: string, scheme: Scheme): string {
 export const inkIconAs = (svg: string, ink: string) => svg.replace(/stroke="#f4f4f5"/gi, `stroke="${ink}"`);
 
 /** Signal's dot grid (see wallpaper.tsx). */
-export const backdrops = { signalDot: '#ffffff' };
+export const backdrops: { signalDot: Record<Scheme, string> } = { signalDot: { dark: '#ffffff', light: '#000000' } };
 
 /** The phone wallpapers: three soft glows each, as color and where it sits (fractions of the screen). */
 export const wallpaperGlows: Record<'aurora' | 'ember' | 'ocean' | 'forest', [string, number, number][]> = {

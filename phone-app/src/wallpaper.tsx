@@ -75,7 +75,7 @@ export function Wallpaper() {
   // changes size (the tab bar hiding, rotation) so the light reaches the bottom edge.
   const [size, setSize] = useState('');
 
-  if (look === 'signal') return <DotBackdrop key={size} onSize={setSize} />;
+  if (look === 'signal') return <DotBackdrop key={size} onSize={setSize} dot={backdrops.signalDot[scheme]} />;
   if (wallpaper === 'none') return null;
   const glows = wallpaperGlows[wallpaper];
   const strength = look === 'glass' ? 0.75 : scheme === 'light' ? 0.32 : 0.5;
@@ -104,12 +104,12 @@ type BackdropProps = { onSize: (size: string) => void };
 const measure = (onSize: BackdropProps['onSize']) => ({ nativeEvent: { layout } }: LayoutChangeEvent) => onSize(`${layout.width}x${layout.height}`);
 
 /** Signal: a fine dot grid, like the dots of a matrix display. */
-function DotBackdrop({ onSize }: BackdropProps) {
+function DotBackdrop({ onSize, dot }: BackdropProps & { dot: string }) {
   return <View pointerEvents="none" style={styles.fill} onLayout={measure(onSize)}>
     <Svg width="100%" height="100%">
       <Defs>
         <Pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
-          <Circle cx="9" cy="9" r="1" fill={backdrops.signalDot} opacity={0.13} />
+          <Circle cx="9" cy="9" r="1" fill={dot} opacity={0.13} />
         </Pattern>
       </Defs>
       <Rect width="100%" height="100%" fill="url(#dots)" />

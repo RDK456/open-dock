@@ -43,13 +43,19 @@ const pcLight = tokens(':root[data-theme="light"]');
 assert.deepEqual(Object.keys(pcLight).sort(), Object.keys(pcDark).sort(), 'PC app: a token is missing from one theme');
 assert.ok(Object.keys(pcDark).length >= 30, 'PC app: tokens not read');
 
-// The designed looks: each replaces some of its base theme's tokens.
-const LOOK_BASE = { studio: 'dark', atelier: 'light', signal: 'dark', glass: 'dark', funk: 'dark' } as const;
-const pcLooks = Object.entries(LOOK_BASE).map(([look, base]) => {
+// The designed looks: each replaces some of its base theme's tokens, in light and in dark. The plain block is the
+// look's original half; its [data-theme] block redraws it for the other choice and must replace every color it sets.
+const LOOK_NATIVE = { studio: 'dark', atelier: 'light', signal: 'dark', glass: 'dark', funk: 'dark' } as const;
+const base = (scheme: string) => (scheme === 'dark' ? pcDark : pcLight);
+const pcLooks = Object.entries(LOOK_NATIVE).flatMap(([look, native]) => {
   const own = tokens(`:root[data-look="${look}"]`);
   const unknown = Object.keys(own).filter((name) => !(name in pcDark) && !/^--(key|tile|aurora|look)-/.test(name));
   assert.deepEqual(unknown, [], `PC ${look}: tokens the base themes do not have`);
-  return [`PC ${look} (${base})`, { ...(base === 'dark' ? pcDark : pcLight), ...own }] as const;
+  const other = native === 'dark' ? 'light' : 'dark';
+  const flip = tokens(`:root[data-look="${look}"][data-theme="${other}"]`);
+  const kept = Object.keys(own).filter((name) => !(name in flip) && /#|rgb/.test(own[name]) && !name.startsWith('--tile-'));
+  assert.deepEqual(kept, [], `PC ${look} ${other}: colors left over from the ${native} half`);
+  return [[`PC ${look} (${native})`, { ...base(native), ...own }], [`PC ${look} (${other})`, { ...base(other), ...own, ...flip }]] as const;
 });
 for (const [theme, t] of [['PC dark', pcDark], ['PC light', pcLight], ...pcLooks] as const) {
   for (const surface of ['--background', '--card', '--card-raised', '--z850']) {
@@ -81,7 +87,7 @@ assert.deepEqual(strays, [], `App.css: colors written out instead of tokens:\n${
 
 // --- The phone app
 assert.deepEqual(Object.keys(lightColors).sort(), Object.keys(darkColors).sort(), 'phone: a token is missing from one theme');
-const phoneLooks = Object.entries(LOOK_THEMES).map(([look, { colors, scheme }]) => [`phone ${look} (${scheme})`, colors] as const);
+const phoneLooks = Object.entries(LOOK_THEMES).flatMap(([look, both]) => (['light', 'dark'] as const).map((scheme) => [`phone ${look} (${scheme})`, both[scheme]] as const));
 for (const [theme, c] of [['phone dark', darkColors], ['phone light', lightColors], ...phoneLooks] as const) {
   for (const surface of ['bg', 'panel', 'panelRaised'] as const) {
     need(theme, `text on ${surface}`, c.text, c[surface], 7);

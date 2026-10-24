@@ -55,6 +55,7 @@ import {
   Camera,
   Globe,
   TextCursorInput,
+  Image as ImageIcon,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -71,8 +72,9 @@ import { DeckSelect } from "./DeckSelect";
 import { PanelHeader, PanelSection } from "./SettingsPanel";
 import { applyPageMove, clonePage, copyName, fitBytes, freshId, planPageMove, reorderProfile, type MoveDecisions, type MoveRequest, type Resolution } from "./deck-move";
 import { canReceiveIcon, type IconTarget } from "./deck-icons";
+import { COMMON_SHORTCUTS, mainKey, shortcutFromPress } from "./shortcut-keys";
 import { buttonPlacement, canPlaceWidgetItem, defaultSpan, firstWidgetPlacement, fitPlacement, swapPlacements } from "./deck-grid";
-import { widgetBlockSize, type WidgetSurface } from "./now-playing-layout";
+import { phoneGridShape, widgetBlockSize, type WidgetSurface } from "./now-playing-layout";
 import { version } from "../package.json";
 import { UpdatesSetting, useUpdater } from "./updates";
 import { AppearanceSetting, inkIcon, useTheme } from "./theme";
@@ -781,6 +783,9 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
     widget,
   })));
   const widgetOccupied = occupiedWidgetCells(widgetScreen);
+  // Upright, the phone draws the grid tall and narrow; the canvas takes that shape so the page looks as it does there.
+  // Sideways the phone's strip is too flat to edit in, so the canvas keeps its own layout.
+  const phoneShape = widgetSurface?.portrait ? phoneGridShape(widgetSurface, widgetScreen.columns, widgetScreen.rows) : null;
 
   async function save(next: DeckConfig) {
     const fillPluginValues = (widgets: DeckWidget[]): DeckWidget[] => widgets.map((widget) => {
@@ -1864,15 +1869,15 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
       <div className="deck-main-scroll">
         {/* The next pages peek out behind this one, like the phone's card stack; click one to deal it. */}
         {folder || profile.pages.length < 2 ? null : [1, 2].filter((step) => step < profile.pages.length).map((step) => profile.pages[(profile.pages.indexOf(page) + step) % profile.pages.length]).reverse().map((entry, at, list) => <button type="button" key={entry.id} className="deck-ghost" style={{ marginInline: (list.length - at) * 16 }} disabled={busy} onClick={() => selectPage(profile, entry)}>{entry.name}</button>)}
-        <div className="deck-canvas-wrap" onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
+        <div className={`deck-canvas-wrap ${phoneShape?.portrait ? 'phone-portrait' : ''}`} onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
           <div className="deck-canvas-heading">
-            <div><h2>{folder ? folder.name : page.name}</h2><p>{widgetScreen.buttons.length + widgetScreen.widgets.length} items · {widgetOccupied.size} of {widgetScreen.rows * widgetScreen.columns} cells · Drag to move or resize{folder ? ' · Drop on Back to move out' : ''}</p></div>
+            <div><h2>{folder ? folder.name : page.name}</h2><p>{widgetScreen.buttons.length + widgetScreen.widgets.length} items · {widgetOccupied.size} of {widgetScreen.rows * widgetScreen.columns} cells · Drag to move or resize{folder ? ' · Drop on Back to move out' : ''}{phoneShape ? ' · As on your phone, upright' : ''}</p></div>
             <div className="heading-actions">
               <label className="grid-size-control">Rows<DeckSelect value={String(widgetScreen.rows)} disabled={busy} options={Array.from({ length: 6 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))} onChange={(value) => resizeGrid('rows', value)} /></label>
               <label className="grid-size-control">Columns<DeckSelect value={String(widgetScreen.columns)} disabled={busy} options={Array.from({ length: 6 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))} onChange={(value) => resizeGrid('columns', value)} /></label>
             </div>
           </div>
-          <div ref={widgetCanvasRef} key={folder?.id ?? page.id} className={`deck-canvas widget-canvas ${folder ? "enter-folder" : "enter-page"}`} style={{ gridTemplateColumns: `repeat(${widgetScreen.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${widgetScreen.rows}, minmax(100px, auto))` }} onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
+          <div ref={widgetCanvasRef} key={folder?.id ?? page.id} className={`deck-canvas widget-canvas ${phoneShape ? 'phone-shaped' : ''} ${folder ? "enter-folder" : "enter-page"}`} style={{ gridTemplateColumns: `repeat(${widgetScreen.columns}, minmax(0, 1fr))`, gridTemplateRows: phoneShape ? `repeat(${widgetScreen.rows}, minmax(0, 1fr))` : `repeat(${widgetScreen.rows}, minmax(100px, auto))`, aspectRatio: phoneShape ? String(phoneShape.aspect) : undefined }} onClick={(event) => { if (event.target === event.currentTarget) { clearSelection(); setPendingCell(null); } }}>
             {Array.from({ length: widgetScreen.rows * widgetScreen.columns }, (_, index) => {
               const row = Math.floor(index / widgetScreen.columns);
               const column = index % widgetScreen.columns;
@@ -2069,6 +2074,7 @@ function buttonLabel(button: DeckButton, playback: PlaybackState) {
 }
 
 function iconForButton(button: DeckButton, playback: PlaybackState, theme: 'light' | 'dark') {
+  if (button.appIconData && button.icon === 'image') return <img className="deck-button-image-fill" src={button.appIconData} alt="" />;
   if (button.appIconData) return <img className="deck-button-app-icon" src={button.appIconData} alt="" />;
   if (button.iconSvg && button.icon !== 'auto') return <img className="deck-button-svg-icon" src={`data:image/svg+xml,${encodeURIComponent(inkIcon(button.iconSvg, theme))}`} alt="" />;
   const aliases: Record<string, typeof Command> = { command: Command, monitor: Monitor, music: Music, mic: Mic, headphones: Headphones, 'app-window': AppWindow };
@@ -2104,29 +2110,94 @@ function iconMarkup(button: HTMLElement) {
   return svg.outerHTML;
 }
 
-function IconPicker({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (name: string, svg?: string) => void }) {
+// A keyboard shortcut: press it to record it, or pick a common one. Keys Windows keeps for itself (Win+L, Ctrl+Alt+Del)
+// never reach the app while recording; the list has the ones that can be sent.
+function ShortcutField({ label, keys, disabled, onChange }: { label: string; keys: string[]; disabled: boolean; onChange: (keys: string[]) => void }) {
+  const [recording, setRecording] = useState(false);
+  const [hint, setHint] = useState('');
+  const stop = () => { setRecording(false); setHint(''); };
+  function record(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (!recording) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat || ['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
+    if (event.code === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) return stop();
+    const next = shortcutFromPress(event);
+    if (next) { onChange(next); stop(); return; }
+    setHint(mainKey(event.code) ? 'Hold Ctrl, Alt, Shift or Win with the key.' : "That key can't be sent. Use a letter, number, F-key, arrow or Enter, Tab, Delete…");
+  }
+  return <div className="shortcut-field">
+    <span className="shortcut-field-label">{label}</span>
+    <button type="button" className={`shortcut-record ${recording ? 'recording' : ''}`} disabled={disabled} aria-label={recording ? 'Recording: press the shortcut' : `${keys.join(' + ') || 'No shortcut'}. Click to record a new one`}
+      onClick={() => { setRecording(true); setHint('Press the shortcut now. Esc cancels.'); }} onBlur={stop} onKeyDown={record}>
+      {recording ? <span>Press keys…</span> : keys.length ? keys.map((key) => <kbd key={key}>{key.replace('META', 'WIN').replace('_', ' ')}</kbd>) : <span>Click to record</span>}
+    </button>
+    <DeckSelect value="" disabled={disabled} options={[{ value: '', label: 'Common shortcuts…' }, ...COMMON_SHORTCUTS.map(([group, name, value]) => ({ value, label: `${group} · ${name}  ${value.replace('META', 'WIN')}` }))]} onChange={(value) => { if (value) onChange(value.split('+')); }} />
+    {hint ? <p className="panel-note">{hint}</p> : null}
+  </div>;
+}
+
+// A color icon (Papirus, GPL-3.0, like this app) becomes the key's image: drawn to a PNG, as big as a button can carry.
+async function colorIconPng(svg: string): Promise<string> {
+  const image = new Image();
+  image.src = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  await image.decode();
+  for (const size of [256, 160, 96]) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    canvas.getContext('2d')!.drawImage(image, 0, 0, size, size);
+    const data = canvas.toDataURL('image/png');
+    if (data.length <= 65_000) return data;
+  }
+  throw new Error('That icon is too detailed to use');
+}
+
+function IconPicker({ value, disabled, onChange, onImage }: { value: string; disabled: boolean; onChange: (name: string, svg?: string) => void; onImage: (data: string) => void }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(72);
   const [registry, setRegistry] = useState<LucideRegistry | null>(null);
   const [loading, setLoading] = useState(false);
+  const [imageError, setImageError] = useState('');
+  const [colorIcons, setColorIcons] = useState<Record<string, string> | null>(null);
+  const colorMatches = useMemo(() => Object.keys(colorIcons ?? {}).filter((name) => name.includes(query.trim().toLowerCase())), [query, colorIcons]);
   const matches = useMemo(() => Object.keys(registry ?? {}).filter((name) => name.toLowerCase().includes(query.trim().toLowerCase())), [query, registry]);
   const visible = matches.slice(0, limit);
-  const SelectedIcon = value === 'auto' ? Zap : registry?.[value as keyof LucideRegistry] ?? Command;
+  const SelectedIcon = value === 'auto' ? Zap : value === 'image' ? ImageIcon : registry?.[value as keyof LucideRegistry] ?? Command;
+  // Any picture on this PC (an icon downloaded from an icon site, a logo) becomes the key's icon, read as a small PNG.
+  async function chooseImage() {
+    setImageError('');
+    try {
+      const path = await openFileDialog({ title: 'Choose an icon image', multiple: false, directory: false, filters: [{ name: 'Images', extensions: ['png', 'ico', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'svg'] }] });
+      if (typeof path !== 'string') return;
+      onImage(await invoke<string>('extract_file_thumbnail', { path, size: 256 }));
+      setOpen(false);
+    } catch (error) { setImageError(String(error)); }
+  }
   async function togglePicker() {
     if (open) { setOpen(false); return; }
     if (!registry) {
       setLoading(true);
-      try { const module = await import('lucide-react/dist/esm/icons/index.mjs'); setRegistry(module as unknown as LucideRegistry); }
-      finally { setLoading(false); }
+      try {
+        const [module, color] = await Promise.all([import('lucide-react/dist/esm/icons/index.mjs'), import('./color-icons.json')]);
+        setRegistry(module as unknown as LucideRegistry);
+        setColorIcons(color.default as Record<string, string>);
+      } finally { setLoading(false); }
     }
     setOpen(true);
   }
   return <div className="icon-picker">
-    <button type="button" className="icon-picker-trigger" disabled={disabled || loading} onClick={() => void togglePicker()}><SelectedIcon size={17} /><span>{loading ? 'Loading icons…' : value === 'auto' ? 'Automatic by action' : value}</span><ChevronDown size={15} /></button>
+    <button type="button" className="icon-picker-trigger" disabled={disabled || loading} onClick={() => void togglePicker()}><SelectedIcon size={17} /><span>{loading ? 'Loading icons…' : value === 'auto' ? 'Automatic by action' : value === 'image' ? 'Your image' : value}</span><ChevronDown size={15} /></button>
     {open ? <div className="icon-picker-popover">
       <input autoFocus value={query} placeholder={`Search ${Object.keys(registry ?? {}).length} Lucide icons…`} onChange={(event) => { setQuery(event.target.value); setLimit(72); }} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }} />
       <button type="button" className={`icon-picker-auto ${value === 'auto' ? 'selected' : ''}`} onClick={() => { onChange('auto'); setOpen(false); }}><Zap size={16} /> Automatic by action</button>
+      <button type="button" className={`icon-picker-auto ${value === 'image' ? 'selected' : ''}`} onClick={() => void chooseImage()}><ImageIcon size={16} /> Use an image…</button>
+      {imageError ? <p className="panel-note" role="alert">{imageError}</p> : null}
+      {colorMatches.length ? <>
+        <p className="icon-picker-heading">Color icons</p>
+        <div className="icon-picker-grid color-icons">{colorMatches.slice(0, query.trim() ? 60 : 24).map((name) => <button type="button" key={name} className="icon-picker-option" title={name} aria-label={name} onClick={() => void colorIconPng(colorIcons![name]).then((data) => { onImage(data); setOpen(false); }, (error) => setImageError(String(error)))}><img src={`data:image/svg+xml,${encodeURIComponent(colorIcons![name])}`} alt="" width={26} height={26} /><span>{name}</span></button>)}</div>
+        <p className="icon-picker-heading">Line icons</p>
+      </> : null}
       <div className="icon-picker-grid">{visible.map((name) => {
         const Icon = registry![name as keyof LucideRegistry];
         return <button type="button" key={name} className={`icon-picker-option ${name === value ? 'selected' : ''}`} title={name} aria-label={name} onClick={(event) => { onChange(name, iconMarkup(event.currentTarget)); setOpen(false); }}><Icon size={17} /><span>{name}</span></button>;
@@ -2141,7 +2212,6 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
   onChangeRef.current = onChange;
   const action = button.action;
   const kind = action.type === 'plugin_action' ? `plugin:${action.pluginId}:${action.actionId}` : action.type === 'sequence' ? 'sequence' : action.type;
-  const keys = action.type === 'hotkey' ? action.keys.join('+') : '';
   const app = action.type === 'launch_app' ? action.app : '';
   const filePath = action.type === 'launch_file' ? action.path : '';
   const folderPath = action.type === 'launch_folder' ? action.path : '';
@@ -2247,7 +2317,7 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
       {kind === 'run_script' && action.type === 'run_script' ? <><label>Local script<div className="app-path-picker"><input value={scriptPath} onChange={(event) => onChange({ action: { ...action, path: event.target.value } })} placeholder={isMacos ? 'Choose a .sh or .py script' : 'Choose a .ps1 or .py script'} disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a local script" title="Browse for a local script" disabled={busy} onClick={() => void browseScript()}><File size={15} /></button></div></label><label className="script-permission"><input type="checkbox" checked={action.allowOnPc} disabled={busy || !scriptPath.trim()} onChange={(event) => onChange({ action: { ...action, allowOnPc: event.target.checked } })} /><span>Allow this script to run on this PC when activated from a paired phone</span></label><small>Scripts run as your Windows or macOS user. Open Dock follows the operating system’s script policy.</small>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
       {kind === 'media' ? <label>Media command<DeckSelect value={media} onChange={(value) => onChange({ action: { type: 'media', command: value as MediaCommand } })} disabled={busy} options={[['play_pause', 'Play / Pause'], ['next_track', 'Next track'], ['previous_track', 'Previous track'], ['volume_up', 'Volume up'], ['volume_down', 'Volume down'], ['mute', 'Mute']].map(([value, label]) => ({ value, label }))} /></label> : null}
       {kind === 'system' && action.type === 'system' ? <><label>Command<DeckSelect value={action.command} onChange={(value) => onChange({ action: { type: 'system', command: value as SystemCommand } })} disabled={busy} options={SYSTEM_COMMANDS.map(([value, label]) => ({ value, label }))} /></label>{action.command === 'screenshot' ? <small>Saves the main monitor as a PNG in Pictures/Open Dock.</small> : action.command.startsWith('brightness') ? <small>Works on built-in laptop screens.</small> : ['restart', 'shutdown', 'sign_out'].includes(action.command) ? <small>Runs at once, without asking. Open apps may lose unsaved work.</small> : null}</> : null}
-      {kind === 'hotkey' ? <label>Keys<input value={keys} onChange={(event) => onChange({ action: { type: 'hotkey', keys: event.target.value.toUpperCase().split('+').map((key) => key.trim()).filter(Boolean) } })} placeholder="CTRL+SHIFT+M" disabled={busy} /></label> : null}
+      {kind === 'hotkey' && action.type === 'hotkey' ? <ShortcutField label="Keys" keys={action.keys} disabled={busy} onChange={(next) => onChange({ action: { type: 'hotkey', keys: next } })} /> : null}
       {kind === 'launch_app' && action.type === 'launch_app' ? <><label>App path or name<div className="app-path-picker"><input value={app} onChange={(event) => setAppTarget(event.target.value)} placeholder="Application, shortcut, or app name" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for an application" title="Browse for an application" disabled={busy} onClick={() => void browseApp()}><FolderOpen size={15} /></button></div></label></> : null}
       {kind === 'launch_file' && action.type === 'launch_file' ? <><label>File path<div className="app-path-picker"><input value={filePath} onChange={(event) => setFileTarget(event.target.value)} placeholder="Choose a file" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a file" title="Browse for a file" disabled={busy} onClick={() => void browseFileOrFolder(false)}><File size={15} /></button></div></label></> : null}
       {kind === 'launch_folder' && action.type === 'launch_folder' ? <><label>Folder path<div className="app-path-picker"><input value={folderPath} onChange={(event) => setFolderTarget(event.target.value)} placeholder="Choose a folder" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a folder" title="Browse for a folder" disabled={busy} onClick={() => void browseFileOrFolder(true)}><FolderOpen size={15} /></button></div></label></> : null}
@@ -2259,7 +2329,7 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
     </PanelSection>
     <PanelSection title="Appearance">
       <label>Button label<input value={button.label} onChange={(event) => onChange({ label: event.target.value })} maxLength={24} disabled={busy} /></label>
-      <label>Icon<IconPicker value={button.icon} disabled={busy} onChange={(name, svg) => { thumbnailRequestRef.current += 1; setExtractingThumbnail(false); onChange({ icon: name, iconSvg: svg, appIconData: undefined }); }} /></label>
+      <label>Icon<IconPicker value={button.icon} disabled={busy} onChange={(name, svg) => { thumbnailRequestRef.current += 1; setExtractingThumbnail(false); onChange({ icon: name, iconSvg: svg, appIconData: undefined }); }} onImage={(data) => { thumbnailRequestRef.current += 1; setExtractingThumbnail(false); onChange({ icon: 'image', iconSvg: undefined, appIconData: data }); }} /></label>
       {kind === 'launch_app' && action.type === 'launch_app' ? <><button type="button" className="secondary-button app-icon-button" disabled={busy || extractingIcon || !app.trim()} onClick={() => void extractIcon(true)}>{extractingIcon ? 'Reading icon…' : button.appIconData && button.icon === 'app-icon' ? isWindowsShortcut ? 'Refresh shortcut icon' : 'Refresh app icon' : isWindowsShortcut ? 'Use shortcut icon' : 'Use app icon'}</button>{isWindowsShortcut && button.appIconData ? <button type="button" className="secondary-button app-icon-button" disabled={busy || extractingIcon} onClick={() => void extractIcon(false)}>Reset to app icon</button> : null}{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
       {kind === 'launch_file' && action.type === 'launch_file' ? <><button type="button" className="secondary-button app-icon-button" disabled={busy || extractingThumbnail || !filePath.trim()} onClick={() => void extractFileThumbnail(filePath)}>{extractingThumbnail ? 'Reading thumbnail…' : button.appIconData ? 'Refresh thumbnail' : 'Use file thumbnail'}</button>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
       {kind === 'launch_folder' && action.type === 'launch_folder' ? <><button type="button" className="secondary-button app-icon-button" disabled={busy || extractingThumbnail || !folderPath.trim()} onClick={() => void extractFileThumbnail(folderPath)}>{extractingThumbnail ? 'Reading icon…' : button.appIconData ? 'Refresh folder icon' : 'Use folder icon'}</button>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
@@ -2326,15 +2396,7 @@ function SequenceEditor({ steps, disabled, isMacos, onChange }: { steps: DeckSte
         <button type="button" className="sequence-order-button" aria-label={`Move step ${index + 1} down`} title="Move down" disabled={disabled || index === draft.length - 1} onClick={() => moveStep(index, 1)}><ChevronDown size={14} /></button>
         <button type="button" className="sequence-order-button sequence-remove-button" aria-label={`Remove step ${index + 1}`} title="Remove step" disabled={disabled || draft.length === 1} onClick={() => commit(draft.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={14} /></button>
       </div>
-      {step.type === 'hotkey' ? <label>Shortcut<input value={step.keys.join('+')} disabled={disabled} placeholder="CTRL+SHIFT+M" onChange={(event) => {
-        const next = [...draft];
-        next[index] = { type: 'hotkey', keys: event.target.value.toUpperCase().split('+').map((key) => key.trim()) };
-        setDraft(next);
-      }} onBlur={() => {
-        const keys = parseShortcut(step.keys.join('+'));
-        if (!keys) setError(`Step ${index + 1}: enter a valid shortcut such as CTRL+SHIFT+M.`);
-        else changeStep(index, { type: 'hotkey', keys });
-      }} /></label> : null}
+      {step.type === 'hotkey' ? <ShortcutField label="Shortcut" keys={step.keys} disabled={disabled} onChange={(keys) => changeStep(index, { type: 'hotkey', keys })} /> : null}
       {step.type === 'media' ? <label>Command<DeckSelect value={step.command} disabled={disabled} options={[
         ['play_pause', 'Play / Pause'], ['next_track', 'Next track'], ['previous_track', 'Previous track'], ['volume_up', 'Volume up'], ['volume_down', 'Volume down'], ['mute', 'Mute'],
       ].map(([value, label]) => ({ value, label }))} onChange={(value) => changeStep(index, { type: 'media', command: value as MediaCommand })} /></label> : null}
@@ -2365,16 +2427,6 @@ function SequenceEditor({ steps, disabled, isMacos, onChange }: { steps: DeckSte
   </div>;
 }
 
-function parseShortcut(value: string): string[] | null {
-  if (!value.trim()) return null;
-  const modifiers = new Set(['CTRL', 'ALT', 'SHIFT', 'META']);
-  const special = new Set(['SPACE', 'ENTER', 'TAB', 'ESCAPE', 'BACKSPACE', 'DELETE', 'HOME', 'END', 'PAGE_UP', 'PAGE_DOWN', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
-  const keys = value.toUpperCase().replace(/ /g, '').split('+');
-  if (keys.length < 2 || keys.length > 5 || keys.some((key) => !key) || keys.slice(0, -1).some((key) => !modifiers.has(key)) || new Set(keys.slice(0, -1)).size !== keys.length - 1) return null;
-  const last = keys[keys.length - 1];
-  if (!/^[A-Z0-9]$/.test(last) && !special.has(last) && !/^F([1-9]|1[0-2])$/.test(last)) return null;
-  return keys;
-}
 
 export default App;
 

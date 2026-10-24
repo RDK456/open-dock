@@ -7,13 +7,12 @@ import { invoke } from '@tauri-apps/api/core';
 // <html data-theme> and, for a designed look, <html data-look>.
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Theme = 'light' | 'dark';
-/** Classic is the plain light or dark design. The others are complete designs, each light or dark by nature. */
+/** Classic is the plain design. The others are complete designs. Every look comes in light and dark. */
 export type Look = 'classic' | 'studio' | 'atelier' | 'signal' | 'glass' | 'funk';
 
 const KEY = 'opendock.appearance';
 const LOOK_KEY = 'opendock.look';
 const THEME_COLOR = { light: '#ffffff', dark: '#09090b' } as const;
-const LOOK_SCHEME: Record<Exclude<Look, 'classic'>, Theme> = { studio: 'dark', atelier: 'light', signal: 'dark', glass: 'dark', funk: 'dark' };
 
 export function parseMode(value: unknown): ThemeMode {
   return value === 'light' || value === 'dark' ? value : 'system';
@@ -41,9 +40,9 @@ let mode: ThemeMode = readMode();
 let look: Look = readLook();
 const listeners = new Set<() => void>();
 
-// A designed look is light or dark by nature; Classic follows the light/dark choice.
-const themeNow = (): Theme => (look === 'classic' ? resolveTheme(mode) : LOOK_SCHEME[look]);
-const nativeMode = (): ThemeMode => (look === 'classic' ? mode : LOOK_SCHEME[look]);
+// Every look follows the light/dark choice.
+const themeNow = (): Theme => resolveTheme(mode);
+const nativeMode = (): ThemeMode => mode;
 
 function apply() {
   const theme = themeNow();
@@ -88,11 +87,11 @@ export const useTheme = (): Theme => useSyncExternalStore(subscribe, themeNow);
 const CHOICES: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
 const LOOKS: [Look, string, string][] = [
   ['classic', 'Classic', 'Plain keys in light or dark.'],
-  ['studio', 'Studio', 'A precise dark tool: an icon rail, hairlines, one violet accent and quick, quiet motion.'],
+  ['studio', 'Studio', 'A precise tool: an icon rail, hairlines, one violet accent and quick, quiet motion.'],
   ['atelier', 'Atelier', 'Editorial and warm: navigation across the top, serif headings, wide margins and slow fades.'],
-  ['signal', 'Signal', 'Black and white like a device: a floating dock, monospace capitals, a dot grid and one red dot.'],
+  ['signal', 'Signal', 'Monochrome like a device: a floating dock, monospace capitals, a dot grid and one red dot.'],
   ['glass', 'Glass', 'Frosted glass over an aurora.'],
-  ['funk', 'Funk', 'Neon keys with thick outlines and a hard shadow, on deep purple.'],
+  ['funk', 'Funk', 'Neon keys with thick outlines and a hard shadow.'],
 ];
 
 export function AppearanceSetting() {
@@ -105,12 +104,12 @@ export function AppearanceSetting() {
         {LOOKS.map(([value, label]) => <button key={value} type="button" role="radio" aria-checked={currentLook === value} className={currentLook === value ? 'transport-tab selected' : 'transport-tab'} onClick={() => setLook(value)}>{label}</button>)}
       </div>
     </section>
-    {currentLook === 'classic' ? <section className="device-navigation-setting appearance-setting">
+    <section className="device-navigation-setting appearance-setting">
       <div className="device-navigation-copy"><h2>Appearance</h2><p>Light, dark, or match this PC.</p></div>
       <div className="transport-tabs" role="radiogroup" aria-label="Appearance">
         {CHOICES.map(([value, label]) => <button key={value} type="button" role="radio" aria-checked={current === value} className={current === value ? 'transport-tab selected' : 'transport-tab'} onClick={() => setThemeMode(value)}>{label}</button>)}
       </div>
-    </section> : null}
+    </section>
   </>;
 }
 

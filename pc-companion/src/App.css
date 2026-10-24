@@ -137,7 +137,7 @@
   --hairline: #ffffffb3;
 }
 
-/* Designed looks. Each sits on its light or dark base (theme.tsx sets data-theme to match) and replaces what differs.
+/* Designed looks. Each sits on the light or dark base the user chose and replaces what differs.
    The --key-* tokens draw the deck's keys; tiled looks deal --tile-N blocks out to the keys in turn. The phone has
    the same looks in phone-app/src/theme-colors.ts. */
 :root[data-look="studio"] {
@@ -335,6 +335,177 @@
   --tile-5: #d9ccff; --tile-ink-5: #1a1033;
 }
 
+/* Each look's other half: the native blocks above are Studio, Signal, Glass and Funk in dark and Atelier in light;
+   these redraw them for the other choice. They replace everything their native block sets. */
+:root[data-look="studio"][data-theme="light"] {
+  --background: #f7f7f8;
+  --sidebar: #f7f7f8;
+  --card: #ffffff;
+  --card-raised: #f1f1f3;
+  --border: #e3e4e8;
+  --foreground: #0e0f11;
+  --muted: #4b4e56;
+  --subtle: #5b5f68;
+  --blue: #4b53d6;
+  --z700: #d6d8dd;
+  --z800: #e9eaee;
+  --z850: #eceef1;
+  --z900: #f1f2f4;
+  --z950: #fafafb;
+  --rail: #f7f7f8;
+  --rail-text: #0e0f11;
+  --rail-muted: #5b5f68;
+  --rail-hover: #ececf0;
+  --rail-selected: #e6e7ec;
+  --rail-selected-text: #0e0f11;
+  --brand: #5e66e8;
+  --accent: #4f57e0;
+  --accent-hover: #3f47cf;
+  --accent-text: #ffffff;
+  --hairline: #0000000f;
+  --key-bg: #ffffff;
+  --key-border: #0000001a;
+  --key-shadow: inset 0 -1px 0 #0000000a, 0 1px 2px #0000000f;
+  --key-shadow-hover: 0 0 0 1px #5e66e866, 0 10px 24px #0000001f;
+  --key-ink: #0e0f11;
+  --look-glow: #5e66e814;
+}
+:root[data-look="atelier"][data-theme="dark"] {
+  --background: #16130f;
+  --sidebar: #16130f;
+  --card: #1e1a15;
+  --card-raised: #26211b;
+  --border: #3a3228;
+  --foreground: #f3ece0;
+  --muted: #c2b6a2;
+  --subtle: #a99c87;
+  --blue: #8fb3d9;
+  --red: #f08a76;
+  --green: #8cc79a;
+  --star: #d9a441;
+  --z200: #ece4d6;
+  --z300: #d6cbb8;
+  --z700: #4a4034;
+  --z800: #2e2820;
+  --z850: #29241d;
+  --z900: #221d17;
+  --z950: #1a1612;
+  --rail: #16130f;
+  --rail-text: #f3ece0;
+  --rail-muted: #a99c87;
+  --rail-hover: #26211b;
+  --rail-selected: #16130f;
+  --rail-selected-text: #f3ece0;
+  --brand: #d2a86a;
+  --accent: #d2a86a;
+  --accent-hover: #e0bb83;
+  --accent-text: #16130f;
+  --hairline: #3a3228;
+  --shadow: #00000066;
+  --key-bg: #1e1a15;
+  --key-border: #463c2f;
+  --key-shadow: 0 1px 0 #0000004d;
+  --key-shadow-hover: 0 18px 34px -16px #000000b3;
+  --key-ink: #f3ece0;
+}
+:root[data-look="signal"][data-theme="light"] {
+  --background: #f2f2f2;
+  --sidebar: #f2f2f2;
+  --card: #ffffff;
+  --card-raised: #ebebeb;
+  --border: #d6d6d6;
+  --foreground: #000000;
+  --muted: #474747;
+  --subtle: #5c5c5c;
+  --blue: #1f5fbf;
+  --red: #c8102e;
+  --green: #1a1a1a;
+  --z300: #333333;
+  --z700: #cccccc;
+  --z800: #e0e0e0;
+  --z850: #e6e6e6;
+  --z900: #ebebeb;
+  --z950: #f7f7f7;
+  --rail: #ffffff;
+  --rail-text: #000000;
+  --rail-muted: #5c5c5c;
+  --rail-hover: #ebebeb;
+  --rail-selected: #000000;
+  --rail-selected-text: #ffffff;
+  --brand: #000000;
+  --accent: #e60012;
+  --accent-hover: #c4000f;
+  --accent-text: #ffffff;
+  --hairline: #d6d6d6;
+  --dot-off: #cccccc;
+  --key-bg: #ffffff;
+  --key-border: #d0d0d0;
+  --key-shadow-hover: inset 0 0 0 1px #000000;
+  --key-ink: #000000;
+  --look-dot: #00000021;
+}
+:root[data-look="glass"][data-theme="light"] {
+  --background: #eef1f8;
+  --sidebar: #f4f6fb;
+  --card: #ffffff;
+  --card-raised: #f0f2f8;
+  --border: #d9deea;
+  --foreground: #10131f;
+  --muted: #464c63;
+  --subtle: #575d75;
+  --z850: #e6e9f2;
+  --z950: #f7f8fc;
+  --rail: #f4f6fb;
+  --rail-text: #10131f;
+  --rail-muted: #575d75;
+  --rail-hover: #e6e9f2;
+  --rail-selected: #2b3770;
+  --rail-selected-text: #ffffff;
+  --accent: #3b4aa8;
+  --accent-hover: #2f3c8e;
+  --accent-text: #ffffff;
+  --key-bg: rgb(255 255 255 / 55%);
+  --key-border: rgb(255 255 255 / 85%);
+  --key-shadow: 0 8px 24px rgb(40 50 90 / 12%);
+  --key-shadow-hover: 0 12px 32px rgb(40 50 90 / 18%), inset 0 0 24px rgb(120 140 255 / 14%);
+  --key-ink: #10131f;
+  --aurora-1: rgb(94 220 170 / 35%);
+  --aurora-2: rgb(120 160 255 / 38%);
+  --aurora-3: rgb(255 140 200 / 30%);
+}
+:root[data-look="funk"][data-theme="light"] {
+  --background: #fff6e0;
+  --sidebar: #ffeec2;
+  --card: #fffaf0;
+  --card-raised: #fdeecf;
+  --border: #e6d3a8;
+  --foreground: #1a1033;
+  --muted: #4a3d6b;
+  --subtle: #5a4c7a;
+  --blue: #0067a3;
+  --red: #c2185b;
+  --green: #0f7a4f;
+  --star: #c77700;
+  --z850: #f6e4bd;
+  --z900: #fdeecf;
+  --z950: #fffaf0;
+  --rail: #ffeec2;
+  --rail-text: #1a1033;
+  --rail-muted: #4a3d6b;
+  --rail-hover: #fde3a7;
+  --rail-selected: #1a1033;
+  --rail-selected-text: #c6ff3d;
+  --brand: #6a2cf0;
+  --accent: #6a2cf0;
+  --accent-hover: #5a1fe0;
+  --accent-text: #ffffff;
+  --key-bg: #fffaf0;
+  --key-border: #1a1033;
+  --key-shadow: 0 5px 0 #1a1033;
+  --key-shadow-hover: 0 8px 0 #1a1033;
+  --key-ink: #1a1033;
+}
+
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--z700) transparent; }
 body { margin: 0; min-width: 760px; min-height: 100vh; background: var(--background); }
 button { font: inherit; }
@@ -511,6 +682,9 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .icon-picker-option { min-width: 0; min-height: 56px; padding: 5px 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 9px; }
 .icon-picker-option span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-picker-option svg { flex: none; color: var(--muted); }
+.icon-picker-heading { margin: 8px 2px 0; color: var(--subtle); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.icon-picker-grid.color-icons { max-height: 170px; }
+.icon-picker-option img { flex: none; }
 .icon-picker-auto:hover, .icon-picker-option:hover, .icon-picker-auto.selected, .icon-picker-option.selected { background: var(--z800); }
 .icon-picker-more { width: 100%; min-height: 30px; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .icon-picker-more:hover { background: var(--z800); color: var(--foreground); }
@@ -1207,3 +1381,17 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   [data-look] .content > *, [data-look] .deck-canvas > *, [data-look="signal"] .page-heading h1::after { animation: none; }
   [data-look="atelier"] .sidebar .nav-item::before { transition: none; }
 }
+/* The canvas in the phone's own proportions; upright, it stands as narrow as a phone. */
+.deck-canvas.phone-shaped { min-height: 0; align-content: stretch; }
+.deck-canvas.phone-shaped > .deck-button { min-height: 0; }
+.deck-canvas-wrap.phone-portrait .deck-canvas { width: min(100%, 440px); margin-inline: auto; }
+/* An image the user chose fills its key, with the label over it. */
+.deck-button-image-fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; pointer-events: none; }
+.deck-button:has(.deck-button-image-fill) strong, .deck-button:has(.deck-button-image-fill) small { position: relative; margin-top: auto; text-shadow: 0 1px 3px var(--shadow-strong), 0 0 2px var(--shadow-strong); }
+/* A shortcut is recorded by pressing it. */
+.shortcut-field { display: grid; gap: 6px; }
+.shortcut-field-label { color: var(--muted); font-size: 12px; }
+.shortcut-record { min-height: 38px; padding: 6px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 7px; background: var(--z950); color: var(--subtle); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.shortcut-record:hover:not(:disabled) { border-color: var(--z600); }
+.shortcut-record.recording { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--foreground); }
+.shortcut-record kbd { padding: 2px 7px; border: 1px solid var(--z700); border-bottom-width: 2px; border-radius: 5px; background: var(--z900); color: var(--foreground); font: 600 11px "IBM Plex Mono", ui-monospace, monospace; }

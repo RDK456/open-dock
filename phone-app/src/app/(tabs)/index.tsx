@@ -449,7 +449,7 @@ export default function DeckScreen() {
       } catch {
         if (alive && immersive) {
           setImmersive(false);
-          setFeedback('Landscape mode is unavailable on this device');
+          setFeedback('Full screen is unavailable on this device');
         }
       }
     };
@@ -499,10 +499,20 @@ export default function DeckScreen() {
     }, 2800);
   };
 
+  // Full screen: sideways moves between pages, up and down between profiles.
   const pageSwipeResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_, gesture) => !folder && Math.abs(gesture.dx) > 38 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4,
+    onMoveShouldSetPanResponder: (_, gesture) => !folder && (
+      (Math.abs(gesture.dx) > 38 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4) ||
+      (Math.abs(gesture.dy) > 38 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.4)),
     onPanResponderRelease: (_, gesture) => {
+      if (Math.abs(gesture.dy) > Math.abs(gesture.dx)) {
+        const profiles = deckConfig?.profiles ?? [];
+        const at = profiles.findIndex((profile) => profile.id === activeProfile?.id);
+        if (profiles.length < 2 || at < 0) return;
+        void selectProfile(profiles[(at + (gesture.dy < 0 ? 1 : -1) + profiles.length) % profiles.length].id);
+        return;
+      }
       const pages = activeProfile?.pages ?? [];
       if (pages.length < 2 || activePageIndex < 0) return;
       const nextIndex = (activePageIndex + (gesture.dx < 0 ? 1 : -1) + pages.length) % pages.length;
@@ -515,7 +525,6 @@ export default function DeckScreen() {
   const rows = surface?.rows ?? 2;
   const occupied = surface ? surfaceOccupancy(surface) : new Map<number, SurfaceItem>();
   const hasItems = occupied.size > 0;
-  const hasWidgets = (surface?.widgets.length ?? 0) > 0;
   const regularGap = 9;
   const [canvasIn] = useState(() => new Animated.Value(1));
   const immersiveScreenId = immersive ? folder?.id ?? activePage?.id ?? '' : '';
@@ -541,14 +550,15 @@ export default function DeckScreen() {
   const widgetKeyInset = 5;
   const immersiveSurfaceWidth = immersiveSize.width - 24;
   const immersiveSurfaceHeight = immersiveAvailableHeight - 24;
+  // Reported for every page, widgets or not: the desktop draws its preview in the same shape and orientation.
+  const portrait = !wide;
   useEffect(() => {
-    if (!hasWidgets) return;
     if (immersive) {
-      if (immersiveSurfaceWidth > 0 && immersiveSurfaceHeight > 0) reportWidgetSurface({ width: immersiveSurfaceWidth, height: immersiveSurfaceHeight, gap: immersiveGap, inset: widgetKeyInset, fixedRowHeight: null });
+      if (immersiveSurfaceWidth > 0 && immersiveSurfaceHeight > 0) reportWidgetSurface({ width: immersiveSurfaceWidth, height: immersiveSurfaceHeight, gap: immersiveGap, inset: widgetKeyInset, fixedRowHeight: null, portrait });
     } else if (regularGridWidth > 0) {
-      reportWidgetSurface({ width: regularGridWidth, height: 0, gap: regularGap, inset: widgetKeyInset, fixedRowHeight: regularCellHeight });
+      reportWidgetSurface({ width: regularGridWidth, height: 0, gap: regularGap, inset: widgetKeyInset, fixedRowHeight: regularCellHeight, portrait });
     }
-  }, [immersive, immersiveSurfaceHeight, immersiveSurfaceWidth, reportWidgetSurface, hasWidgets, regularGridWidth, regularCellHeight]);
+  }, [immersive, immersiveSurfaceHeight, immersiveSurfaceWidth, reportWidgetSurface, regularGridWidth, regularCellHeight, portrait]);
   const actionErrorText = actionError === 'accessibility_permission_required' ? 'Allow Open Dock in Mac Accessibility settings'
     : actionError === 'app_launch_failed' ? 'PC could not launch this app. Check its target path'
     : actionError === 'stale_revision' ? 'Deck changed. Wait for sync, then try again'
@@ -638,8 +648,8 @@ export default function DeckScreen() {
       return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {editing && !big && pins.includes(button.id) ? <View pointerEvents="none" style={styles.pinDot} /> : null}
-        {button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.iconStroke} />}
-        {big ? null : <Text style={[styles.keyLabel, { color: surfaceLook.ink, fontFamily: design.font, fontSize: design.labelSize, fontWeight: design.labelWeight, lineHeight: Math.round(design.labelSize * 1.2), letterSpacing: design.tracking ?? (design.tiles ? -0.4 : 0) }]} numberOfLines={2}>{design.caps ? label.toUpperCase() : label}</Text>}
+        {button.appIconData && button.icon === 'image' ? <Image source={{ uri: button.appIconData }} style={[StyleSheet.absoluteFill, { borderRadius: design.radius }]} resizeMode="cover" /> : button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.iconStroke} />}
+        {big ? null : <Text style={[styles.keyLabel, button.icon === 'image' && { marginTop: 'auto', textShadowColor: colors.scrim, textShadowRadius: 4 }, { color: surfaceLook.ink, fontFamily: design.font, fontSize: design.labelSize, fontWeight: design.labelWeight, lineHeight: Math.round(design.labelSize * 1.2), letterSpacing: design.tracking ?? (design.tiles ? -0.4 : 0) }]} numberOfLines={2}>{design.caps ? label.toUpperCase() : label}</Text>}
       </SpringKey>;
     });
   };
@@ -661,6 +671,7 @@ export default function DeckScreen() {
         </View>
         {showImmersiveTools ? <View style={styles.immersiveTools}>
           {folder ? <Pressable style={styles.immersiveExit} onPress={() => { closeFolder(); revealImmersiveTools(); }} accessibilityRole="button" accessibilityLabel="Close folder"><ChevronLeft size={19} color={colors.text} /></Pressable> : null}
+          {deckConfig && deckConfig.profiles.length > 1 ? <Text style={[styles.pageTabText, styles.pageTabTextActive]} numberOfLines={1} accessibilityHint="Swipe up or down for another profile">{activeProfile?.name}</Text> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.immersivePageTools}>
             {(activeProfile?.pages ?? []).map((page, index) => <Pressable key={page.id} onPress={() => { selectPage(page.id); revealImmersiveTools(); }} style={[styles.immersivePageButton, index === activePageIndex && styles.pageTabActive]} accessibilityRole="button" accessibilityLabel={`Show ${page.name} page`} accessibilityState={{ selected: index === activePageIndex }}>
               <Text style={[styles.pageTabText, index === activePageIndex && styles.pageTabTextActive]}>{page.name}</Text>
@@ -669,7 +680,7 @@ export default function DeckScreen() {
           <Pressable style={styles.immersiveExit} onPress={() => { setImmersive(false); setShowImmersiveTools(false); }} accessibilityRole="button" accessibilityLabel="Exit immersive mode"><Minimize2 size={19} color={colors.text} /></Pressable>
         </View> : null}
         <MediaToastView toast={mediaSource.toast} bottom={12} onSwitch={(player) => mediaSource.choose(player.id, player.name)} onDismiss={mediaSource.dismissToast} />
-        <PlayerSheet visible={mediaSource.sheetOpen} landscape state={mediaSource.players} onChoose={mediaSource.choose} onClose={mediaSource.closeSheet} />
+        <PlayerSheet visible={mediaSource.sheetOpen} landscape={wide} state={mediaSource.players} onChoose={mediaSource.choose} onClose={mediaSource.closeSheet} />
       </SafeAreaView>
       <PerfOverlay />
       {power.overlay}
@@ -733,7 +744,7 @@ export default function DeckScreen() {
       </View>
       <MediaToastView toast={mediaSource.toast} bottom={bottomClearance} onSwitch={(player) => mediaSource.choose(player.id, player.name)} onDismiss={mediaSource.dismissToast} />
       {editTarget ? <ButtonEditor key={editTarget.button?.id ?? `${editTarget.placement.row}-${editTarget.placement.column}`} target={editTarget} onClose={() => setEditTarget(null)} /> : null}
-      <PlayerSheet visible={mediaSource.sheetOpen} landscape={false} state={mediaSource.players} onChoose={mediaSource.choose} onClose={mediaSource.closeSheet} />
+      <PlayerSheet visible={mediaSource.sheetOpen} landscape={wide} state={mediaSource.players} onChoose={mediaSource.choose} onClose={mediaSource.closeSheet} />
       <PerfOverlay />
       {power.overlay}
     </SafeAreaView>
