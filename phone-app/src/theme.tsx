@@ -1,9 +1,9 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { Appearance, useColorScheme } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
-import { darkColors, keyLook, lightColors, LOOK_THEMES, parseLook, parseMode, type Colors, type KeyLook, type Look, type Scheme, type ThemeMode } from './theme-colors';
+import { darkColors, headingLook, keyLook, lightColors, LOOK_THEMES, parseLook, parseMode, surfaceLook, type Colors, type HeadingLook, type KeyLook, type Look, type Scheme, type SurfaceLook, type ThemeMode } from './theme-colors';
 
-export { LOOKS, type Colors, type KeyLook, type Look, type Scheme, type ThemeMode } from './theme-colors';
+export { LOOKS, type Colors, type HeadingLook, type KeyLook, type Look, type Scheme, type SurfaceLook, type ThemeMode } from './theme-colors';
 
 // Light, dark, or the phone's own setting, and the deck's look. Both are kept on this phone only. They are read
 // synchronously when the app starts, so the first frame already has the right look, and the light/dark result is
@@ -43,8 +43,8 @@ export function setLook(next: Look) {
 export const useThemeMode = (): ThemeMode => useSyncExternalStore(subscribe, () => mode);
 export const useLook = (): Look => useSyncExternalStore(subscribe, () => look);
 
-/** The look in use now: its colors, whether it is light or dark (never system), and how deck keys are drawn. */
-export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; look: Look; key: KeyLook } {
+/** The look in use now: its colors, whether it is light or dark (never system), how deck keys, titles, cards and the media rail are drawn. */
+export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; look: Look; key: KeyLook; heading: HeadingLook; surface: SurfaceLook } {
   const chosen = useThemeMode();
   const current = useLook();
   const system = useColorScheme();
@@ -52,7 +52,7 @@ export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; l
     const designed = current === 'classic' ? null : LOOK_THEMES[current];
     const scheme: Scheme = designed?.scheme ?? (chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen);
     const colors = designed?.colors ?? (scheme === 'light' ? lightColors : darkColors);
-    return { colors, scheme, mode: chosen, look: current, key: keyLook(current, colors) };
+    return { colors, scheme, mode: chosen, look: current, key: keyLook(current, colors), heading: headingLook(current), surface: surfaceLook(current) };
   }, [chosen, current, system]);
 }
 

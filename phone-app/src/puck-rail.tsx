@@ -38,6 +38,7 @@ export function usePins(profileId: string | undefined) {
 
 function Puck({ size, accent, morph, onPress, label, disabled, children }: { size: number; accent?: boolean; morph?: boolean; onPress: () => void; label: string; disabled?: boolean; children: ReactNode }) {
   const styles = useStyles(makeStyles);
+  const { surface } = useTheme();
   const [scale] = useState(() => new Animated.Value(1));
   // The play puck morphs from a circle into a soft square while music plays (JS-driven: radius can't run natively).
   const [shape] = useState(() => new Animated.Value(morph ? 1 : 0));
@@ -47,7 +48,7 @@ function Puck({ size, accent, morph, onPress, label, disabled, children }: { siz
   const to = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 9 }).start();
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Animated.View style={[styles.puck, accent && styles.accent, disabled && styles.off, { width: size, height: size, borderRadius: shape.interpolate({ inputRange: [0, 1], outputRange: [size / 2, size * 0.3] }) }]}>
+      <Animated.View style={[styles.puck, accent && styles.accent, disabled && styles.off, { width: size, height: size, borderWidth: surface.border, borderBottomWidth: surface.base ? surface.border + 2 : surface.border, borderRadius: shape.interpolate({ inputRange: [0, 1], outputRange: [size * surface.puck, size * Math.min(surface.puck, 0.3)] }) }]}>
         <Pressable style={styles.hit} onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }} onPressIn={() => to(0.88)} onPressOut={() => to(1)} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}>
           {children}
         </Pressable>
@@ -69,7 +70,7 @@ export function PuckRail({ pinned, playing, connected, renderIcon, onPress, send
   sendMedia: (command: DeckMediaCommand) => void;
   vertical?: boolean;
 }) {
-  const { colors } = useTheme();
+  const { colors, surface } = useTheme();
   const styles = useStyles(makeStyles);
   const left = pinned.slice(0, 2);
   const right = pinned.slice(2, 4);
@@ -77,7 +78,7 @@ export function PuckRail({ pinned, playing, connected, renderIcon, onPress, send
   const small = vertical ? 38 : 50;
   const pin = (button: DeckButton) => <Puck key={button.id} size={small} onPress={() => onPress(button)} label={button.label} disabled={!connected}>{renderIcon(button, 20)}</Puck>;
   return (
-    <View style={[styles.rail, vertical && styles.vertical]}>
+    <View style={[styles.rail, vertical && styles.vertical, { borderRadius: surface.railRadius, borderWidth: surface.border, borderBottomWidth: surface.base ?? surface.border }]}>
       {left.map(pin)}
       <Puck size={small} onPress={() => sendMedia('previous_track')} label="Previous track" disabled={!connected}><SkipBack size={20} color={colors.text} /></Puck>
       <Puck size={vertical ? 48 : 66} accent morph={playing} onPress={() => sendMedia('play_pause')} label={playing ? 'Pause' : 'Play'} disabled={!connected}>

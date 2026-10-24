@@ -415,7 +415,8 @@ export default function DeckScreen() {
   const [openFolders, setOpenFolders] = useState<Record<string, string>>({});
   const [regularGridWidth, setRegularGridWidth] = useState(0);
   const [regularGridHeight, setRegularGridHeight] = useState(0);
-  const bottomClearance = useTabBarClearance();
+  // The deck fills the screen down to the dock (or the edge, beside a rail): no breathing room under it.
+  const bottomClearance = useTabBarClearance(0);
   const window = useWindowDimensions();
   // Sideways there is no height to spare, so the rail stands beside the card instead of under it.
   const wide = window.width > window.height;
@@ -706,7 +707,7 @@ export default function DeckScreen() {
         {editing ? <Text style={styles.editHint}>Tap a key to change it, + to add one, long-press to pin it to the rail.</Text> : null}
         <View style={[styles.deckRow, wide && styles.deckRowWide]}>
         <View style={styles.stackArea}>
-          {surface ? <DeckStack pages={(folder ? [{ id: folder.id, name: folder.name }] : activeProfile?.pages ?? [])} index={folder ? 0 : Math.max(0, activePageIndex)} onChange={(at) => { const page = activeProfile?.pages[at]; if (page && !folder) void selectPage(page.id); }}>
+          {surface ? <DeckStack peek={wide ? 5 : 12} pages={(folder ? [{ id: folder.id, name: folder.name }] : activeProfile?.pages ?? [])} index={folder ? 0 : Math.max(0, activePageIndex)} onChange={(at) => { const page = activeProfile?.pages[at]; if (page && !folder) void selectPage(page.id); }}>
             <ScrollView scrollEnabled={fitCellHeight < 54} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }} onLayout={(event) => {
               const height = event.nativeEvent.layout.height;
               setRegularGridHeight((current) => Math.abs(current - height) < 0.5 ? current : height);
@@ -825,7 +826,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 4, paddingRight: 8 },
   backText: { flexShrink: 1, maxWidth: 140, color: colors.muted, fontSize: 14 },
   grid: { position: 'relative' },
-  key: { minHeight: 100, borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, padding: 11, justifyContent: 'space-between' },
+  key: { borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, padding: 11, justifyContent: 'space-between' },
   emptyKey: { borderStyle: 'dashed', backgroundColor: 'transparent', opacity: 0.45 },
   appIcon: { width: 23, height: 23 },
   keyDisabled: { opacity: 0.52 },

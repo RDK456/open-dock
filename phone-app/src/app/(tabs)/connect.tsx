@@ -35,7 +35,7 @@ function decodePairingCode(data: string): PcConnection | null {
 }
 
 export default function ConnectScreen() {
-  const { colors } = useTheme();
+  const { colors, heading } = useTheme();
   const styles = useStyles(makeStyles);
   const { connection, pairedDevices, status, protocolError, connect, disconnect, removePairedDevice } = usePcConnection();
   const bottomClearance = useTabBarClearance();
@@ -148,7 +148,7 @@ export default function ConnectScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Connect</Text>
+          <Text style={[styles.title, heading]}>Connect</Text>
           <Text style={styles.description}>Pair this phone with the Open Dock app running on your PC.</Text>
 
           <View style={[styles.statusCard, connected ? styles.statusGood : connecting ? styles.statusPending : styles.statusIdle]}>

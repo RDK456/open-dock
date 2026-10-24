@@ -12,7 +12,7 @@ import { useTabBarClearance } from '../../tab-inset';
 const EXAMPLES = ['Open Spotify', 'Volume up', 'Next song', 'Search for weather', 'Type hello', 'Lock the PC', 'Take a screenshot', 'Open youtube.com'];
 
 export default function VoiceScreen() {
-  const { colors } = useTheme();
+  const { colors, heading } = useTheme();
   const styles = useStyles(makeStyles);
   const bottomClearance = useTabBarClearance();
   const { status, sendVoice } = usePcConnection();
@@ -64,7 +64,7 @@ export default function VoiceScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Wallpaper />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Voice</Text>
+        <Text style={[styles.title, heading]}>Voice</Text>
         <Text style={styles.subtitle}>{!connected ? 'Connect to your PC to use voice commands.' : listening ? 'Listening. Say the command.' : handsFree.enabled ? `Say “${handsFree.phrase}” and a command, or tap the mic.` : 'Tap the mic and say what the PC should do.'}</Text>
 
         <View style={styles.micArea}>

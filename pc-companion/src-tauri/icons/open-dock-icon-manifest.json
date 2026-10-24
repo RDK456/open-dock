@@ -1,8 +1,0 @@
-{
-  "default": "open-dock.svg",
-  "bg_color": "#f4c22b",
-  "android_bg": "open-dock-android-background.svg",
-  "android_fg": "open-dock-android-foreground.svg",
-  "android_fg_scale": 100,
-  "android_monochrome": "open-dock-android-monochrome.svg"
-}

@@ -2,9 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
 import * as Haptics from 'expo-haptics';
-import { useStyles, type Colors } from './theme';
+import { useStyles, useTheme, type Colors } from './theme';
 
-const PEEK = 12;
 const STYLES = ['Fling', 'Slide', 'Flip', 'Zoom'] as const;
 type SwipeStyle = (typeof STYLES)[number];
 
@@ -13,8 +12,11 @@ type SwipeStyle = (typeof STYLES)[number];
  * Swipe the top card sideways to deal the next page, in one of four styles (tap the style chip to change it).
  * Any other page change, like opening a folder, zooms the new card in.
  */
-export function DeckStack({ pages, index, onChange, children }: { pages: { id: string; name: string }[]; index: number; onChange: (next: number) => void; children: ReactNode }) {
+export function DeckStack({ pages, index, onChange, peek = 12, children }: { pages: { id: string; name: string }[]; index: number; onChange: (next: number) => void; peek?: number; children: ReactNode }) {
   const styles = useStyles(makeStyles);
+  const { surface } = useTheme();
+  // The look's corners and edges; Funk's thick bottom edge stands in for a hard shadow.
+  const edge = { borderRadius: surface.radius, borderWidth: surface.border, borderBottomWidth: surface.base ?? surface.border };
   const [x] = useState(() => new Animated.Value(0));
   const [rise] = useState(() => new Animated.Value(1));
   const [enterFrom] = useState(() => new Animated.Value(0));
@@ -89,7 +91,7 @@ export function DeckStack({ pages, index, onChange, children }: { pages: { id: s
     Fling: [
       { translateX: x },
       { rotate: x.interpolate({ inputRange: [-400, 0, 400], outputRange: ['-7deg', '0deg', '7deg'], extrapolate: 'clamp' }) },
-      { translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [PEEK * 2, 0] }) },
+      { translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [peek * 2, 0] }) },
       { scale: rise.interpolate({ inputRange: [0, 1], outputRange: [0.93, 1] }) },
     ],
     Slide: [{ translateX: Animated.add(x, Animated.multiply(Animated.subtract(1, rise), enterFrom)) }],
@@ -107,18 +109,18 @@ export function DeckStack({ pages, index, onChange, children }: { pages: { id: s
   const fade = swipe === 'Zoom' || swipe === 'Flip' ? Animated.multiply(leaving.interpolate({ inputRange: [0, 1], outputRange: [1, 0.2] }), rise.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] })) : 1;
 
   return (
-    <View style={[styles.wrap, { paddingTop: PEEK * behind.length + 4 }]} onLayout={(event) => { width.current = event.nativeEvent.layout.width; setCardWidth(width.current); }}>
-      {behind.map((page, depth) => <View key={page.id} pointerEvents="none" style={[styles.card, styles.ghost, { top: PEEK * (behind.length - 1 - depth), transform: [{ scale: 1 - 0.035 * (depth + 1) }], opacity: 0.55 - depth * 0.18 }]}>
+    <View style={[styles.wrap, { paddingTop: peek * behind.length + 4 }]} onLayout={(event) => { width.current = event.nativeEvent.layout.width; setCardWidth(width.current); }}>
+      {behind.map((page, depth) => <View key={page.id} pointerEvents="none" style={[styles.card, edge, styles.ghost, { top: peek * (behind.length - 1 - depth), transform: [{ scale: 1 - 0.035 * (depth + 1) }], opacity: 0.55 - depth * 0.18 }]}>
         <Text style={styles.ghostName} numberOfLines={1}>{page.name}</Text>
       </View>).reverse()}
-      <Animated.View style={[styles.card, styles.top, { opacity: Animated.multiply(fade, zoomIn), transform: [...motion[swipe], { scale: zoomScale }] as never }]} {...responder.panHandlers}>
+      <Animated.View style={[styles.card, edge, styles.top, !surface.lift && styles.flat, { opacity: Animated.multiply(fade, zoomIn), transform: [...motion[swipe], { scale: zoomScale }] as never }]} {...responder.panHandlers}>
         <View style={styles.cardHead}>
-          <Text style={styles.pageName} numberOfLines={1}>{pages[index]?.name}</Text>
-          {pages.length > 1 ? <Pressable style={styles.styleChip} onPress={cycle} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Swipe animation: ${swipe}. Tap to change.`}>
+          <Text style={[styles.pageName, surface.title]} numberOfLines={1}>{pages[index]?.name}</Text>
+          {pages.length > 1 ? <Pressable style={[styles.styleChip, { borderRadius: surface.chipRadius }]} onPress={cycle} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Swipe animation: ${swipe}. Tap to change.`}>
             <Text style={styles.styleChipText}>{swipe}</Text>
           </Pressable> : null}
           {pages.length > 1 ? <View style={styles.pips} accessibilityLabel={`Page ${index + 1} of ${pages.length}`}>
-            {pages.map((page, at) => <View key={page.id} style={[styles.pip, at === index && styles.pipOn]} />)}
+            {pages.map((page, at) => <View key={page.id} style={[styles.pip, at === index && styles.pipOn, { height: surface.pip.size, width: at === index ? surface.pip.on : surface.pip.size, borderRadius: surface.pip.radius }]} />)}
           </View> : null}
         </View>
         <View style={styles.body}>{children}</View>
@@ -140,5 +142,6 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   pips: { flexDirection: 'row', gap: 5 },
   pip: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.borderStrong },
   pipOn: { width: 18, backgroundColor: colors.accent },
+  flat: { shadowOpacity: 0, elevation: 0 },
   body: { flex: 1 },
 });

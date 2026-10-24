@@ -238,6 +238,53 @@ export function keyLook(look: Look, colors: Colors): KeyLook {
   }
 }
 
+/** A screen title's type in a look, as on the PC: tight sans, serif display, or spaced monospace capitals. */
+export type HeadingLook = { fontFamily?: string; fontSize: number; fontWeight: '400' | '500' | '600' | '700' | '800'; letterSpacing: number; textTransform?: 'uppercase' };
+
+/** The deck's page card and media rail in a look: their corners, edges, lift, the page title's type and the page pips. */
+export type SurfaceLook = {
+  radius: number;
+  border: number;
+  /** A thicker bottom edge, Funk's hard drop shadow (Android draws no offset shadows). */
+  base?: number;
+  /** A soft shadow under the top card. */
+  lift: boolean;
+  title: HeadingLook;
+  chipRadius: number;
+  pip: { size: number; on: number; radius: number };
+  railRadius: number;
+  /** Media pucks' corner as a share of their size: 0.5 is round. */
+  puck: number;
+};
+
+export function surfaceLook(look: Look): SurfaceLook {
+  switch (look) {
+    case 'studio':
+      return { radius: 14, border: 1, lift: false, title: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 }, chipRadius: 6, pip: { size: 5, on: 14, radius: 3 }, railRadius: 14, puck: 0.26 };
+    case 'atelier':
+      return { radius: 4, border: 1, lift: false, title: { fontFamily: 'serif', fontSize: 24, fontWeight: '400', letterSpacing: -0.3 }, chipRadius: 2, pip: { size: 2, on: 22, radius: 0 }, railRadius: 4, puck: 0.08 };
+    case 'signal':
+      return { radius: 20, border: 1, lift: false, title: { fontFamily: 'monospace', fontSize: 12, fontWeight: '500', letterSpacing: 2.2, textTransform: 'uppercase' }, chipRadius: 999, pip: { size: 4, on: 4, radius: 0 }, railRadius: 999, puck: 0.5 };
+    case 'funk':
+      return { radius: 22, border: 3, base: 7, lift: false, title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 }, chipRadius: 10, pip: { size: 9, on: 22, radius: 5 }, railRadius: 24, puck: 0.32 };
+    case 'glass':
+      return { radius: 28, border: 1, lift: true, title: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 }, chipRadius: 11, pip: { size: 6, on: 18, radius: 3 }, railRadius: 999, puck: 0.5 };
+    default:
+      return { radius: 28, border: 1, lift: true, title: { fontSize: 17, fontWeight: '700', letterSpacing: 0 }, chipRadius: 11, pip: { size: 6, on: 18, radius: 3 }, railRadius: 999, puck: 0.5 };
+  }
+}
+
+export function headingLook(look: Look): HeadingLook {
+  switch (look) {
+    case 'studio': return { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 };
+    case 'atelier': return { fontFamily: 'serif', fontSize: 30, fontWeight: '400', letterSpacing: -0.4 };
+    case 'signal': return { fontFamily: 'monospace', fontSize: 16, fontWeight: '500', letterSpacing: 2.4, textTransform: 'uppercase' };
+    case 'glass': return { fontSize: 26, fontWeight: '700', letterSpacing: -0.6 };
+    case 'funk': return { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 };
+    default: return { fontSize: 23, fontWeight: '600', letterSpacing: -0.3 };
+  }
+}
+
 /** A button icon the PC saved as SVG was saved in the dark deck's light ink: it takes the theme's ink. */
 export function inkIcon(svg: string, scheme: Scheme): string {
   return scheme === 'light' ? inkIconAs(svg, '#18181b') : svg;

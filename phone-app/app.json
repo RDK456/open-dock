@@ -21,7 +21,7 @@
     "android": {
       "package": "app.opendock.phone",
       "adaptiveIcon": {
-        "backgroundColor": "#f4c22b",
+        "backgroundColor": "#0b0b0b",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },

@@ -32,7 +32,7 @@ const centroid = (event: GestureResponderEvent) => {
 };
 
 export default function TouchScreen() {
-  const { colors } = useTheme();
+  const { colors, heading } = useTheme();
   const styles = useStyles(makeStyles);
   const router = useRouter();
   const focused = useIsFocused();
@@ -174,7 +174,7 @@ export default function TouchScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Wallpaper />
       <View style={styles.header}>
-        <Text style={styles.title}>Touch</Text>
+        <Text style={[styles.title, heading]}>Touch</Text>
         {wide ? null : <Text style={styles.subtitle}>{connected ? signing ? 'Sign with your finger, then paste it on the PC' : 'One finger moves · tap clicks · two fingers scroll · pinch zooms · two-finger tap right-clicks' : 'Connect to a PC to use the touchpad'}</Text>}
       </View>
 
