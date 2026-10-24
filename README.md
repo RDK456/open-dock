@@ -2,10 +2,6 @@
 
 Phone control deck and local PC companion.
 
-## Credits
-
-Open Dock is a modified fork of [Freeze](https://github.com/naveen-devang/Freeze) by [Naveen Devang](https://github.com/naveen-devang), who wrote the original phone deck and PC companion. All credit for the original design and code goes to them. This fork adds its own looks (Studio, Atelier, Signal, Glass, Funk) with per-look navigation, hands-free "hey dock" voice control on the phone and PC, a new icon, and other changes; see the commit history for everything that differs. Like the original, it is licensed under the GNU GPL v3 (see [LICENSE](LICENSE)).
-
 ## Download
 
 Get the latest installers from the [Releases page](https://github.com/RDK456/open-dock/releases/latest). After the first install, Open Dock updates itself.
