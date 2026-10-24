@@ -453,26 +453,44 @@ pub(super) fn parse(said: &str) -> Vec<Intent> {
     vec![whole.unwrap_or(Intent::Unknown(text))]
 }
 
-/// The name that best matches what was said: exact, then starts with, then a whole word, then contains.
+/// The name that best matches what was said: exact, then starts with, then a whole word, then contains. With
+/// `loose` ("open …" was said), last a name that sounds alike once the spaces are gone: recognizers split a name
+/// they don't know into words ("spot if i", "spot this fy" for Spotify), more so with an accent.
 pub(super) fn best_match<'a>(name: &str, candidates: impl Iterator<Item = (&'a str, &'a str)>, loose: bool) -> Option<&'a str> {
     let want = name.to_lowercase();
+    let squash = |text: &str| sound(&text.chars().filter(|c| c.is_alphanumeric()).collect::<String>());
+    let want_sound = squash(&want);
     let rank = |candidate: &str| {
         let candidate = candidate.to_lowercase();
         if candidate == want {
-            0
+            Some(0)
         } else if candidate.starts_with(&format!("{want} ")) || candidate.starts_with(&want) {
-            1
+            Some(1)
         } else if candidate.split(|c: char| !c.is_alphanumeric()).any(|word| word == want) {
-            2
+            Some(2)
         } else if loose && want.len() >= 3 && candidate.contains(&want) {
-            3
+            Some(3)
+        } else if loose && want_sound.len() >= 4 {
+            // The whole name or its first word: at most a third of its letters off, or all of them, in order, among
+            // a few extra ones ("spotthisfy").
+            let first = candidate.split_whitespace().next().unwrap_or_default();
+            let within = |target: &str| {
+                let mut heard = want_sound.chars();
+                target.chars().all(|letter| heard.any(|c| c == letter)) && want_sound.len() * 2 <= target.len() * 3
+            };
+            [squash(&candidate), squash(first)]
+                .iter()
+                .filter(|target| target.len() >= 4)
+                .map(|target| (edit_distance(&want_sound, target), target))
+                .filter(|(distance, target)| distance * 3 <= target.len() || within(target))
+                .map(|(distance, _)| 10 + distance)
+                .min()
         } else {
-            9
+            None
         }
     };
     candidates
-        .map(|(candidate, id)| (rank(candidate), candidate.len(), id))
-        .filter(|(rank, _, _)| *rank < 9)
+        .filter_map(|(candidate, id)| rank(candidate).map(|rank| (rank, candidate.len(), id)))
         .min_by_key(|(rank, len, _)| (*rank, *len))
         .map(|(_, _, id)| id)
 }
@@ -605,6 +623,12 @@ mod tests {
         assert_eq!(best_match("word", list(), true), Some("e"));
         assert_eq!(best_match("chrome", list(), true), None);
         assert_eq!(best_match("tify", list(), false), None);
+        // Names split into sound-alike words.
+        assert_eq!(best_match("spot if i", list(), true), Some("a"));
+        assert_eq!(best_match("spot this fy", list(), true), Some("a"));
+        assert_eq!(best_match("word pad", list(), true), Some("d"));
+        assert_eq!(best_match("spot if i", list(), false), None);
+        assert_eq!(best_match("notepad", list(), true), None);
     }
 
     #[test]

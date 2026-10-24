@@ -93,6 +93,8 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
   }, [showIsland]);
 
   const listening = useRef(false);
+  // Until the recognizer says it has no Indian English; then the phone's own language.
+  const lang = useRef<string | undefined>('en-IN');
   // The latest partial transcript; some recognizers end the session without ever sending it as final.
   const pending = useRef('');
   const [hearing, setHearing] = useState(false);
@@ -106,6 +108,8 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     const once = mode.current === 'once';
     pending.current = '';
     ExpoSpeechRecognitionModule.start({
+      // Indian English hears Indian accents far better than the phone's default (US) English.
+      lang: lang.current,
       // Partial results are what Android 12 and older send; see `pending`.
       interimResults: true,
       // Before Android 13 "continuous" only stretches the silence timeout, and the session then ends in a
@@ -178,6 +182,9 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
           mode.current = 'off';
           setHearing(false);
           setError('Open Dock needs the microphone. Allow it in Settings, under Permissions.');
+        } else if (event.error === 'language-not-supported' && lang.current) {
+          // `end` follows and starts the next session in the phone's own language.
+          lang.current = undefined;
         } else if (event.error === 'language-not-supported' || event.error === 'audio-capture') {
           setError(`Speech recognition is not available (${event.error}). Type the command instead.`);
         }
