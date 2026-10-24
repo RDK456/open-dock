@@ -353,7 +353,7 @@ assert.equal(pathaanText?.kind === 'plain' && pathaanText.versions?.[0].entries,
 
 // Reproduce LRCLIB rejecting Android's generic OkHttp identity, through the real lookup and retries.
 const originalFetch = globalThis.fetch;
-const clientUserAgent = 'Open Dock/1.0 (https://github.com/naveen-devang/Open Dock)';
+const clientUserAgent = 'Open Dock/1.0 (https://github.com/RDK456/open-dock)';
 let transportUserAgent = 'okhttp/4.9.2';
 const requests: { path: string; headers: Headers }[] = [];
 globalThis.fetch = async (input, init) => {
@@ -388,7 +388,7 @@ try {
   assert.deepEqual(requests.map((request) => request.path), ['/api/get', '/api/search']);
   for (const { headers } of requests) {
     assert.equal(headers.get('User-Agent'), clientUserAgent);
-    assert.equal(headers.get('Lrclib-Client'), 'Open Dock (https://github.com/naveen-devang/Open Dock)');
+    assert.equal(headers.get('Lrclib-Client'), 'Open Dock (https://github.com/RDK456/open-dock)');
   }
 
   // Without the Android opt-in, iOS and browser requests retain their transport's own User-Agent.

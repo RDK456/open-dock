@@ -7,7 +7,7 @@ import { useStyles, type Colors } from './theme';
 
 // Android only: Open Dock reads the latest GitHub release and hands its APK to Android's installer,
 // which refuses any APK not signed with Open Dock's release key. iOS updates come from Apple.
-const RELEASES = 'https://github.com/naveen-devang/Open Dock/releases/latest/download';
+const RELEASES = 'https://github.com/RDK456/open-dock/releases/latest/download';
 const APK_URL = `${RELEASES}/OpenDock.apk`;
 const DAY = 24 * 60 * 60 * 1000;
 const FLAG_GRANT_READ_URI_PERMISSION = 1;

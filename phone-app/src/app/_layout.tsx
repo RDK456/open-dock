@@ -9,7 +9,7 @@ import { setLyricsUserAgent } from '../lyrics';
 import { useTheme } from '../theme';
 
 if (Platform.OS === 'android') {
-  setLyricsUserAgent('Open Dock/1.0 (https://github.com/naveen-devang/Open Dock)');
+  setLyricsUserAgent('Open Dock/1.0 (https://github.com/RDK456/open-dock)');
 }
 
 export default function RootLayout() {
