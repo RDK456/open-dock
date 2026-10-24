@@ -64,5 +64,16 @@ class KeepAliveModule : Module() {
       appContext.reactContext?.let { context -> context.stopService(Intent(context, KeepAliveService::class.java)) }
       Unit
     }
+
+    // Delta updates (see DeltaPatch): the installed APK's SHA-256, and the new APK rebuilt from it and a patch.
+    AsyncFunction("installedApkSha256") {
+      val context = appContext.reactContext ?: throw IllegalStateException("no app context")
+      DeltaPatch.sha256(java.io.File(context.applicationInfo.sourceDir))
+    }
+
+    AsyncFunction("applyApkPatch") { patchPath: String, outPath: String ->
+      val context = appContext.reactContext ?: throw IllegalStateException("no app context")
+      DeltaPatch.apply(java.io.File(context.applicationInfo.sourceDir), java.io.File(patchPath.removePrefix("file://")), java.io.File(outPath.removePrefix("file://")))
+    }
   }
 }

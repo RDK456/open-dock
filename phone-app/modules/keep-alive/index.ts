@@ -13,6 +13,8 @@ const native = Platform.OS === 'android' ? requireOptionalNativeModule<{
   requestOverlayPermission(): void;
   showIsland(state: string, text: string): void;
   hideIsland(): void;
+  installedApkSha256(): Promise<string>;
+  applyApkPatch(patchPath: string, outPath: string): Promise<string>;
 }>('KeepAlive') : null;
 
 export function startKeepAlive(title: string, text: string, microphone: boolean) {
@@ -52,4 +54,15 @@ export function setIsland(state: IslandState, text = '') {
 
 export function askToRunUnrestricted() {
   try { native?.requestIgnoreBatteryOptimizations(); } catch { /* the phone has no such screen */ }
+}
+
+/** Delta updates: the installed APK's SHA-256, or null where it can't be read (then the full APK is used). */
+export async function installedApkSha256(): Promise<string | null> {
+  try { return native ? await native.installedApkSha256() : null; } catch { return null; }
+}
+
+/** Rebuilds the new APK at `outPath` from the installed one and the patch; resolves to its SHA-256. */
+export async function applyApkPatch(patchPath: string, outPath: string): Promise<string> {
+  if (!native) throw new Error('no native module');
+  return native.applyApkPatch(patchPath, outPath);
 }

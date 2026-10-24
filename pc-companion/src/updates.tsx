@@ -5,6 +5,8 @@ import { version } from "../package.json";
 
 // Open Dock checks GitHub's latest release (tauri.conf.json → plugins.updater), downloads in the
 // background, and waits for Restart because a restart drops connected phones for a few seconds.
+// On Windows it first asks for a delta update (src-tauri/src/delta.rs): only a patch for the installed exe is
+// downloaded. Without one (other platforms, an older install, a failed patch) the full installer is used.
 export type UpdateState =
   | { kind: "idle" | "checking" }
   | { kind: "current"; checkedAt: number }
@@ -19,13 +21,19 @@ export function useUpdater() {
   const [state, setState] = useState<UpdateState>({ kind: "idle" });
   const [auto, setAutoState] = useState(() => { try { return localStorage.getItem(AUTO_KEY) !== "off"; } catch { return true; } });
   const busy = useRef(false);
-  const ready = useRef<Update | null>(null);
+  const ready = useRef<Update | "delta" | null>(null);
 
   const checkNow = useCallback(async () => {
     if (busy.current || ready.current) return;
     busy.current = true;
     setState({ kind: "checking" });
     try {
+      const delta = await invoke<{ version: string; notes: string } | null>("download_delta_update").catch(() => null);
+      if (delta) {
+        ready.current = "delta";
+        setState({ kind: "ready", version: delta.version, notes: delta.notes });
+        return;
+      }
       const update = await check();
       if (!update) { setState({ kind: "current", checkedAt: Date.now() }); return; }
       let total = 0, done = 0, shown = -1;
@@ -51,7 +59,11 @@ export function useUpdater() {
 
   // On Windows install() hands over to the installer, which closes and reopens Open Dock itself.
   const restart = useCallback(async () => {
-    try { await ready.current?.install(); await invoke("restart_app"); }
+    try {
+      if (ready.current === "delta") { await invoke("install_delta_update"); return; }
+      await ready.current?.install();
+      await invoke("restart_app");
+    }
     catch (error) { setState({ kind: "error", message: String(error) }); }
   }, []);
 

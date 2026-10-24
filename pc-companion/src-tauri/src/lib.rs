@@ -30,6 +30,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
 mod adb;
+mod delta;
 mod icon_png;
 mod island;
 mod media_players;
@@ -5073,6 +5074,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
+            delta::download_delta_update,
+            delta::install_delta_update,
             connection_info,
             deck_config,
             list_open_dock_plugins,
@@ -5104,6 +5107,7 @@ pub fn run() {
             arm_voice
         ])
         .setup(move |app| {
+            delta::remove_replaced_exe();
             let config_dir = app.path().app_config_dir()?;
             fs::create_dir_all(&config_dir)?;
             adb::init(&config_dir);

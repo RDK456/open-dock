@@ -3,20 +3,26 @@ import { AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from '
 import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { startActivityAsync } from 'expo-intent-launcher';
+import { applyApkPatch, installedApkSha256 } from '../modules/keep-alive';
 import { useStyles, type Colors } from './theme';
 
 // Android only: Open Dock reads the latest GitHub release and hands its APK to Android's installer,
 // which refuses any APK not signed with Open Dock's release key. iOS updates come from Apple.
+// When the release carries a patch from exactly the APK installed here (latest.json → delta.android, made by
+// scripts/make-delta.py), only the patch is downloaded and the new APK is rebuilt on the phone; it must come out
+// with the release's SHA-256, or the full APK is downloaded instead.
 const RELEASES = 'https://github.com/RDK456/open-dock/releases/latest/download';
 const APK_URL = `${RELEASES}/OpenDock.apk`;
 const DAY = 24 * 60 * 60 * 1000;
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
 export const CURRENT_VERSION = Constants.expoConfig?.version ?? '0.0.0';
 
+type Delta = { fromSha256: string; url: string; bytes: number; sha256: string };
+
 type UpdateState =
   | { kind: 'idle' | 'checking' }
   | { kind: 'current' }
-  | { kind: 'available'; version: string; notes: string; bytes: number | null }
+  | { kind: 'available'; version: string; notes: string; bytes: number | null; delta: Delta | null }
   | { kind: 'downloading'; version: string; percent: number }
   | { kind: 'ready'; version: string; file: File }
   | { kind: 'error'; message: string };
@@ -26,6 +32,7 @@ let lastCheck = 0;
 let dismissed = '';
 const listeners = new Set<() => void>();
 const apkFile = () => new File(Paths.cache, 'OpenDock.apk');
+const patchFile = () => new File(Paths.cache, 'OpenDock.patch');
 const set = (next: UpdateState) => { state = next; listeners.forEach((listener) => listener()); };
 
 export function isNewer(latest: string, current: string) {
@@ -49,33 +56,57 @@ export async function checkForUpdate() {
   if (response.status === 404) { set({ kind: 'current' }); return; }
   if (!response.ok) { set({ kind: 'error', message: `GitHub didn't answer (error ${response.status}). Try again later.` }); return; }
   try {
-    const latest = await response.json() as { version?: string; notes?: string };
+    const latest = await response.json() as { version?: string; notes?: string; delta?: { android?: Delta } };
     const version = (latest.version ?? '').replace(/^v/, '');
     if (!isNewer(version, CURRENT_VERSION)) {
       if (apkFile().exists) apkFile().delete(); // left over from the update that's now installed
       set({ kind: 'current' });
       return;
     }
+    const offered = latest.delta?.android;
+    if (offered?.url && offered.sha256 && offered.fromSha256 === await installedApkSha256()) {
+      set({ kind: 'available', version, notes: latest.notes ?? '', bytes: offered.bytes || null, delta: offered });
+      return;
+    }
     const head = await fetch(APK_URL, { method: 'HEAD' }).catch(() => null);
     const bytes = Number(head?.headers.get('content-length')) || null;
-    set({ kind: 'available', version, notes: latest.notes ?? '', bytes });
+    set({ kind: 'available', version, notes: latest.notes ?? '', bytes, delta: null });
   } catch {
     set({ kind: 'error', message: "GitHub sent an update file Open Dock couldn't read. Try again later." });
   }
 }
 
+const fetchTo = (url: string, file: File, version: string) => File.downloadFileAsync(url, file, {
+  idempotent: true,
+  onProgress: ({ bytesWritten, totalBytes }) => {
+    const percent = totalBytes ? Math.floor((bytesWritten / totalBytes) * 100) : 0;
+    if (state.kind === 'downloading' && percent !== state.percent) set({ kind: 'downloading', version, percent });
+  },
+});
+
+/** The new APK rebuilt from the installed one and the release's patch, or null when that didn't work out. */
+async function patched(delta: Delta, version: string): Promise<File | null> {
+  try {
+    const patch = await fetchTo(delta.url, patchFile(), version);
+    const sha256 = await applyApkPatch(patch.uri, apkFile().uri);
+    patch.delete();
+    return sha256 === delta.sha256 ? apkFile() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function download() {
   if (state.kind !== 'available') return;
-  const { version } = state;
+  const { version, delta } = state;
   set({ kind: 'downloading', version, percent: 0 });
   try {
-    const file = await File.downloadFileAsync(APK_URL, apkFile(), {
-      idempotent: true,
-      onProgress: ({ bytesWritten, totalBytes }) => {
-        const percent = totalBytes ? Math.floor((bytesWritten / totalBytes) * 100) : 0;
-        if (state.kind === 'downloading' && percent !== state.percent) set({ kind: 'downloading', version, percent });
-      },
-    });
+    let file = delta ? await patched(delta, version) : null;
+    if (!file) {
+      if (apkFile().exists) apkFile().delete(); // a patch that didn't rebuild the release's APK
+      set({ kind: 'downloading', version, percent: 0 });
+      file = await fetchTo(APK_URL, apkFile(), version);
+    }
     set({ kind: 'ready', version, file });
     await install();
   } catch {

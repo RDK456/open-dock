@@ -37,6 +37,9 @@ tauri-plugin-single-instance = "2"
 # Downloads Google's platform-tools (adb) when the PC has none; same rustls stack as the updater.
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 sha2 = "0.10"
+# Delta updates (src/delta.rs): the patch's zlib blocks and the updater plugin's signature check.
+flate2 = "1"
+minisign-verify = "0.2"
 zip = { version = "4", default-features = false, features = ["deflate"] }
 png = "0.17"
 
