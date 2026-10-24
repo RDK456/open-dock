@@ -2,12 +2,6 @@
 
 Phone control deck and local PC companion.
 
-## Credits
-
-Open Dock is a modified fork of [Freeze](https://github.com/naveen-devang/Freeze) by [Naveen Devang](https://github.com/naveen-devang), who wrote the original phone deck and PC companion. All credit for the original design and code goes to them. This fork adds its own looks (Studio, Atelier, Signal, Glass, Funk) with per-look navigation, hands-free "hey dock" voice control on the phone and PC, a new icon, and other changes; see the commit history for everything that differs. Like the original, it is licensed under the GNU GPL v3 (see [LICENSE](LICENSE)).
-
-The color icons in the PC app's icon picker (`pc-companion/src/color-icons.json`) are a selection from the [Papirus icon theme](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme) by the Papirus Development Team, licensed under the GNU GPL v3.
-
 ## Download
 
 Get the latest installers from the [Releases page](https://github.com/RDK456/open-dock/releases/latest). After the first install, Open Dock updates itself.
@@ -54,4 +48,4 @@ Updates download only what changed when the release has patches from the previou
 
 ## License
 
-Open Dock is free software under the [GNU General Public License v3.0](LICENSE). `phone-app/` also contains files from Expo's app template, which are MIT licensed (`phone-app/LICENSE`). macOS release builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause).
+Open Dock is free software under the [GNU General Public License v3.0](LICENSE). `phone-app/` also contains files from Expo's app template, which are MIT licensed (`phone-app/LICENSE`). macOS release builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause). The color icons in the PC app's icon picker (`pc-companion/src/color-icons.json`) come from the [Papirus icon theme](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme) (GPL-3.0).
