@@ -1,6 +1,6 @@
 {
   "name": "open-dock-phone",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "main": "expo-router/entry",
   "dependencies": {
     "expo": "~57.0.26",
