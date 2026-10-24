@@ -48,6 +48,8 @@ Run `bash scripts/setup-release-signing.sh` once to create the signing keys and 
 
 To ship, run `node scripts/bump-version.ts 1.2.0`, commit, then `git tag v1.2.0 && git push origin v1.2.0`. The **Release** workflow builds Windows, macOS and Android into a draft GitHub release. Publish the draft to make it the latest release.
 
+Updates download only what changed when the release has patches from the previous version. Before you publish, run `python scripts/make-delta.py release <previous version> <old setup.exe> <new setup.exe> <old OpenDock.apk> <new OpenDock.apk> latest.json`, then upload the two `.patch` files and the updated `latest.json`. This needs `pip install bsdiff4`, 7-Zip, and the updater signing key in `TAURI_SIGNING_PRIVATE_KEY`. Without patches, apps download the full installer or APK.
+
 ## License
 
 Open Dock is free software under the [GNU General Public License v3.0](LICENSE). `phone-app/` also contains files from Expo's app template, which are MIT licensed (`phone-app/LICENSE`). macOS release builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause).
