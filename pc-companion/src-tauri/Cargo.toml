@@ -1,6 +1,6 @@
 [package]
 name = "open-dock-pc"
-version = "1.5.2"
+version = "1.5.3"
 description = "Local PC companion for Open Dock"
 authors = ["Open Dock"]
 edition = "2021"
