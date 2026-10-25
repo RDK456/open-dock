@@ -1,4 +1,5 @@
 import { forwardRef, useRef, useState } from 'react';
+import { motionOn } from './prefs';
 import { Animated, Pressable as NativePressable, type PressableProps, type PressableStateCallbackType, type View } from 'react-native';
 
 const AnimatedPressable = Animated.createAnimatedComponent(NativePressable);
@@ -7,7 +8,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(NativePressable);
 export const Pressable = forwardRef<View, PressableProps>(function Pressable({ style, onPressIn, onPressOut, ...rest }, ref) {
   const [pressed, setPressed] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
-  const to = (value: number, bounciness: number) => Animated.spring(scale, { toValue: value, speed: 40, bounciness, useNativeDriver: true }).start();
+  const to = (value: number, bounciness: number) => (motionOn() ? Animated.spring(scale, { toValue: value, speed: 40, bounciness, useNativeDriver: true }).start() : scale.setValue(value));
   const resolved = typeof style === 'function' ? style({ pressed } as PressableStateCallbackType) : style;
   return (
     <AnimatedPressable

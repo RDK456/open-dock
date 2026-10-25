@@ -63,6 +63,8 @@ struct AppState {
     device_decks: RwLock<HashMap<String, DeckConfig>>,
     /// Phones that have connected: id to the name they gave themselves.
     known_devices: RwLock<HashMap<String, String>>,
+    /// What this PC keeps about a phone besides its own name, by phone id.
+    device_meta: RwLock<HashMap<String, DeviceMeta>>,
     /// Open connections per phone id.
     online_devices: std::sync::Mutex<HashMap<String, usize>>,
     media_state: tokio::sync::watch::Sender<system_media::SystemMediaState>,
@@ -340,6 +342,9 @@ struct DeckButton {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     app_icon_data: Option<String>,
     action: DeckAction,
+    /// What a long press on the phone does instead of `action`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    long_press: Option<DeckAction>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -590,6 +595,7 @@ fn default_deck_config() -> DeckConfig {
         icon_svg: None,
         app_icon_data: None,
         action: DeckAction::Media { command },
+        long_press: None,
     })
     .collect();
     DeckConfig {
@@ -953,6 +959,13 @@ fn validate_deck_button(
     // An image the user chose for the key, on any action.
     if button.icon == "image" && button.app_icon_data.is_none() {
         return Err("A button's image icon is missing".into());
+    }
+    if let Some(long_press) = &button.long_press {
+        // A folder opens on the phone and a long press is not a place to start one.
+        if matches!(long_press, DeckAction::OpenFolder { .. }) {
+            return Err("A long press cannot open a folder".into());
+        }
+        validate_action(long_press)?;
     }
     validate_action(&button.action)
 }
@@ -1658,6 +1671,19 @@ fn persist_known_devices(state: &AppState) {
             let _ = fs::write(config_dir.join("devices.json"), bytes);
         }
     }
+    if let Ok(meta) = state.device_meta.read() {
+        if let Ok(bytes) = serde_json::to_vec(&*meta) {
+            let _ = fs::write(config_dir.join("device-meta.json"), bytes);
+        }
+    }
+}
+
+/// What the PC keeps about a phone besides the name it gave itself.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", default)]
+struct DeviceMeta {
+    /// The name the PC shows instead of the phone's own; empty means none.
+    alias: String,
 }
 
 fn load_devices(state: &AppState, config_dir: &Path) {
@@ -1675,6 +1701,24 @@ fn load_devices(state: &AppState, config_dir: &Path) {
     {
         if let Ok(mut devices) = state.known_devices.write() {
             *devices = known.into_iter().filter(|(id, _)| valid_id(id)).collect();
+        }
+    }
+    if let Some(meta) = fs::read(config_dir.join("device-meta.json"))
+        .ok()
+        .filter(|bytes| bytes.len() <= MAX_DECK_CONFIG_BYTES)
+        .and_then(|bytes| serde_json::from_slice::<HashMap<String, DeviceMeta>>(&bytes).ok())
+    {
+        if let Ok(mut current) = state.device_meta.write() {
+            *current = meta
+                .into_iter()
+                .filter(|(id, _)| valid_id(id))
+                .map(|(id, mut meta)| {
+                    if !meta.alias.is_empty() && !valid_label(&meta.alias, 40) {
+                        meta.alias.clear();
+                    }
+                    (id, meta)
+                })
+                .collect();
         }
     }
     if let Ok(entries) = fs::read_dir(config_dir.join("device-decks")) {
@@ -1732,7 +1776,9 @@ fn unregister_device(state: &AppState, id: &str) {
 #[serde(rename_all = "camelCase")]
 struct DeviceInfo {
     id: String,
+    /// What the PC calls the phone: the name given here, else the phone's own.
     name: String,
+    phone_name: String,
     online: bool,
     /// Has its own deck instead of the shared one.
     own_deck: bool,
@@ -1742,6 +1788,7 @@ struct DeviceInfo {
 fn list_devices(state: tauri::State<'_, Arc<AppState>>) -> Vec<DeviceInfo> {
     let online = state.online_devices.lock().map(|online| online.clone()).unwrap_or_default();
     let decks = state.device_decks.read().map(|decks| decks.keys().cloned().collect::<Vec<_>>()).unwrap_or_default();
+    let meta = state.device_meta.read().map(|meta| meta.clone()).unwrap_or_default();
     let mut devices: Vec<DeviceInfo> = state
         .known_devices
         .read()
@@ -1750,7 +1797,8 @@ fn list_devices(state: tauri::State<'_, Arc<AppState>>) -> Vec<DeviceInfo> {
                 .iter()
                 .map(|(id, name)| DeviceInfo {
                     id: id.clone(),
-                    name: name.clone(),
+                    name: meta.get(id).map(|meta| meta.alias.clone()).filter(|alias| !alias.is_empty()).unwrap_or_else(|| name.clone()),
+                    phone_name: name.clone(),
                     online: online.contains_key(id),
                     own_deck: decks.contains(id),
                 })
@@ -1759,6 +1807,27 @@ fn list_devices(state: tauri::State<'_, Arc<AppState>>) -> Vec<DeviceInfo> {
         .unwrap_or_default();
     devices.sort_by(|a, b| b.online.cmp(&a.online).then_with(|| a.name.cmp(&b.name)));
     devices
+}
+
+/// Names a phone on this PC; an empty name goes back to the phone's own.
+#[tauri::command]
+fn rename_device(device_id: String, name: String, state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+    let name = name.trim();
+    if !valid_id(&device_id) || !state.known_devices.read().is_ok_and(|known| known.contains_key(&device_id)) {
+        return Err("Unknown device".into());
+    }
+    if !name.is_empty() && !valid_label(name, 40) {
+        return Err("Use 1 to 40 characters".into());
+    }
+    state
+        .device_meta
+        .write()
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
+        .entry(device_id)
+        .or_default()
+        .alias = name.to_owned();
+    persist_known_devices(&state);
+    Ok(())
 }
 
 /// Gives a phone back the shared deck and deletes its own.
@@ -2080,6 +2149,8 @@ enum ClientMessage {
         revision: u64,
         #[serde(rename = "buttonId")]
         button_id: String,
+        #[serde(default, rename = "longPress")]
+        long_press: bool,
     },
     InvokeMediaCommand {
         #[serde(rename = "requestId")]
@@ -2527,6 +2598,7 @@ fn import_legacy_deck(
                         icon_svg: None,
                         app_icon_data: None,
                         action,
+                        long_press: None,
                     })
                 })
                 .collect();
@@ -3672,6 +3744,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 request_id,
                 revision,
                 button_id,
+                long_press,
             } if authenticated => {
                 let result = if !valid_id(&request_id) || !valid_id(&button_id) {
                     Err("invalid_request".to_owned())
@@ -3681,6 +3754,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                         &deck_key(&state, &device_id),
                         revision,
                         &button_id,
+                        long_press,
                         state.independent_navigation.load(Ordering::Relaxed),
                         &mut selected_profile_id,
                         &mut selected_page_id,
@@ -4283,11 +4357,11 @@ fn apply_button_edit(
         buttons.remove(index);
     }
     if let Some(button) = button {
-        if !phone_editable(&button.action) || button.app_icon_data.is_some() {
+        if !phone_editable(&button.action) || !button.long_press.as_ref().is_none_or(phone_editable) || button.app_icon_data.is_some() {
             return Err("Set up this kind of button in Open Dock on the PC".into());
         }
         match buttons.iter().position(|item| item.id == button.id) {
-            Some(index) if !phone_editable(&buttons[index].action) => {
+            Some(index) if !phone_editable(&buttons[index].action) || !buttons[index].long_press.as_ref().is_none_or(phone_editable) => {
                 return Err("Edit this button in Open Dock on the PC".into());
             }
             Some(index) => buttons[index] = button,
@@ -4335,6 +4409,7 @@ fn invoke_button(
     key: &str,
     revision: u64,
     button_id: &str,
+    long_press: bool,
     independent: bool,
     selected_profile_id: &mut String,
     selected_page_id: &mut String,
@@ -4374,13 +4449,14 @@ fn invoke_button(
     let button = page_buttons(page)
         .or_else(|| profile.pages.iter().find_map(|page| page_buttons(page)))
         .ok_or_else(|| "unknown_button".to_owned())?;
-    let button = &button;
+    // A key without a long-press action does its normal action on a long press too.
+    let action = if long_press { button.long_press.as_ref().unwrap_or(&button.action) } else { &button.action };
     let changed_selection = matches!(
-        &button.action,
+        action,
         DeckAction::SelectProfile { .. } | DeckAction::SelectPage { .. }
     );
     run_deck_action(
-        &button.action,
+        action,
         state,
         key,
         revision,
@@ -4670,7 +4746,7 @@ async fn run_voice(
                 // The user's own deck buttons come first, then installed apps, then well-known sites.
                 if let Some(button) = deck_button_named(state, &name, independent, selected_profile_id) {
                     let revision = state.deck_config.read().map(|config| config.revision).unwrap_or_default();
-                    invoke_button(state, "", revision, &button.0, independent, selected_profile_id, selected_page_id)?;
+                    invoke_button(state, "", revision, &button.0, false, independent, selected_profile_id, selected_page_id)?;
                     done.push(format!("Pressed {}", button.1));
                     continue;
                 }
@@ -5320,6 +5396,7 @@ pub fn run() {
         deck_updates,
         device_decks: RwLock::new(HashMap::new()),
         known_devices: RwLock::new(HashMap::new()),
+        device_meta: RwLock::new(HashMap::new()),
         online_devices: std::sync::Mutex::new(HashMap::new()),
         media_state,
         media_refresh: Arc::new(tokio::sync::Notify::new()),
@@ -5357,6 +5434,7 @@ pub fn run() {
             connection_info,
             deck_config,
             list_devices,
+            rename_device,
             reset_device_deck,
             set_pc_name,
             list_open_dock_plugins,

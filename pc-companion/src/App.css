@@ -1398,3 +1398,7 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 @keyframes pop-zoom { from { opacity: 0; transform: scale(.9); } }
 .content { animation: screen-zoom 380ms cubic-bezier(.34, 1.3, .64, 1) both !important; }
 [role="dialog"], [role="menu"], [role="listbox"], .deck-menu, .select-menu, .app-picker, .icon-picker-menu { animation: pop-zoom 220ms cubic-bezier(.34, 1.4, .64, 1) both; }
+
+/* The Motion switch in Settings: with it off everything holds still (the specificity beats the !important rules above). */
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation: none !important; transition: none !important; }
+html[data-motion="off"] .nav-item:hover, html[data-motion="off"] .primary-button:hover:not(:disabled), html[data-motion="off"] .secondary-button:hover:not(:disabled), html[data-motion="off"] .transport-tab:hover { transform: none !important; }

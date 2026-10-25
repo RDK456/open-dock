@@ -18,7 +18,7 @@ export type SystemCommand = 'lock' | 'sleep' | 'restart' | 'shutdown' | 'sign_ou
 /** Touchpad and keyboard input; `move` and `scroll` are in PC pixels and wheel steps. */
 export type PointerEvent = { kind: 'move' | 'scroll'; dx: number; dy: number } | { kind: 'zoom'; steps: number } | { kind: 'click' | 'press' | 'release'; button: 'left' | 'right' | 'middle' } | { kind: 'text'; text: string } | { kind: 'key'; key: string };
 export type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
-export type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction };
+export type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction; longPress?: DeckAction };
 export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
 export type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
@@ -49,7 +49,8 @@ type ConnectionContextValue = {
   connect: (connection: PcConnection) => Promise<void>;
   disconnect: () => Promise<void>;
   removePairedDevice: (id: string) => Promise<void>;
-  sendButton: (buttonId: string) => boolean;
+  /** Presses a deck key; `longPress` runs its long-press action (the same action when it has none). */
+  sendButton: (buttonId: string, longPress?: boolean) => boolean;
   sendMediaCommand: (command: DeckMediaCommand) => boolean;
   sendSystemVolume: (volumePercent: number) => boolean;
   seekMedia: (positionMs: number) => boolean;
@@ -141,7 +142,8 @@ function validDeckButton(value: unknown): value is DeckButton {
     (placement === undefined || (placement !== null && typeof placement === 'object' && Number.isInteger(placement.row) && Number.isInteger(placement.column) && Number.isInteger(placement.rowSpan) && Number.isInteger(placement.columnSpan))) &&
     (!button.iconSvg || (typeof button.iconSvg === 'string' && button.iconSvg.length <= 8192 && button.iconSvg.startsWith('<svg') && button.iconSvg.endsWith('</svg>') && !/<script|<foreignobject|onload=|onclick=|href=|url\(/i.test(button.iconSvg))) &&
     (!button.appIconData || (typeof button.appIconData === 'string' && button.appIconData.length <= 65536 && button.appIconData.startsWith('data:image/png;base64,'))) &&
-    !!button.action && typeof button.action.type === 'string';
+    !!button.action && typeof button.action.type === 'string' &&
+    (button.longPress === undefined || (!!button.longPress && typeof button.longPress.type === 'string'));
 }
 
 function utf8ByteLength(value: string) {
@@ -661,14 +663,14 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     await persistPairedDevices(pairedDevicesRef.current.filter((device) => connectionId(device) !== id));
   }, [connection, disconnect, persistPairedDevices]);
 
-  const sendRequest = useCallback((type: string, idField: string, id: string | number) => {
+  const sendRequest = useCallback((type: string, idField: string, id: string | number, extra?: Record<string, unknown>) => {
     const socket = socketRef.current;
     if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN || !deckConfig) return false;
     setActionError(null);
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     pendingRequestsRef.current.add(requestId);
     try {
-      socket.send(JSON.stringify({ type, requestId, revision: deckConfig.revision, [idField]: id }));
+      socket.send(JSON.stringify({ type, requestId, revision: deckConfig.revision, [idField]: id, ...extra }));
     } catch {
       pendingRequestsRef.current.delete(requestId);
       setActionError('control_failed');
@@ -698,9 +700,9 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       }
     }, 1600);
   }, []);
-  const sendButton = useCallback((buttonId: string) => {
-    const sent = sendRequest('invoke_button', 'buttonId', buttonId);
-    if (sent && deckConfig && isPlayPauseButton(deckConfig, buttonId)) showPlayPausePressed();
+  const sendButton = useCallback((buttonId: string, longPress = false) => {
+    const sent = sendRequest('invoke_button', 'buttonId', buttonId, longPress ? { longPress: true } : undefined);
+    if (sent && !longPress && deckConfig && isPlayPauseButton(deckConfig, buttonId)) showPlayPausePressed();
     return sent;
   }, [sendRequest, deckConfig, showPlayPausePressed]);
   const sendMediaCommand = useCallback((command: DeckMediaCommand) => {

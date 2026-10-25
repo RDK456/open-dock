@@ -2,6 +2,7 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 import { AppState, BackHandler, Linking, PermissionsAndroid, Platform } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
 import * as Haptics from 'expo-haptics';
+import { haptic } from './prefs';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { askToRunUnrestricted, askToShowIsland, canShowIsland, moveToBack, runsUnrestricted, setIsland, startKeepAlive, stopKeepAlive, type IslandState } from '../modules/keep-alive';
 import { usePcConnection } from './connection';
@@ -84,7 +85,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     setArmedAt(0);
     showIsland('working', command);
     const result = await latest.current.sendVoice(command);
-    void Haptics.notificationAsync(result.ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
+    haptic.notify(result.ok);
     setLast({ said: command, ...result });
     showIsland(result.ok ? 'done' : 'failed', result.text);
     setTimeout(() => {
@@ -140,7 +141,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
       } else {
         setArmedAt(Date.now());
         showIsland('listening');
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptic.impact(Haptics.ImpactFeedbackStyle.Medium);
       }
     };
     // The island follows the words as they come, once they are a command (after a tap, or after the wake phrase).
@@ -223,7 +224,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
     if (mode.current === 'wake') {
       setArmedAt(Date.now());
       showIsland('listening');
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptic.impact(Haptics.ImpactFeedbackStyle.Medium);
       return;
     }
     const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -231,7 +232,7 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
       setError('Open Dock needs the microphone. Allow it in Settings, under Permissions.');
       return;
     }
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic.impact(Haptics.ImpactFeedbackStyle.Medium);
     mode.current = 'once';
     setHearing(true);
     showIsland('listening');

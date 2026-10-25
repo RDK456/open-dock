@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
-import * as Haptics from 'expo-haptics';
+import { haptic, motionOn } from './prefs';
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react-native';
 import type { DeckButton, DeckMediaCommand } from './connection';
 import { useStyles, useTheme, type Colors } from './theme';
@@ -45,11 +45,11 @@ function Puck({ size, accent, morph, onPress, label, disabled, children }: { siz
   useEffect(() => {
     Animated.spring(shape, { toValue: morph ? 1 : 0, useNativeDriver: false, speed: 12, bounciness: 9 }).start();
   }, [morph, shape]);
-  const to = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 9 }).start();
+  const to = (toValue: number) => (motionOn() ? Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 9 }).start() : scale.setValue(toValue));
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
       <Animated.View style={[styles.puck, accent && styles.accent, disabled && styles.off, { width: size, height: size, borderWidth: surface.border, borderBottomWidth: surface.base ? surface.border + 2 : surface.border, borderRadius: shape.interpolate({ inputRange: [0, 1], outputRange: [size * surface.puck, size * Math.min(surface.puck, 0.3)] }) }]}>
-        <Pressable style={styles.hit} onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }} onPressIn={() => to(0.88)} onPressOut={() => to(1)} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}>
+        <Pressable style={styles.hit} onPress={() => { haptic.impact(); onPress(); }} onPressIn={() => to(0.88)} onPressOut={() => to(1)} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}>
           {children}
         </Pressable>
       </Animated.View>

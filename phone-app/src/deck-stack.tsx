@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import Storage from 'expo-sqlite/kv-store';
-import * as Haptics from 'expo-haptics';
+import { haptic, motionOn } from './prefs';
 import { useStyles, useTheme, type Colors } from './theme';
 
 const STYLES = ['Fling', 'Slide', 'Flip', 'Zoom'] as const;
@@ -24,18 +24,17 @@ export function DeckStack({ pages, index, onChange, peek = 12, children }: { pag
   const [swipe, setSwipe] = useState<SwipeStyle>('Fling');
   const width = useRef(1);
   const [cardWidth, setCardWidth] = useState(1);
-  const state = useRef({ index, count: pages.length, onChange, reduce: false, swipe, dealing: false });
+  const state = useRef({ index, count: pages.length, onChange, swipe, dealing: false });
   useEffect(() => { state.current = { ...state.current, index, count: pages.length, onChange, swipe }; });
 
   useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => { state.current.reduce = reduce; });
     void Storage.getItem('opendock.swipe').then((saved) => { if (STYLES.includes(saved as SwipeStyle)) setSwipe(saved as SwipeStyle); });
   }, []);
 
   const cycle = () => {
     const next = STYLES[(STYLES.indexOf(swipe) + 1) % STYLES.length];
     setSwipe(next);
-    void Haptics.selectionAsync();
+    haptic.select();
     void Storage.setItem('opendock.swipe', next);
   };
 
@@ -43,7 +42,7 @@ export function DeckStack({ pages, index, onChange, peek = 12, children }: { pag
   const currentId = pages[index]?.id;
   useEffect(() => {
     if (state.current.dealing) { state.current.dealing = false; return; }
-    if (state.current.reduce) return;
+    if (!motionOn()) return;
     zoomIn.setValue(0);
     Animated.timing(zoomIn, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [currentId, zoomIn]);
@@ -58,7 +57,8 @@ export function DeckStack({ pages, index, onChange, peek = 12, children }: { pag
       x.setValue(count < 2 ? g.dx * 0.25 : g.dx);
     },
     onPanResponderRelease: (_, g) => {
-      const { index: at, count, onChange: change, reduce } = state.current;
+      const { index: at, count, onChange: change } = state.current;
+      const reduce = !motionOn();
       const direction = g.dx < 0 ? 1 : -1;
       const next = (at + direction + count) % count;
       const flung = Math.abs(g.dx) > width.current * 0.22 || Math.abs(g.vx) > 0.55;
@@ -68,7 +68,7 @@ export function DeckStack({ pages, index, onChange, peek = 12, children }: { pag
       }
       const deal = () => {
         state.current.dealing = true;
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptic.impact();
         change(next);
         x.setValue(0);
         enterFrom.setValue(direction * width.current);

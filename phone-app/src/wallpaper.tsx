@@ -1,7 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Animated, Easing, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Storage from 'expo-sqlite/kv-store';
+import { usePrefs } from './prefs';
 import { useTheme } from './theme';
 import { backdrops, wallpaperGlows } from './theme-colors';
 
@@ -38,15 +39,7 @@ export function setWallpaperSettings(next: Partial<WallpaperSettings>) {
 
 export const useWallpaperSettings = () => useSyncExternalStore(subscribe, () => settings);
 
-function useReduceMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduce);
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
-    return () => subscription.remove();
-  }, []);
-  return reduce;
-}
+const useReduceMotion = () => !usePrefs().motion;
 
 /** Fills its parent, behind everything else. Drifts slowly unless motion is off here or on the phone. */
 export function Wallpaper() {

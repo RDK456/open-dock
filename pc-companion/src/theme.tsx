@@ -36,8 +36,15 @@ function readLook(): Look {
   try { return parseLook(localStorage.getItem(LOOK_KEY)); } catch { return 'classic'; }
 }
 
+// Motion is this app's own switch (on unless turned off); the PC's reduce-motion setting is not consulted.
+const MOTION_KEY = 'opendock.motion';
+function readMotion(): boolean {
+  try { return localStorage.getItem(MOTION_KEY) !== 'off'; } catch { return true; }
+}
+
 let mode: ThemeMode = readMode();
 let look: Look = readLook();
+let motion = readMotion();
 const listeners = new Set<() => void>();
 
 // Every look follows the light/dark choice.
@@ -49,6 +56,8 @@ function apply() {
   document.documentElement.dataset.theme = theme;
   if (look === 'classic') delete document.documentElement.dataset.look;
   else document.documentElement.dataset.look = look;
+  if (motion) delete document.documentElement.dataset.motion;
+  else document.documentElement.dataset.motion = 'off';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
   listeners.forEach((listener) => listener());
 }
@@ -69,6 +78,12 @@ export function setLook(next: Look) {
   syncTitleBar();
 }
 
+export function setMotion(next: boolean) {
+  motion = next;
+  try { localStorage.setItem(MOTION_KEY, next ? 'on' : 'off'); } catch { /* the choice lasts until the app closes */ }
+  apply();
+}
+
 // Follow the PC while the choice is System.
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (mode === 'system') apply(); });
 apply();
@@ -81,6 +96,8 @@ export const currentTheme = (): Theme => themeNow();
 export const onThemeChange = subscribe;
 export const useThemeMode = (): ThemeMode => useSyncExternalStore(subscribe, () => mode);
 export const useLook = (): Look => useSyncExternalStore(subscribe, () => look);
+export const useMotion = (): boolean => useSyncExternalStore(subscribe, () => motion);
+export const motionOn = (): boolean => motion;
 /** The look in use right now: light or dark, never system. */
 export const useTheme = (): Theme => useSyncExternalStore(subscribe, themeNow);
 
@@ -97,7 +114,12 @@ const LOOKS: [Look, string, string][] = [
 export function AppearanceSetting() {
   const current = useThemeMode();
   const currentLook = useLook();
+  const moving = useMotion();
   return <>
+    <section className="device-navigation-setting">
+      <div className="device-navigation-copy"><h2>Motion</h2><p>Page transitions, fades and previews that move. Turn off for a still, quieter app.</p></div>
+      <button className={`setting-switch ${moving ? 'enabled' : ''}`} type="button" role="switch" aria-checked={moving} aria-label="Motion" onClick={() => setMotion(!moving)}><span /></button>
+    </section>
     <section className="device-navigation-setting appearance-setting">
       <div className="device-navigation-copy"><h2>Look</h2><p>{LOOKS.find(([value]) => value === currentLook)?.[2]} Your phone has its own setting on its Connect tab.</p></div>
       <div className="transport-tabs" role="radiogroup" aria-label="Look">

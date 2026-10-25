@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Pressable } from '../../motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
 import { Mic, Send } from 'lucide-react-native';
+import { Entrance, haptic } from '../../prefs';
 import { Wallpaper } from '../../wallpaper';
 import { usePcConnection } from '../../connection';
 import { useHandsFree, type Heard } from '../../hands-free';
@@ -42,7 +42,7 @@ export default function VoiceScreen() {
     setBusy(true);
     const result = await sendVoice(text);
     setBusy(false);
-    void Haptics.notificationAsync(result.ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
+    haptic.notify(result.ok);
     reveal({ said: text, ...result } satisfies Heard);
   };
 
@@ -70,10 +70,10 @@ export default function VoiceScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} keyboardShouldPersistTaps="handled">
         <View style={wide && styles.columns}>
         <View style={wide && styles.column}>
-        <Text style={[styles.title, heading]}>Voice</Text>
-        <Text style={styles.subtitle}>{!connected ? 'Connect to your PC to use voice commands.' : listening ? 'Listening. Say the command.' : handsFree.enabled ? `Say “${handsFree.phrase}” and a command, or tap the mic.` : 'Tap the mic and say what the PC should do.'}</Text>
+        <Entrance><Text style={[styles.title, heading]}>Voice</Text></Entrance>
+        <Entrance index={1}><Text style={styles.subtitle}>{!connected ? 'Connect to your PC to use voice commands.' : listening ? 'Listening. Say the command.' : handsFree.enabled ? `Say “${handsFree.phrase}” and a command, or tap the mic.` : 'Tap the mic and say what the PC should do.'}</Text></Entrance>
 
-        <View style={[styles.micArea, wide && styles.micAreaWide]}>
+        <Entrance index={2}><View style={[styles.micArea, wide && styles.micAreaWide]}>
           <Animated.View pointerEvents="none" style={[styles.ring, { opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }), transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] }) }] }]} />
           <Pressable
             style={({ pressed }) => [styles.mic, listening && styles.micArmed, !connected && styles.disabled, pressed && styles.pressed]}
@@ -84,7 +84,7 @@ export default function VoiceScreen() {
           >
             <Mic size={42} color={colors.onAccent} />
           </Pressable>
-        </View>
+        </View></Entrance>
 
         {last ? (
           <Animated.View style={[styles.result, !last.ok && styles.resultError, { opacity: shown, transform: [{ translateY: shown.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}>
@@ -93,7 +93,7 @@ export default function VoiceScreen() {
           </Animated.View>
         ) : null}
 
-        <View style={styles.inputRow}>
+        <Entrance index={3}><View style={styles.inputRow}>
           <TextInput
             style={styles.input}
             value={typed}
@@ -108,18 +108,18 @@ export default function VoiceScreen() {
           <Pressable style={({ pressed }) => [styles.send, pressed && styles.pressed]} disabled={!connected || !typed.trim()} onPress={submitTyped} accessibilityRole="button" accessibilityLabel="Send command">
             <Send size={18} color={colors.text} />
           </Pressable>
-        </View>
+        </View></Entrance>
         </View>
 
         <View style={wide && styles.column}>
         {Platform.OS === 'android' ? (
-          <View style={[styles.handsFree, wide && styles.firstInColumn]}>
+          <Entrance index={2}><View style={[styles.handsFree, wide && styles.firstInColumn]}>
             <View style={styles.handsFreeRow}>
               <View style={styles.handsFreeText}>
                 <Text style={styles.handsFreeTitle}>Hands-free</Text>
                 <Text style={styles.handsFreeHint}>Listens for your wake phrase, also while you use other apps. A notification shows while it runs.</Text>
               </View>
-              <Switch value={handsFree.enabled} onValueChange={(on) => void handsFree.setEnabled(on)} trackColor={{ true: colors.accent, false: colors.border }} accessibilityLabel="Hands-free" />
+              <Switch value={handsFree.enabled} onValueChange={(on) => void handsFree.setEnabled(on)} trackColor={{ true: colors.accent, false: colors.border }} thumbColor={colors.text} accessibilityLabel="Hands-free" />
             </View>
             <Text style={styles.phraseLabel}>Wake phrase</Text>
             <TextInput
@@ -153,15 +153,17 @@ export default function VoiceScreen() {
                 <Pressable style={({ pressed }) => [styles.noticeButton, pressed && styles.chipPressed]} onPress={handsFree.allowBackground} accessibilityRole="button"><Text style={styles.chipText}>Keep running</Text></Pressable>
               </View>
             ) : null}
-          </View>
+          </View></Entrance>
         ) : null}
 
-        <Text style={styles.heading}>Try saying</Text>
+        <Entrance index={3}><Text style={styles.heading}>Try saying</Text></Entrance>
         <View style={styles.examples}>
-          {EXAMPLES.map((example) => (
-            <Pressable key={example} style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} disabled={!connected || busy} onPress={() => void run(example)} accessibilityRole="button">
-              <Text style={styles.chipText}>{example}</Text>
-            </Pressable>
+          {EXAMPLES.map((example, at) => (
+            <Entrance key={example} index={4 + at}>
+              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} disabled={!connected || busy} onPress={() => void run(example)} accessibilityRole="button">
+                <Text style={styles.chipText}>{example}</Text>
+              </Pressable>
+            </Entrance>
           ))}
         </View>
         </View>

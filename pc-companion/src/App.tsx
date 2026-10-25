@@ -77,9 +77,9 @@ import { buttonPlacement, canPlaceWidgetItem, defaultSpan, firstWidgetPlacement,
 import { phoneGridShape, widgetBlockSize, type WidgetSurface } from "./now-playing-layout";
 import { version } from "../package.json";
 import { UpdatesSetting, useUpdater } from "./updates";
-import { AppearanceSetting, inkIcon, useTheme } from "./theme";
+import { AppearanceSetting, inkIcon, motionOn, useTheme } from "./theme";
 
-type DeviceInfo = { id: string; name: string; online: boolean; ownDeck: boolean };
+type DeviceInfo = { id: string; name: string; phoneName: string; online: boolean; ownDeck: boolean };
 
 type ConnectionInfo = {
   host: string;
@@ -98,6 +98,7 @@ type ConnectionInfo = {
 type SystemCommand = 'lock' | 'sleep' | 'restart' | 'shutdown' | 'sign_out' | 'brightness_up' | 'brightness_down' | 'screenshot';
 const SYSTEM_COMMANDS: [SystemCommand, string][] = [['screenshot', 'Screenshot'], ['lock', 'Lock'], ['sleep', 'Sleep'], ['brightness_up', 'Brightness up'], ['brightness_down', 'Brightness down'], ['sign_out', 'Sign out'], ['restart', 'Restart'], ['shutdown', 'Shut down']];
 type MediaCommand = 'play_pause' | 'next_track' | 'previous_track' | 'volume_up' | 'volume_down' | 'mute';
+const MEDIA_COMMANDS: [MediaCommand, string][] = [['play_pause', 'Play / Pause'], ['next_track', 'Next track'], ['previous_track', 'Previous track'], ['volume_up', 'Volume up'], ['volume_down', 'Volume down'], ['mute', 'Mute']];
 type DeckStep = { type: 'media'; command: MediaCommand } | { type: 'hotkey'; keys: string[] } | { type: 'launch_app'; app: string } | { type: 'launch_file'; path: string } | { type: 'launch_folder'; path: string } | { type: 'type_text'; text: string } | { type: 'open_url'; url: string } | { type: 'delay'; ms: number };
 type DeckAction = DeckStep | { type: 'run_script'; path: string; allowOnPc: boolean } | { type: 'plugin_action'; pluginId: string; actionId: string; allowOnPc: boolean; inputs: Record<string, string> } | { type: 'launch_app'; app: string } | { type: 'sequence'; steps: DeckStep[] } | { type: 'select_profile'; profileId: string } | { type: 'select_page'; pageId: string } | { type: 'open_folder'; folderId: string } | { type: 'system'; command: SystemCommand };
 type OpenDockPluginInput = { id: string; label: string; type: 'text' | 'number' | 'select'; default: string; options: string[]; optionLabels: string[] };
@@ -105,7 +106,7 @@ type OpenDockPluginWidget = { id: string; name: string; description: string; typ
 type OpenDockPlugin = { id: string; name: string; version: string; description: string; actions: { id: string; name: string; description: string; script: string; inputs: OpenDockPluginInput[] }[]; widgets: OpenDockPluginWidget[] };
 type OpenDockPluginListing = { plugins: OpenDockPlugin[]; warnings: string[] };
 type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
-type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction };
+type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction; longPress?: DeckAction };
 type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
 type WidgetScreen = { enabled: boolean; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 type PlaybackState = 'playing' | 'paused' | 'stopped' | 'unavailable';
@@ -193,7 +194,7 @@ function App() {
   const go = (next: typeof screen) => {
     if (next === screen) return;
     const start = (document as Document & { startViewTransition?: (update: () => void) => unknown }).startViewTransition;
-    if (!start || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setScreen(next); return; }
+    if (!start || !motionOn()) { setScreen(next); return; }
     start.call(document, () => flushSync(() => setScreen(next)));
   };
   const updater = useUpdater();
@@ -207,6 +208,7 @@ function App() {
   const [independentNavigation, setIndependentNavigation] = useState(true);
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState('');
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [pcNameDraft, setPcNameDraft] = useState('');
   const [pcNameError, setPcNameError] = useState('');
   const [navigationSettingBusy, setNavigationSettingBusy] = useState(false);
@@ -419,6 +421,15 @@ function App() {
       setDevices(await invoke<DeviceInfo[]>('list_devices'));
     } catch { /* the list refreshes itself */ }
   }
+  // The name this PC gives the phone in the picker; empty goes back to the phone's own.
+  async function renameDevice() {
+    if (!deviceId || renameDraft === null) return;
+    try {
+      await invoke('rename_device', { deviceId, name: renameDraft });
+      setDevices(await invoke<DeviceInfo[]>('list_devices'));
+      setRenameDraft(null);
+    } catch { /* keep the field open so it can be fixed */ }
+  }
   async function savePcName() {
     setPcNameError('');
     try {
@@ -473,10 +484,14 @@ function App() {
       <section className="main-panel">
         <header className="topbar" data-tauri-drag-region>
           {screen === 'deck' && devices.length > 0 ? <div className="device-picker">
-            <select aria-label="Device to customise" value={deviceId} onChange={(event) => setDeviceId(event.target.value)}>
+            <select aria-label="Device to customise" value={deviceId} onChange={(event) => { setDeviceId(event.target.value); setRenameDraft(null); }}>
               <option value="">All devices (shared deck)</option>
               {devices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.online ? ' · connected' : ''}{device.ownDeck ? ' · custom' : ''}</option>)}
             </select>
+            {selectedDevice && renameDraft !== null ? <form className="name-field" onSubmit={(event) => { event.preventDefault(); void renameDevice(); }}>
+              <input autoFocus value={renameDraft} maxLength={40} placeholder={selectedDevice.phoneName} aria-label="Device name" onChange={(event) => setRenameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setRenameDraft(null); }} />
+              <button type="submit" className="secondary-button">Save</button>
+            </form> : selectedDevice ? <button type="button" className="secondary-button" onClick={() => setRenameDraft(selectedDevice.name)}>Rename</button> : null}
             {selectedDevice?.ownDeck ? <button type="button" className="secondary-button" onClick={() => void resetDeviceDeck()}>Use shared deck</button> : null}
           </div> : <span />}
           <div className="network-badge">
@@ -2362,7 +2377,7 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
       <label>Action<DeckSelect value={kind} onChange={setKind} disabled={busy} options={actionOptions} /></label>
       {action.type === 'plugin_action' ? <><label className="plugin-action-info">Plugin action<span>{pluginAction?.description || 'Runs the local script defined by this Open Dock plugin.'}</span></label>{pluginAction?.inputs.map((input) => <label key={input.id}>{input.label}{input.type === 'select' ? <DeckSelect value={action.inputs?.[input.id] ?? input.default ?? input.options[0] ?? ''} disabled={busy} options={input.options.map((option, index) => ({ value: option, label: input.optionLabels?.[index] || option }))} onChange={(value) => onChange({ action: { ...action, inputs: { ...action.inputs, [input.id]: value } } })} /> : <input type={input.type} value={action.inputs?.[input.id] ?? input.default} onChange={(event) => onChange({ action: { ...action, inputs: { ...action.inputs, [input.id]: event.target.value } } })} disabled={busy} maxLength={512} />}</label>)}<label className="script-permission"><input type="checkbox" checked={action.allowOnPc} disabled={busy} onChange={(event) => onChange({ action: { ...action, allowOnPc: event.target.checked } })} /><span>Allow this plugin action to run on this PC from a paired phone</span></label></> : null}
       {kind === 'run_script' && action.type === 'run_script' ? <><label>Local script<div className="app-path-picker"><input value={scriptPath} onChange={(event) => onChange({ action: { ...action, path: event.target.value } })} placeholder={isMacos ? 'Choose a .sh or .py script' : 'Choose a .ps1 or .py script'} disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for a local script" title="Browse for a local script" disabled={busy} onClick={() => void browseScript()}><File size={15} /></button></div></label><label className="script-permission"><input type="checkbox" checked={action.allowOnPc} disabled={busy || !scriptPath.trim()} onChange={(event) => onChange({ action: { ...action, allowOnPc: event.target.checked } })} /><span>Allow this script to run on this PC when activated from a paired phone</span></label><small>Scripts run as your Windows or macOS user. Open Dock follows the operating system’s script policy.</small>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
-      {kind === 'media' ? <label>Media command<DeckSelect value={media} onChange={(value) => onChange({ action: { type: 'media', command: value as MediaCommand } })} disabled={busy} options={[['play_pause', 'Play / Pause'], ['next_track', 'Next track'], ['previous_track', 'Previous track'], ['volume_up', 'Volume up'], ['volume_down', 'Volume down'], ['mute', 'Mute']].map(([value, label]) => ({ value, label }))} /></label> : null}
+      {kind === 'media' ? <label>Media command<DeckSelect value={media} onChange={(value) => onChange({ action: { type: 'media', command: value as MediaCommand } })} disabled={busy} options={MEDIA_COMMANDS.map(([value, label]) => ({ value, label }))} /></label> : null}
       {kind === 'system' && action.type === 'system' ? <><label>Command<DeckSelect value={action.command} onChange={(value) => onChange({ action: { type: 'system', command: value as SystemCommand } })} disabled={busy} options={SYSTEM_COMMANDS.map(([value, label]) => ({ value, label }))} /></label>{action.command === 'screenshot' ? <small>Saves the main monitor as a PNG in Pictures/Open Dock.</small> : action.command.startsWith('brightness') ? <small>Works on built-in laptop screens.</small> : ['restart', 'shutdown', 'sign_out'].includes(action.command) ? <small>Runs at once, without asking. Open apps may lose unsaved work.</small> : null}</> : null}
       {kind === 'hotkey' && action.type === 'hotkey' ? <ShortcutField label="Keys" keys={action.keys} disabled={busy} onChange={(next) => onChange({ action: { type: 'hotkey', keys: next } })} /> : null}
       {kind === 'launch_app' && action.type === 'launch_app' ? <><label>App path or name<div className="app-path-picker"><input value={app} onChange={(event) => setAppTarget(event.target.value)} placeholder="Application, shortcut, or app name" disabled={busy} /><button type="button" className="app-browse-button" aria-label="Browse for an application" title="Browse for an application" disabled={busy} onClick={() => void browseApp()}><FolderOpen size={15} /></button></div></label></> : null}
@@ -2374,6 +2389,9 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
       {kind === 'select_profile' && action.type === 'select_profile' ? <label>Profile<DeckSelect value={action.profileId} options={profiles.map((item) => ({ value: item.id, label: item.name }))} onChange={(profileId) => onChange({ action: { type: 'select_profile', profileId } })} disabled={busy} /></label> : null}
       {kind === 'select_page' && action.type === 'select_page' ? <label>Page<DeckSelect value={action.pageId} options={pages.map((item) => ({ value: item.id, label: item.name }))} onChange={(pageId) => onChange({ action: { type: 'select_page', pageId } })} disabled={busy} /></label> : null}
     </PanelSection>
+    {action.type === 'open_folder' ? null : <PanelSection title="Long press">
+      <LongPressEditor action={button.longPress} disabled={busy} onChange={(longPress) => onChange({ longPress })} />
+    </PanelSection>}
     <PanelSection title="Appearance">
       <label>Button label<input value={button.label} onChange={(event) => onChange({ label: event.target.value })} maxLength={24} disabled={busy} /></label>
       <label>Icon<IconPicker value={button.icon} disabled={busy} onChange={(name, svg) => { thumbnailRequestRef.current += 1; setExtractingThumbnail(false); onChange({ icon: name, iconSvg: svg, appIconData: undefined }); }} onImage={(data) => { thumbnailRequestRef.current += 1; setExtractingThumbnail(false); onChange({ icon: 'image', iconSvg: undefined, appIconData: data }); }} /></label>
@@ -2381,6 +2399,24 @@ function ButtonProperties({ button, busy, isMacos, profiles, pages, plugins, onC
       {kind === 'launch_file' && action.type === 'launch_file' ? <><button type="button" className="secondary-button app-icon-button" disabled={busy || extractingThumbnail || !filePath.trim()} onClick={() => void extractFileThumbnail(filePath)}>{extractingThumbnail ? 'Reading thumbnail…' : button.appIconData ? 'Refresh thumbnail' : 'Use file thumbnail'}</button>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
       {kind === 'launch_folder' && action.type === 'launch_folder' ? <><button type="button" className="secondary-button app-icon-button" disabled={busy || extractingThumbnail || !folderPath.trim()} onClick={() => void extractFileThumbnail(folderPath)}>{extractingThumbnail ? 'Reading icon…' : button.appIconData ? 'Refresh folder icon' : 'Use folder icon'}</button>{iconError ? <small className="form-error">{iconError}</small> : null}</> : null}
     </PanelSection>
+  </>;
+}
+
+const LONG_PRESS_KINDS: [string, string][] = [['', 'Same as a tap'], ['media', 'Media'], ['hotkey', 'Keyboard shortcut'], ['open_url', 'Open website'], ['type_text', 'Type text'], ['launch_app', 'Launch app'], ['system', 'System & power']];
+
+/** What holding the key on the phone does instead of its tap action. */
+function LongPressEditor({ action, disabled, onChange }: { action: DeckAction | undefined; disabled: boolean; onChange: (action: DeckAction | undefined) => void }) {
+  const pick = (value: string) => onChange(
+    value === 'media' ? { type: 'media', command: 'mute' } : value === 'hotkey' ? { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'M'] } : value === 'open_url' ? { type: 'open_url', url: 'https://www.google.com' }
+      : value === 'type_text' ? { type: 'type_text', text: 'Hello from Open Dock' } : value === 'launch_app' ? { type: 'launch_app', app: '' } : value === 'system' ? { type: 'system', command: 'screenshot' } : undefined);
+  return <>
+    <label>On long press<DeckSelect value={action?.type ?? ''} onChange={pick} disabled={disabled} options={LONG_PRESS_KINDS.map(([value, label]) => ({ value, label }))} /></label>
+    {action?.type === 'media' ? <label>Media command<DeckSelect value={action.command} onChange={(value) => onChange({ type: 'media', command: value as MediaCommand })} disabled={disabled} options={MEDIA_COMMANDS.map(([value, label]) => ({ value, label }))} /></label> : null}
+    {action?.type === 'system' ? <label>Command<DeckSelect value={action.command} onChange={(value) => onChange({ type: 'system', command: value as SystemCommand })} disabled={disabled} options={SYSTEM_COMMANDS.map(([value, label]) => ({ value, label }))} /></label> : null}
+    {action?.type === 'hotkey' ? <ShortcutField label="Keys" keys={action.keys} disabled={disabled} onChange={(keys) => onChange({ type: 'hotkey', keys })} /> : null}
+    {action?.type === 'open_url' ? <label>Web address<input type="url" value={action.url} maxLength={2048} disabled={disabled} placeholder="https://" onChange={(event) => onChange({ type: 'open_url', url: event.target.value.trim() })} /></label> : null}
+    {action?.type === 'type_text' ? <label>Text<textarea rows={3} value={action.text} maxLength={2000} disabled={disabled} onChange={(event) => onChange({ type: 'type_text', text: event.target.value })} /></label> : null}
+    {action?.type === 'launch_app' ? <label>App path or name<input value={action.app} disabled={disabled} placeholder="Application, shortcut, or app name" onChange={(event) => onChange({ type: 'launch_app', app: event.target.value })} /></label> : null}
   </>;
 }
 

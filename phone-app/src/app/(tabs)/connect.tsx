@@ -8,7 +8,8 @@ import { Camera, Check, ChevronDown, ChevronRight, Monitor, QrCode, Radar, Refre
 import { connectionId, getPhoneName, PcConnection, setPhoneName, usePcConnection } from '../../connection';
 import { findPcs, pairWithPin, type FoundPc } from '../../discovery';
 import { useStyles, useTheme, type Colors } from '../../theme';
-import { AppearanceSection, ScreenSettingsSection } from '../../screen-power';
+import { AppearanceSection, FeelSection, ScreenSettingsSection } from '../../screen-power';
+import { Entrance } from '../../prefs';
 import { AppUpdatesSection } from '../../app-updates';
 
 type PairingCode = PcConnection & { type: 'open-dock-pair'; version: 1 };
@@ -160,10 +161,12 @@ export default function ConnectScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={[styles.title, heading]}>Connect</Text>
-          <Text style={styles.description}>Pair this phone with the Open Dock app running on your PC.</Text>
+          <Entrance>
+            <Text style={[styles.title, heading]}>Connect</Text>
+            <Text style={styles.description}>Pair this phone with the Open Dock app running on your PC.</Text>
+          </Entrance>
 
-          <View style={[styles.statusCard, connected ? styles.statusGood : connecting ? styles.statusPending : styles.statusIdle]}>
+          <Entrance index={1}><View style={[styles.statusCard, connected ? styles.statusGood : connecting ? styles.statusPending : styles.statusIdle]}>
             <Monitor size={17} color={connected ? colors.mint : colors.muted} />
             <View style={styles.statusCopy}>
               <Text style={styles.statusTitle}>{connected ? 'Connected to your PC' : connecting ? 'Connecting…' : status === 'error' ? 'Could not connect' : 'No PC connected'}</Text>
@@ -172,16 +175,16 @@ export default function ConnectScreen() {
             {connected && <Check size={16} color={colors.mint} />}
             {connection && !connected && !connecting ? <Pressable style={styles.retryButton} onPress={() => void connect(connection)} accessibilityRole="button" accessibilityLabel="Retry connecting"><RefreshCw size={12} color={colors.text} /><Text style={styles.deviceButtonText}>Retry</Text></Pressable> : null}
             {connection && connecting ? <Pressable style={styles.retryButton} onPress={() => void disconnect()} accessibilityRole="button" accessibilityLabel="Cancel connecting"><Text style={styles.deviceButtonText}>Cancel</Text></Pressable> : null}
-          </View>
+          </View></Entrance>
 
-          {Platform.OS === 'android' && connection ? <View style={styles.transportRow}>
+          {Platform.OS === 'android' && connection ? <Entrance index={2}><View style={styles.transportRow}>
             <Text style={styles.transportTitle}>Connection mode</Text>
             <View style={styles.transportSwitch}>
               <Pressable style={[styles.transportButton, connection.transport !== 'usb' && styles.transportActive]} onPress={() => void switchTransport('wifi')} accessibilityRole="button" accessibilityState={{ selected: connection.transport !== 'usb' }}><Text style={[styles.transportText, connection.transport !== 'usb' && styles.transportTextActive]}>Wi-Fi</Text></Pressable>
               <Pressable style={[styles.transportButton, connection.transport === 'usb' && styles.transportActive]} onPress={() => void switchTransport('usb')} accessibilityRole="button" accessibilityState={{ selected: connection.transport === 'usb' }}><Text style={[styles.transportText, connection.transport === 'usb' && styles.transportTextActive]}>USB</Text></Pressable>
             </View>
             <Text style={styles.transportHint}>Pair once. Switch modes without scanning again.</Text>
-          </View> : null}
+          </View></Entrance> : null}
 
           {scanning ? (
             <View style={styles.scannerCard}>
@@ -190,18 +193,18 @@ export default function ConnectScreen() {
               <Pressable style={styles.cancelScan} onPress={() => setScanning(false)} accessibilityRole="button"><Text style={styles.cancelScanText}>Cancel scan</Text></Pressable>
             </View>
           ) : (
-            <Pressable style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]} onPress={() => void startScan()} accessibilityRole="button">
+            <Entrance index={3}><Pressable style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]} onPress={() => void startScan()} accessibilityRole="button">
               <QrCode size={19} color={colors.text} strokeWidth={1.8} />
               <View style={styles.scanCopy}><Text style={styles.scanTitle}>Scan QR code</Text><Text style={styles.scanSubtitle}>Connect without entering details</Text></View>
               <ChevronRight size={16} color={colors.faint} />
-            </Pressable>
+            </Pressable></Entrance>
           )}
 
-          <Pressable style={({ pressed }) => [styles.scanButton, pressed && styles.pressed, searching && styles.disabled]} disabled={searching} onPress={() => void search()} accessibilityRole="button">
+          <Entrance index={4}><Pressable style={({ pressed }) => [styles.scanButton, pressed && styles.pressed, searching && styles.disabled]} disabled={searching} onPress={() => void search()} accessibilityRole="button">
             <Radar size={19} color={colors.text} strokeWidth={1.8} />
             <View style={styles.scanCopy}><Text style={styles.scanTitle}>{searching ? 'Looking for PCs…' : 'Find my PC'}</Text><Text style={styles.scanSubtitle}>Pair with the PIN shown in Open Dock, no camera needed</Text></View>
             <ChevronRight size={16} color={colors.faint} />
-          </Pressable>
+          </Pressable></Entrance>
           {found && found.length > 0 ? <View style={styles.manualCard}>
             {found.map((pc) => <Pressable key={pc.host} style={[styles.foundRow, pinTarget?.host === pc.host && styles.foundRowActive]} onPress={() => { setPinTarget(pc); setPin(''); }} accessibilityRole="button" accessibilityLabel={`Pair with ${pc.name}`}>
               <Monitor size={16} color={colors.muted} />
@@ -216,11 +219,11 @@ export default function ConnectScreen() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <View style={styles.manualCard}>
+          <Entrance index={5}><View style={styles.manualCard}>
             <Text style={styles.label}>This phone&apos;s name</Text>
             <TextInput value={phoneName} onChangeText={setPhoneNameDraft} onSubmitEditing={() => void savePhoneName()} onBlur={() => void savePhoneName()} maxLength={40} placeholder="My phone" placeholderTextColor={colors.faint} autoCapitalize="words" returnKeyType="done" style={styles.input} accessibilityLabel="This phone's name" />
             <Text style={styles.portHint}>The PC lists this phone by this name.</Text>
-          </View>
+          </View></Entrance>
 
           <Pressable style={styles.manualToggle} onPress={() => setManualOpen(!manualOpen)} accessibilityRole="button" accessibilityState={{ expanded: manualOpen }}>
             <Text style={styles.manualTitle}>Manual setup</Text>
@@ -240,7 +243,7 @@ export default function ConnectScreen() {
             <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={() => void submit()} accessibilityRole="button"><Text style={styles.primaryText}>Connect manually</Text></Pressable>
           </View>}
 
-          <View style={styles.pairedSection}>
+          <Entrance index={6}><View style={styles.pairedSection}>
             <View style={styles.pairedHeader}><Text style={styles.pairedTitle}>Paired devices</Text><Text style={styles.pairedCount}>{pairedDevices.length}</Text></View>
             {pairedDevices.length === 0 ? <Text style={styles.emptyPaired}>No paired PCs yet. Scan a QR code or enter details above.</Text> : pairedDevices.map((device) => {
               const active = Boolean(connection && connectionId(connection) === connectionId(device));
@@ -263,11 +266,12 @@ export default function ConnectScreen() {
                 </View>
               </View>;
             })}
-          </View>
+          </View></Entrance>
 
-          <AppearanceSection />
-          <ScreenSettingsSection />
-          <AppUpdatesSection />
+          <Entrance index={7}><AppearanceSection /></Entrance>
+          <Entrance index={8}><FeelSection /></Entrance>
+          <Entrance index={8}><ScreenSettingsSection /></Entrance>
+          <Entrance index={8}><AppUpdatesSection /></Entrance>
 
           <View style={styles.localNote}><ShieldCheck size={15} color={colors.muted} /><Text style={styles.localNoteText}>{connection?.transport === 'usb' ? 'Direct Android USB connection through authorized USB debugging.' : 'Direct connection over your local Wi-Fi. Use a trusted network.'}</Text></View>
           {!permission?.granted && !scanning && <View style={styles.permissionNote}><Camera size={14} color={colors.faint} /><Text style={styles.permissionText}>Camera access is only used to scan the pairing code.</Text></View>}
@@ -280,8 +284,8 @@ export default function ConnectScreen() {
 const makeStyles = (colors: Colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  content: { padding: 18, paddingBottom: 28 },
-  title: { color: colors.text, fontSize: 23, fontWeight: '600', letterSpacing: -0.3, marginTop: 17 },
+  content: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 28 },
+  title: { color: colors.text, fontSize: 23, fontWeight: '600', letterSpacing: -0.3 },
   description: { color: colors.muted, fontSize: 14, lineHeight: 17, marginTop: 5 },
   statusCard: { borderRadius: 7, borderWidth: 1, padding: 13, marginTop: 19, flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusGood: { backgroundColor: colors.goodBg, borderColor: colors.goodBorder },

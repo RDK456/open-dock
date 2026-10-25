@@ -565,7 +565,7 @@ export default function DeckScreen() {
     : actionError === 'unknown_button' ? 'Button is out of date. Refresh the deck and try again'
     : actionError ? 'PC could not perform control' : '';
 
-  const press = (button: DeckButton, label: string) => {
+  const press = (button: DeckButton, label: string, longPress = false) => {
     if (button.action.type === 'open_folder') {
       openFolder(button.action.folderId);
       return;
@@ -574,7 +574,7 @@ export default function DeckScreen() {
       router.push('/connect');
       return;
     }
-    if (sendButton(button.id)) {
+    if (sendButton(button.id, longPress)) {
       setFeedback(`${label} sent`);
       if (feedbackTimer.current) {
         clearTimeout(feedbackTimer.current);
@@ -645,7 +645,7 @@ export default function DeckScreen() {
       const Icon = controlIcon(button, playbackState);
       const order = placement.row * columns + placement.column;
       const surfaceLook = keySurface(order);
-      return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
+      return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : button.longPress && connected ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); press(button, label, true); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {editing && !big && pins.includes(button.id) ? <View pointerEvents="none" style={styles.pinDot} /> : null}
         {button.appIconData && button.icon === 'image' ? <Image source={{ uri: button.appIconData }} style={[StyleSheet.absoluteFill, { borderRadius: design.radius }]} resizeMode="cover" /> : button.appIconData ? <Image source={{ uri: button.appIconData }} style={big ? { width: iconSize, height: iconSize } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.iconStroke} />}

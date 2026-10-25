@@ -4,6 +4,7 @@ import { Pressable } from './motion';
 import Storage from 'expo-sqlite/kv-store';
 import * as Brightness from 'expo-brightness';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { setPrefs, usePrefs } from './prefs';
 import { LOOKS, setLook, setThemeMode, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
 import { setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
 
@@ -125,8 +126,22 @@ export function AppearanceSection() {
     <Choice options={WALLPAPERS} value={wallpaper} onChange={(value) => setWallpaperSettings({ wallpaper: value })} />
     <Text style={styles.label}>Wallpaper motion</Text>
     <Choice options={[[false, 'Still'], [true, 'Drift']]} value={motion} onChange={(value) => setWallpaperSettings({ motion: value })} />
-    <Text style={styles.hint}>Shows behind the Deck and Touch screens. Drift pauses when the phone asks for reduced motion.</Text>
+    <Text style={styles.hint}>Shows behind the Deck and Touch screens. Drift also stops when Motion is off below.</Text>
     </> : null}
+  </View>;
+}
+
+/** The Feel section of the settings tab: a buzz on key presses, and whether anything moves. */
+export function FeelSection() {
+  const styles = useStyles(makeStyles);
+  const { haptics, motion } = usePrefs();
+  return <View style={styles.card}>
+    <Text style={styles.title}>Feel</Text>
+    <Text style={styles.label}>Haptics on key presses</Text>
+    <Choice options={[[false, 'Off'], [true, 'On']]} value={haptics} onChange={(value) => setPrefs({ haptics: value })} />
+    <Text style={styles.label}>Motion</Text>
+    <Choice options={[[false, 'Off'], [true, 'On']]} value={motion} onChange={(value) => setPrefs({ motion: value })} />
+    <Text style={styles.hint}>Off keeps screens, pages and keys still. This switch is Open Dock&apos;s own; it does not follow the phone&apos;s animation setting.</Text>
   </View>;
 }
 

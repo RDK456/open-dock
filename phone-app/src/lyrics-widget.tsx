@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, AppState, Animated, Easing, KeyboardAvoidingView, Modal, PanResponder, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { usePrefs } from './prefs';
+import { AppState, Animated, Easing, KeyboardAvoidingView, Modal, PanResponder, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from './motion';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Storage from 'expo-sqlite/kv-store';
@@ -184,19 +185,7 @@ function RepeatButton({ onStep, label, size, children }: { onStep: (scale: numbe
   </Pressable>;
 }
 
-function useReduceMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (alive) setReduce(value); });
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
-    return () => {
-      alive = false;
-      subscription.remove();
-    };
-  }, []);
-  return reduce;
-}
+const useReduceMotion = () => !usePrefs().motion;
 
 // A gentle 1 -> 1.08 -> 1 pulse, used by every set of dots.
 function useBreath(enabled: boolean) {
