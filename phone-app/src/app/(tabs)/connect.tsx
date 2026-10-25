@@ -219,12 +219,6 @@ export default function ConnectScreen() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Entrance index={5}><View style={styles.manualCard}>
-            <Text style={styles.label}>This phone&apos;s name</Text>
-            <TextInput value={phoneName} onChangeText={setPhoneNameDraft} onSubmitEditing={() => void savePhoneName()} onBlur={() => void savePhoneName()} maxLength={40} placeholder="My phone" placeholderTextColor={colors.faint} autoCapitalize="words" returnKeyType="done" style={styles.input} accessibilityLabel="This phone's name" />
-            <Text style={styles.portHint}>The PC lists this phone by this name.</Text>
-          </View></Entrance>
-
           <Pressable style={styles.manualToggle} onPress={() => setManualOpen(!manualOpen)} accessibilityRole="button" accessibilityState={{ expanded: manualOpen }}>
             <Text style={styles.manualTitle}>Manual setup</Text>
             {manualOpen ? <ChevronDown size={16} color={colors.faint} /> : <ChevronRight size={16} color={colors.faint} />}
@@ -268,9 +262,16 @@ export default function ConnectScreen() {
             })}
           </View></Entrance>
 
-          <Entrance index={7}><AppearanceSection /></Entrance>
+          <Text style={styles.group}>This phone</Text>
+          <Entrance index={7}><View style={styles.manualCard}>
+            <Text style={styles.label}>Phone name</Text>
+            <TextInput value={phoneName} onChangeText={setPhoneNameDraft} onSubmitEditing={() => void savePhoneName()} onBlur={() => void savePhoneName()} maxLength={40} placeholder="My phone" placeholderTextColor={colors.faint} autoCapitalize="words" returnKeyType="done" style={styles.input} accessibilityLabel="This phone's name" />
+            <Text style={styles.portHint}>The PC lists this phone by this name.</Text>
+          </View></Entrance>
+          <Entrance index={8}><AppearanceSection /></Entrance>
           <Entrance index={8}><FeelSection /></Entrance>
           <Entrance index={8}><ScreenSettingsSection /></Entrance>
+          <Text style={styles.group}>About</Text>
           <Entrance index={8}><AppUpdatesSection /></Entrance>
 
           <View style={styles.localNote}><ShieldCheck size={15} color={colors.muted} /><Text style={styles.localNoteText}>{connection?.transport === 'usb' ? 'Direct Android USB connection through authorized USB debugging.' : 'Direct connection over your local Wi-Fi. Use a trusted network.'}</Text></View>
@@ -285,6 +286,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   content: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 28 },
+  group: { marginTop: 30, marginBottom: -4, color: colors.faint, fontSize: 11, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase' },
   title: { color: colors.text, fontSize: 23, fontWeight: '600', letterSpacing: -0.3 },
   description: { color: colors.muted, fontSize: 14, lineHeight: 17, marginTop: 5 },
   statusCard: { borderRadius: 7, borderWidth: 1, padding: 13, marginTop: 19, flexDirection: 'row', alignItems: 'center', gap: 10 },

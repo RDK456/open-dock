@@ -608,6 +608,8 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .page-heading { margin-bottom: 23px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .page-heading h1 { margin: 0; color: var(--foreground); font-size: 23px; font-weight: 600; letter-spacing: -.45px; }
 .page-heading p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.settings-group { max-width: 760px; margin: 30px 0 10px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.settings-group:first-of-type { margin-top: 0; }
 .device-navigation-setting { max-width: 760px; min-height: 94px; padding: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
 .device-navigation-copy { min-width: 0; }
 .device-navigation-copy h2 { margin: 0; color: var(--foreground); font-size: 14px; font-weight: 600; }

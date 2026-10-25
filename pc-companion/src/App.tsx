@@ -526,8 +526,10 @@ function App() {
             {importError ? <p className="usb-error" role="alert">{importError}</p> : null}
           </section> : null}
           {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} deviceId={deviceId} onSaved={(config) => { setDeckConfig(config); void invoke<DeviceInfo[]>('list_devices').then(setDevices).catch(() => {}); }} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={openDockPlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'settings' ? <>
-          <div className="page-heading"><div><h1>Settings</h1><p>Manage updates, voice, device navigation and Open Dock plugins.</p></div></div>
+          <div className="page-heading"><div><h1>Settings</h1><p>Appearance, this PC, connected phones, voice and plugins.</p></div></div>
+          <h2 className="settings-group">Appearance</h2>
           <AppearanceSetting />
+          <h2 className="settings-group">General</h2>
           <section className="device-navigation-setting pc-name-setting">
             <div className="device-navigation-copy"><h2>This PC's name</h2><p>Phones show this name instead of the IP address.</p></div>
             <form className="name-field" onSubmit={(event) => { event.preventDefault(); void savePcName(); }}>
@@ -536,14 +538,17 @@ function App() {
             </form>
             {pcNameError ? <p className="setting-error" role="alert">{pcNameError}</p> : null}
           </section>
-          <UpdatesSetting updater={updater} />
           <StartWithWindowsSetting />
-          <VoiceSettings voice={voice} />
+          <UpdatesSetting updater={updater} />
+          <h2 className="settings-group">Phones</h2>
           <section className="device-navigation-setting">
             <div className="device-navigation-copy"><h2>Independent device navigation</h2><p>Let each connected phone use its own profile and page. Turn this off to mirror navigation across all phones.</p></div>
             <button className={`setting-switch ${independentNavigation ? 'enabled' : ''}`} type="button" role="switch" aria-checked={independentNavigation} aria-label="Independent device navigation" disabled={navigationSettingBusy} onClick={() => void saveIndependentNavigation(!independentNavigation)}><span /></button>
             {navigationSettingError ? <p className="setting-error" role="alert">{navigationSettingError}</p> : null}
           </section>
+          <h2 className="settings-group">Voice</h2>
+          <VoiceSettings voice={voice} />
+          <h2 className="settings-group">Plugins</h2>
           <OpenDockPluginSettings plugins={openDockPlugins} warnings={openDockPluginWarnings} onChange={(plugins, warnings) => { setOpenDockPlugins(plugins); setOpenDockPluginWarnings(warnings); }} />
           </> : <>
           <div className="page-heading">

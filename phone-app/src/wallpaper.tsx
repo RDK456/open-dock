@@ -1,5 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Animated, Easing, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Animated, Easing, Image, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { File, Paths } from 'expo-file-system';
 import Svg, { Circle, Defs, LinearGradient, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Storage from 'expo-sqlite/kv-store';
 import { usePrefs } from './prefs';
@@ -8,12 +10,32 @@ import { backdrops, wallpaperGlows } from './theme-colors';
 
 // Soft light behind the Deck and Touch screens, under glass panels. Kept on this phone only, like the theme.
 export type WallpaperId = 'none' | 'aurora' | 'ember' | 'ocean' | 'forest';
-export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean };
+// image: a picture of your own (file uri) shown under the gradient; imageOpacity and gradient are 0–1.
+export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean; image: string | null; imageOpacity: number; gradient: number };
 
 export const WALLPAPERS: [WallpaperId, string][] = [['none', 'None'], ['aurora', 'Aurora'], ['ember', 'Ember'], ['ocean', 'Ocean'], ['forest', 'Forest']];
 
 const KEY = 'opendock.wallpaper';
-const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true };
+const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true, image: null, imageOpacity: 1, gradient: 0.5 };
+const unit = (value: unknown, fallback: number) => typeof value === 'number' && value >= 0 && value <= 1 ? value : fallback;
+
+/** Lets the user pick a picture and keeps a copy in the app's own storage, so it outlives the picker's cache. */
+export async function pickWallpaperImage() {
+  const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
+  if (result.canceled) return;
+  try {
+    const copy = new File(Paths.document, `wallpaper-${Date.now()}.jpg`);
+    new File(result.assets[0].uri).copy(copy);
+    clearWallpaperImage();
+    setWallpaperSettings({ image: copy.uri });
+  } catch { setWallpaperSettings({ image: result.assets[0].uri }); }
+}
+
+export function clearWallpaperImage() {
+  const old = settings.image;
+  setWallpaperSettings({ image: null });
+  try { if (old && old.startsWith(Paths.document.uri)) new File(old).delete(); } catch { /* already gone */ }
+}
 
 function read(): WallpaperSettings {
   try {
@@ -21,6 +43,9 @@ function read(): WallpaperSettings {
     return {
       wallpaper: WALLPAPERS.some(([id]) => id === saved.wallpaper) ? saved.wallpaper as WallpaperId : DEFAULTS.wallpaper,
       motion: typeof saved.motion === 'boolean' ? saved.motion : DEFAULTS.motion,
+      image: typeof saved.image === 'string' ? saved.image : null,
+      imageOpacity: unit(saved.imageOpacity, DEFAULTS.imageOpacity),
+      gradient: unit(saved.gradient, DEFAULTS.gradient),
     };
   } catch {
     return DEFAULTS;
@@ -68,7 +93,7 @@ export function Wallpaper() {
   // changes size (the tab bar hiding, rotation) so the light reaches the bottom edge.
   const [size, setSize] = useState('');
 
-  if (look === 'dock') return <DockBackdrop />;
+  if (look === 'dock' || (settings.image && look !== 'signal')) return <DockBackdrop />;
   if (look === 'signal') return <DotBackdrop key={size} onSize={setSize} dot={backdrops.signalDot[scheme]} />;
   if (wallpaper === 'none') return null;
   const glows = wallpaperGlows[wallpaper];
@@ -98,9 +123,13 @@ export function Wallpaper() {
 export function DockBackdrop() {
   const { scheme } = useTheme();
   const [size, setSize] = useState('');
+  const { image, imageOpacity, gradient } = useWallpaperSettings();
   const [from, to, glow] = backdrops.dock[scheme];
-  return <View pointerEvents="none" style={styles.fill} onLayout={measure(setSize)}>
-    <Svg key={size} width="100%" height="100%">
+  // With a picture, the gradient and glows become a veil over it; the level sets how strong.
+  const veil = image ? gradient : 1;
+  return <View pointerEvents="none" style={[styles.fill, { backgroundColor: from }]} onLayout={measure(setSize)}>
+    {image ? <Image source={{ uri: image }} style={[styles.fill, { opacity: imageOpacity }]} resizeMode="cover" /> : null}
+    <Svg key={size} width="100%" height="100%" style={{ opacity: veil }}>
       <Defs>
         <LinearGradient id="dockBase" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor={from} />
@@ -110,9 +139,18 @@ export function DockBackdrop() {
           <Stop offset="0" stopColor={glow} stopOpacity={scheme === 'light' ? 0.4 : 0.5} />
           <Stop offset="1" stopColor={glow} stopOpacity={0} />
         </RadialGradient>
+        <RadialGradient id="dockGlow2" cx="95%" cy="100%" r="65%">
+          <Stop offset="0" stopColor="#8b7cf6" stopOpacity={scheme === 'light' ? 0.28 : 0.4} />
+          <Stop offset="1" stopColor="#8b7cf6" stopOpacity={0} />
+        </RadialGradient>
+        <Pattern id="dockGrid" width="28" height="28" patternUnits="userSpaceOnUse">
+          <Circle cx="14" cy="14" r="0.9" fill={scheme === 'light' ? '#000000' : '#ffffff'} opacity={0.1} />
+        </Pattern>
       </Defs>
       <Rect width="100%" height="100%" fill="url(#dockBase)" />
       <Rect width="100%" height="100%" fill="url(#dockGlow)" />
+      <Rect width="100%" height="100%" fill="url(#dockGlow2)" />
+      <Rect width="100%" height="100%" fill="url(#dockGrid)" />
     </Svg>
   </View>;
 }

@@ -389,9 +389,11 @@ function ChipRow({ label, items, selectedId, onSelect }: { label: string; items:
 export default function DeckScreen() {
   const { colors, scheme, look, key: design } = useTheme();
   // A key's surface in the chosen look; Bento deals its saturated blocks out to the keys in turn.
-  const keySurface = (order: number, dock = false) => {
+  const keySurface = (order: number, dock = false, plate = false) => {
     const tile = design.tiles?.[order % design.tiles.length];
-    // Immersive mode is a dock: bare icons on the backdrop, no key box.
+    // Immersive mode: frosted squircle plates with a lit top edge, an accent LED and a label under the icon.
+    if (plate) return { ink: design.ink, style: { borderRadius: 28, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, boxShadow: `inset 0px 1px 0px ${colors.glassBorder}`, overflow: 'hidden' as const } };
+    // The Dock look's own keys are bare icons on the backdrop, no key box.
     if (dock) return { ink: design.ink, style: { borderRadius: design.radius, borderWidth: 0, backgroundColor: 'transparent' } };
     return {
       ink: tile?.[1] ?? design.ink,
@@ -547,7 +549,7 @@ export default function DeckScreen() {
   const immersiveAvailableHeight = Math.max(0, immersiveSize.height - 24);
   const immersiveCellWidth = Math.max(0, (immersiveSize.width - 24 - immersiveGap * (columns - 1)) / columns);
   const immersiveCellHeight = Math.max(1, (immersiveAvailableHeight - 24 - immersiveGap * (rows - 1)) / rows);
-  const immersiveIconSize = Math.min(76, Math.max(30, Math.min(immersiveCellHeight, immersiveCellWidth) * 0.5));
+  const immersiveIconSize = Math.min(64, Math.max(26, Math.min(immersiveCellHeight, immersiveCellWidth) * (immersiveCellHeight >= 84 ? 0.4 : 0.5)));
   // Widget keys inset their content by a 1 px border plus clockWidgetKey's 4 px padding.
   const widgetKeyInset = 5;
   const immersiveSurfaceWidth = immersiveSize.width - 24;
@@ -646,11 +648,14 @@ export default function DeckScreen() {
       const label = dynamicPlay ? (isPlaying ? 'Pause' : 'Play') : button.label;
       const Icon = controlIcon(button, playbackState);
       const order = placement.row * columns + placement.column;
-      const surfaceLook = keySurface(order, big || !!design.iconOnly);
+      const surfaceLook = keySurface(order, !!design.iconOnly, big);
+      const plateLabel = big && immersiveCellHeight >= 84;
       return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, design.iconOnly && styles.iconOnlyKey, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : button.longPress && connected ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); press(button, label, true); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {editing && !big && pins.includes(button.id) ? <View pointerEvents="none" style={styles.pinDot} /> : null}
         {button.appIconData && button.icon === 'image' ? <Image source={{ uri: button.appIconData }} style={[StyleSheet.absoluteFill, { borderRadius: design.radius }]} resizeMode="cover" /> : button.appIconData ? <Image source={{ uri: button.appIconData }} style={big || design.iconOnly ? { width: iconSize, height: iconSize, borderRadius: iconSize * 0.22 } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.iconStroke} />}
+        {big ? <View pointerEvents="none" style={[styles.plateLed, { backgroundColor: colors.accent }]} /> : null}
+        {plateLabel ? <Text numberOfLines={1} style={[styles.plateLabel, { color: surfaceLook.ink, fontFamily: design.font }]}>{design.caps ? label.toUpperCase() : label}</Text> : null}
         {big || design.iconOnly ? null : <Text style={[styles.keyLabel, button.icon === 'image' && { marginTop: 'auto', textShadowColor: colors.scrim, textShadowRadius: 4 }, { color: surfaceLook.ink, fontFamily: design.font, fontSize: design.labelSize, fontWeight: design.labelWeight, lineHeight: Math.round(design.labelSize * 1.2), letterSpacing: design.tracking ?? (design.tiles ? -0.4 : 0) }]} numberOfLines={2}>{design.caps ? label.toUpperCase() : label}</Text>}
       </SpringKey>;
     });
@@ -760,7 +765,9 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   immersiveGrid: { ...StyleSheet.absoluteFill },
   immersiveDeckCanvas: { position: 'absolute', left: 0, right: 0 },
   iconOnlyKey: { alignItems: 'center', justifyContent: 'center' },
-  immersiveKey: { borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, alignItems: 'center', justifyContent: 'center' },
+  immersiveKey: { borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  plateLabel: { maxWidth: '88%', fontSize: 11, fontWeight: '600', opacity: 0.8, includeFontPadding: false },
+  plateLed: { position: 'absolute', bottom: 7, alignSelf: 'center', width: 16, height: 3, borderRadius: 2, opacity: 0.75 },
   clockWidgetKey: { padding: 4, alignItems: 'center', justifyContent: 'center' },
   pluginWidgetContent: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 3, overflow: 'hidden' },
   immersivePluginWidgetContent: { gap: 7, paddingHorizontal: 8 },

@@ -6,7 +6,7 @@ import * as Brightness from 'expo-brightness';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setPrefs, usePrefs } from './prefs';
 import { LOOKS, setLook, setThemeMode, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
-import { setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
+import { clearWallpaperImage, pickWallpaperImage, setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
 
 const LOOK_HINTS: Record<Look, string> = {
   classic: 'Plain keys in light or dark, with a wallpaper of your choice.',
@@ -112,7 +112,7 @@ export function AppearanceSection() {
   const styles = useStyles(makeStyles);
   const mode = useThemeMode();
   const look = useLook();
-  const { wallpaper, motion } = useWallpaperSettings();
+  const { wallpaper, motion, image, imageOpacity, gradient } = useWallpaperSettings();
   const options: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
   return <View style={styles.card}>
     <Text style={styles.title}>Appearance</Text>
@@ -128,6 +128,19 @@ export function AppearanceSection() {
     <Text style={styles.label}>Wallpaper motion</Text>
     <Choice options={[[false, 'Still'], [true, 'Drift']]} value={motion} onChange={(value) => setWallpaperSettings({ motion: value })} />
     <Text style={styles.hint}>Shows behind the Deck and Touch screens. Drift also stops when Motion is off below.</Text>
+    </> : null}
+    {look !== 'signal' ? <>
+    <Text style={styles.label}>Your own background</Text>
+    <View style={styles.segments}>
+      <Pressable style={styles.segment} onPress={() => void pickWallpaperImage()} accessibilityRole="button"><Text style={styles.segmentText}>{image ? 'Change image' : 'Choose image'}</Text></Pressable>
+      {image ? <Pressable style={styles.segment} onPress={clearWallpaperImage} accessibilityRole="button"><Text style={styles.segmentText}>Remove</Text></Pressable> : null}
+    </View>
+    {image ? <>
+    <Text style={styles.label}>Image opacity</Text>
+    <Choice options={[[0.25, '25%'], [0.5, '50%'], [0.75, '75%'], [1, '100%']]} value={imageOpacity} onChange={(value) => setWallpaperSettings({ imageOpacity: value })} />
+    <Text style={styles.label}>Gradient over image</Text>
+    <Choice options={[[0, 'Off'], [0.35, 'Low'], [0.65, 'Medium'], [1, 'High']]} value={gradient} onChange={(value) => setWallpaperSettings({ gradient: value })} />
+    </> : null}
     </> : null}
   </View>;
 }
