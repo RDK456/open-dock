@@ -74,7 +74,8 @@ const PAIRED_KEY = 'opendock.pc-connections';
 const LEGACY_STORAGE_KEY = 'decklink.pc-connection';
 const MAX_RECONNECT_ATTEMPTS = 3;
 // Some phones (iPhones especially) let a connection to an address nobody answers hang for over a minute.
-const CONNECT_TIMEOUT_MS = 8000;
+const CONNECT_TIMEOUT_MS = 5000;
+const RECONNECT_MAX_DELAY_MS = 4000;
 const USB_PROBE_MS = 10_000;
 const DECK_CACHE_KEY = 'opendock.deck-snapshot';
 const DEVICE_SELECTION_KEY = 'opendock.device-navigation';
@@ -260,6 +261,11 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   });
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
+  const targetRef = useRef<PcConnection | null>(null);
+  const discoveringRef = useRef(false);
+  // Set once the PC has accepted the key. Anything else it receives before that is answered "unauthorized".
+  const authenticatedRef = useRef(false);
+  const unauthorizedRef = useRef(false);
   const shouldReconnectRef = useRef(false);
   const terminalErrorRef = useRef(false);
   const [connection, setConnection] = useState<PcConnection | null>(null);
@@ -288,7 +294,14 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       const socket = socketRef.current;
-      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'set_streaming', active: state === 'active' }));
+      if (socket?.readyState === WebSocket.OPEN && authenticatedRef.current) socket.send(JSON.stringify({ type: 'set_streaming', active: state === 'active' }));
+      // Opening the app is a reason to try right now, not after the backoff.
+      else if (state === 'active' && shouldReconnectRef.current && targetRef.current) {
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+        reconnectAttemptRef.current = 0;
+        openConnectionRef.current?.(targetRef.current, true);
+      }
     });
     return () => subscription.remove();
   }, []);
@@ -318,6 +331,9 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       terminalErrorRef.current = false;
       reconnectAttemptRef.current = 0;
     }
+    targetRef.current = next;
+    authenticatedRef.current = false;
+    if (!retrying) unauthorizedRef.current = false;
     setConnection(next);
     setStatus('connecting');
     if (!retrying) {
@@ -338,19 +354,29 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       if (!shouldReconnectRef.current) return;
       const attempt = reconnectAttemptRef.current;
       // Keep trying in the background so the deck comes back by itself when the PC does; show it as offline meanwhile.
-      setStatus(attempt >= MAX_RECONNECT_ATTEMPTS ? 'disconnected' : 'connecting');
+      setStatus(unauthorizedRef.current ? 'error' : attempt >= MAX_RECONNECT_ATTEMPTS ? 'disconnected' : 'connecting');
       // A PC that is not answering may have a new address on this Wi-Fi (or the cable came out): look for it by name and follow it there.
-      if (attempt >= 1 && next.deviceName) {
+      // Scans early and then every third try, so a PC that stays off does not keep the radio busy.
+      if (next.deviceName && !discoveringRef.current && AppState.currentState === 'active' && (attempt <= 2 || attempt % 3 === 0)) {
+        discoveringRef.current = true;
         void findPcs().then((pcs) => {
           const moved = pcs.find((pc) => pc.name === next.deviceName && (next.transport === 'usb' || pc.host !== next.host || pc.port !== next.port));
-          if (moved && shouldReconnectRef.current && reconnectAttemptRef.current === attempt + 1) openConnectionRef.current?.({ ...next, host: moved.host, port: moved.port, transport: 'wifi' }, true);
-        }).catch(() => undefined);
+          // A scan takes seconds; by then the link may be back (socket open) or the user may have moved on.
+          if (moved && shouldReconnectRef.current && targetRef.current?.deviceName === next.deviceName && socketRef.current?.readyState !== WebSocket.OPEN) {
+            const found = { ...next, host: moved.host, port: moved.port, transport: 'wifi' as const };
+            openConnectionRef.current?.(found, true);
+            // Remember the new address, so the next start and Retry go straight there.
+            void persistPairedDevices(pairedDevicesRef.current.map((device) => connectionId(device) === connectionId(next) ? found : device));
+            void SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(found));
+          }
+        }).catch(() => undefined).finally(() => { discoveringRef.current = false; });
       }
       // Alternate between Wi-Fi and the USB cable, so whichever link is up takes over by itself.
       const other: PcConnection | null = Platform.OS !== 'android' ? null
         : next.transport === 'usb' ? (isLoopback(next.host) ? null : { ...next, transport: 'wifi' })
           : { ...next, transport: 'usb' };
-      const delay = Math.min(30_000, 1000 * 2 ** attempt);
+      // Quick, steady tries (1, 2, then every 4 s): the deck should be back within seconds of the PC.
+      const delay = unauthorizedRef.current ? 10_000 : Math.min(RECONNECT_MAX_DELAY_MS, 1000 * 2 ** attempt);
       reconnectAttemptRef.current += 1;
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null;
@@ -412,6 +438,8 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
               void SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(renamed));
             }
             reconnectAttemptRef.current = 0;
+            unauthorizedRef.current = false;
+            authenticatedRef.current = true;
             setStatus('connected');
             if (widgetSurfaceRef.current) socket.send(JSON.stringify({ type: 'widget_surface', surface: widgetSurfaceRef.current }));
             // In the background the PC sends nothing (see the AppState effect in this provider).
@@ -522,8 +550,9 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
             });
           }
           if (message.type === 'error' && message.message === 'unauthorized') {
-            shouldReconnectRef.current = false;
-            terminalErrorRef.current = true;
+            // Not final: the PC also says this to a message that arrives before the key, or while it starts up.
+            // Keep trying slowly, so a pairing the PC takes back shows as an error but a hiccup heals itself.
+            unauthorizedRef.current = true;
             setStatus('error');
             socket.close();
           }
@@ -555,7 +584,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       setStatus('error');
       retry();
     }
-  }, []);
+  }, [persistPairedDevices]);
 
   useEffect(() => {
     openConnectionRef.current = openConnection;
