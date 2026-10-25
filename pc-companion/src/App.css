@@ -1385,6 +1385,16 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 .device-picker { display: flex; align-items: center; gap: 8px; }
 .device-picker select, .name-field input { min-height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--z900); color: var(--z200); font-size: 13px; }
 .name-field { display: flex; gap: 8px; align-items: center; }
+.device-picker { min-width: 0; flex-wrap: nowrap; }
+.device-tabs { min-width: 0; display: flex; gap: 4px; padding: 3px; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--z900); scrollbar-width: none; }
+.device-tab { min-height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; flex: none; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; white-space: nowrap; }
+.device-tab:hover:not(.selected) { color: var(--foreground); }
+.device-tab.selected { background: var(--z800); color: var(--foreground); }
+.device-tab.template { color: var(--subtle); }
+.device-tab.template.selected { color: var(--foreground); }
+.device-tab:focus-visible { outline: 2px solid var(--z300); outline-offset: 1px; }
+.device-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--z600); }
+.device-dot.online { background: var(--green); }
 
 /* Hover bounce: a spring overshoot on lift, a quick squash on press. !important so every look keeps it. */
 .nav-item, .primary-button, .secondary-button, .icon-button, .panel-icon-button, .deck-library-item, .update-pill, .clock-browser-tile, .app-browse-button, .transport-tab { transition: transform 280ms cubic-bezier(.34, 1.56, .64, 1), background 140ms ease, border-color 140ms ease, color 140ms ease !important; }

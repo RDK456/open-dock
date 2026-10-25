@@ -208,6 +208,8 @@ function App() {
   const [independentNavigation, setIndependentNavigation] = useState(true);
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState('');
+  // Until the user picks a tab themselves, the deck editor follows the first (connected) phone.
+  const [deviceTouched, setDeviceTouched] = useState(false);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [pcNameDraft, setPcNameDraft] = useState('');
   const [pcNameError, setPcNameError] = useState('');
@@ -414,6 +416,20 @@ function App() {
     return () => { live = false; };
   }, [deviceId]);
   const selectedDevice = devices.find((device) => device.id === deviceId);
+  useEffect(() => {
+    if (!deviceTouched && !deviceId && devices.length > 0) setDeviceId(devices[0].id);
+    // A forgotten phone's tab is gone: fall back to the template tab.
+    else if (deviceId && devices.length > 0 && !devices.some((device) => device.id === deviceId)) setDeviceId('');
+  }, [devices, deviceId, deviceTouched]);
+  async function forgetDevice() {
+    if (!deviceId) return;
+    try {
+      await invoke('forget_device', { deviceId });
+      setDeviceId('');
+      setDeviceTouched(true);
+      setDevices(await invoke<DeviceInfo[]>('list_devices'));
+    } catch { /* a connected phone cannot be forgotten; the tab stays */ }
+  }
   async function resetDeviceDeck() {
     if (!deviceId) return;
     try {
@@ -483,16 +499,19 @@ function App() {
 
       <section className="main-panel">
         <header className="topbar" data-tauri-drag-region>
-          {screen === 'deck' && devices.length > 0 ? <div className="device-picker">
-            <select aria-label="Device to customise" value={deviceId} onChange={(event) => { setDeviceId(event.target.value); setRenameDraft(null); }}>
-              <option value="">All devices (shared deck)</option>
-              {devices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.online ? ' · connected' : ''}{device.ownDeck ? ' · custom' : ''}</option>)}
-            </select>
+          {screen === 'deck' ? <div className="device-picker">
+            <div className="device-tabs" role="tablist" aria-label="Phone to configure">
+              {devices.map((device) => <button key={device.id} type="button" role="tab" aria-selected={device.id === deviceId} className={`device-tab ${device.id === deviceId ? 'selected' : ''}`} onClick={() => { setDeviceId(device.id); setDeviceTouched(true); setRenameDraft(null); }}>
+                <span className={`device-dot ${device.online ? 'online' : ''}`} aria-hidden="true" />{device.name}<span className="sr-only">{device.online ? ', connected' : ', not connected'}</span>
+              </button>)}
+              <button type="button" role="tab" aria-selected={deviceId === ''} className={`device-tab template ${deviceId === '' ? 'selected' : ''}`} title="The deck every new phone starts with" onClick={() => { setDeviceId(''); setDeviceTouched(true); setRenameDraft(null); }}>New phones</button>
+            </div>
             {selectedDevice && renameDraft !== null ? <form className="name-field" onSubmit={(event) => { event.preventDefault(); void renameDevice(); }}>
               <input autoFocus value={renameDraft} maxLength={40} placeholder={selectedDevice.phoneName} aria-label="Device name" onChange={(event) => setRenameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setRenameDraft(null); }} />
               <button type="submit" className="secondary-button">Save</button>
             </form> : selectedDevice ? <button type="button" className="secondary-button" onClick={() => setRenameDraft(selectedDevice.name)}>Rename</button> : null}
-            {selectedDevice?.ownDeck ? <button type="button" className="secondary-button" onClick={() => void resetDeviceDeck()}>Use shared deck</button> : null}
+            {selectedDevice ? <button type="button" className="secondary-button" title="Replace this phone's deck with the New phones template" onClick={() => void resetDeviceDeck()}>Reset to template</button> : null}
+            {selectedDevice && !selectedDevice.online ? <button type="button" className="secondary-button" title="Forget this phone and delete its deck" onClick={() => void forgetDevice()}>Forget</button> : null}
           </div> : <span />}
           <div className="network-badge">
             <Wifi size={14} strokeWidth={1.8} />

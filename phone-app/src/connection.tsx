@@ -391,8 +391,10 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           } catch { void Storage.removeItem(`${DEVICE_SELECTION_KEY}.${connectionId(next)}`); }
           if (socketRef.current === socket) socket.send(JSON.stringify({ type: 'authenticate', token: next.token, protocolVersion: 2, legacyDeckAvailable: Boolean(legacyDeck), supportsIndependentNavigation: true, ...identity, ...(selection ? { selectedProfileId: selection.profileId, selectedPageId: selection.pageId } : {}), ...(legacyDeck ? { legacySourceId: legacyDeck.sourceId } : {}) }));
           else socket.close();
-        }).catch(() => {
-          if (socketRef.current === socket) socket.send(JSON.stringify({ type: 'authenticate', token: next.token, protocolVersion: 2, supportsIndependentNavigation: true }));
+        }).catch(async () => {
+          // Whatever failed above, the PC still needs to know which phone this is, or it shows the shared deck.
+          const identity = await phoneIdentity().catch(() => null);
+          if (socketRef.current === socket) socket.send(JSON.stringify({ type: 'authenticate', token: next.token, protocolVersion: 2, supportsIndependentNavigation: true, ...(identity ?? {}) }));
         });
       };
       socket.onmessage = async (event) => {

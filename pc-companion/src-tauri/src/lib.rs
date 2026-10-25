@@ -1652,6 +1652,23 @@ fn device_config(state: &AppState, device_id: &str) -> Option<DeckConfig> {
     read_deck(state, &deck_key(state, device_id))
 }
 
+/// Gives a phone a deck of its own, copied from the shared deck, if it has none yet. The shared deck
+/// is then only the template new phones start from: editing one phone never changes another's.
+fn ensure_device_deck(state: &AppState, config_dir: &Path, device_id: &str) {
+    if !valid_id(device_id) {
+        return;
+    }
+    let Some(shared) = get_deck_config(state) else {
+        return;
+    };
+    let Ok(mut decks) = state.device_decks.write() else {
+        return;
+    };
+    if !decks.contains_key(device_id) && save_device_deck_file(config_dir, device_id, &shared).is_ok() {
+        decks.insert(device_id.to_owned(), shared);
+    }
+}
+
 fn pc_name(state: &AppState) -> String {
     state.device_name.read().map(|name| name.clone()).unwrap_or_default()
 }
@@ -1740,6 +1757,11 @@ fn load_devices(state: &AppState, config_dir: &Path) {
             }
         }
     }
+    // Phones paired before every phone got its own deck keep what they see now, as a copy.
+    let known: Vec<String> = state.known_devices.read().map(|devices| devices.keys().cloned().collect()).unwrap_or_default();
+    for id in known {
+        ensure_device_deck(state, config_dir, &id);
+    }
 }
 
 fn register_device(state: &AppState, id: &str, name: Option<&str>) {
@@ -1758,6 +1780,9 @@ fn register_device(state: &AppState, id: &str, name: Option<&str>) {
     });
     if changed {
         persist_known_devices(state);
+    }
+    if let Some(config_dir) = state.config_dir.read().ok().and_then(|dir| dir.clone()) {
+        ensure_device_deck(state, &config_dir, id);
     }
 }
 
@@ -1830,7 +1855,7 @@ fn rename_device(device_id: String, name: String, state: tauri::State<'_, Arc<Ap
     Ok(())
 }
 
-/// Gives a phone back the shared deck and deletes its own.
+/// Replaces a phone's deck with a fresh copy of the shared template deck.
 #[tauri::command]
 fn reset_device_deck(device_id: String, state: tauri::State<'_, Arc<AppState>>) -> Result<DeckConfig, String> {
     if !valid_id(&device_id) {
@@ -1842,15 +1867,43 @@ fn reset_device_deck(device_id: String, state: tauri::State<'_, Arc<AppState>>) 
         .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
         .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
-    state
+    let shared = get_deck_config(&state).ok_or_else(|| "Open Dock deck config is unavailable".to_owned())?;
+    let mut decks = state
         .device_decks
         .write()
-        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?
-        .remove(&device_id);
-    let _ = fs::remove_file(config_dir.join("device-decks").join(format!("{device_id}.json")));
-    let shared = get_deck_config(&state).ok_or_else(|| "Open Dock deck config is unavailable".to_owned())?;
-    let _ = state.deck_updates.send((String::new(), shared.clone()));
-    Ok(shared)
+        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?;
+    // Keep the revision moving forward so a phone holding the old deck sees the change.
+    let mut next = shared;
+    next.revision = decks.get(&device_id).map_or(next.revision, |own| own.revision).saturating_add(1);
+    save_device_deck_file(&config_dir, &device_id, &next)?;
+    decks.insert(device_id.clone(), next.clone());
+    let _ = state.deck_updates.send((device_id, next.clone()));
+    Ok(next)
+}
+
+/// Makes the PC forget a phone and delete its deck. A phone that is connected right now stays.
+#[tauri::command]
+fn forget_device(device_id: String, state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+    if !valid_id(&device_id) {
+        return Err("Unknown device".into());
+    }
+    if state.online_devices.lock().is_ok_and(|online| online.contains_key(&device_id)) {
+        return Err("Disconnect this phone first".into());
+    }
+    if let Ok(mut known) = state.known_devices.write() {
+        known.remove(&device_id);
+    }
+    if let Ok(mut meta) = state.device_meta.write() {
+        meta.remove(&device_id);
+    }
+    if let Ok(mut decks) = state.device_decks.write() {
+        decks.remove(&device_id);
+    }
+    if let Some(config_dir) = state.config_dir.read().ok().and_then(|dir| dir.clone()) {
+        let _ = fs::remove_file(config_dir.join("device-decks").join(format!("{device_id}.json")));
+    }
+    persist_known_devices(&state);
+    Ok(())
 }
 
 #[tauri::command]
@@ -5436,6 +5489,7 @@ pub fn run() {
             list_devices,
             rename_device,
             reset_device_deck,
+            forget_device,
             set_pc_name,
             list_open_dock_plugins,
             install_open_dock_plugin,
