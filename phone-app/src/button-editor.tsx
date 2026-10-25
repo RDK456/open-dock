@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable } from './motion';
 import { usePcConnection, type DeckAction, type DeckButton, type DeckMediaCommand, type DeckPlacement, type SystemCommand } from './connection';
 import { useStyles, useTheme, type Colors } from './theme';
 

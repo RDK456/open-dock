@@ -1,6 +1,6 @@
 [package]
 name = "open-dock-pc"
-version = "1.4.2"
+version = "1.4.3"
 description = "Local PC companion for Open Dock"
 authors = ["Open Dock"]
 edition = "2021"
@@ -44,7 +44,7 @@ zip = { version = "4", default-features = false, features = ["deflate"] }
 png = "0.17"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62.2", features = ["Foundation", "Foundation_Collections", "Media_SpeechRecognition", "Win32_System_Registry", "Media_Control", "Storage_Streams", "Wdk_Graphics_Direct3D", "Win32_Devices_DeviceAndDriverInstallation", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_Graphics_Dxgi", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_Media_Speech", "Win32_System_Com", "Win32_System_IO", "Win32_System_Performance", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.2", features = ["Foundation", "Foundation_Collections", "Media_SpeechRecognition", "Win32_System_Registry", "Media_Control", "Storage_Streams", "Wdk_Graphics_Direct3D", "Win32_Devices_DeviceAndDriverInstallation", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_Graphics_Dxgi", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_Media_Speech", "Win32_System_Com", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Performance", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 # GPU vendor libraries (NVML, AMD ADLX/ADL, Intel IGCL) are loaded at runtime; none is required.
 nvml-wrapper = "0.13.0"
 libloading = "0.8"

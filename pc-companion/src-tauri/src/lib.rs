@@ -53,11 +53,18 @@ const MAX_PLUGIN_SCRIPT_BYTES: u64 = 1_048_576;
 
 struct AppState {
     host: String,
-    device_name: String,
+    device_name: RwLock<String>,
     token: RwLock<String>,
     config_dir: RwLock<Option<PathBuf>>,
     deck_config: RwLock<DeckConfig>,
-    deck_updates: broadcast::Sender<DeckConfig>,
+    /// A saved deck, tagged with the device it belongs to ("" is the deck shared by every phone without its own).
+    deck_updates: broadcast::Sender<(String, DeckConfig)>,
+    /// Decks customised for one phone, by phone id.
+    device_decks: RwLock<HashMap<String, DeckConfig>>,
+    /// Phones that have connected: id to the name they gave themselves.
+    known_devices: RwLock<HashMap<String, String>>,
+    /// Open connections per phone id.
+    online_devices: std::sync::Mutex<HashMap<String, usize>>,
     media_state: tokio::sync::watch::Sender<system_media::SystemMediaState>,
     /// Wakes the media monitor right after a control (play/pause, seek, volume) so the new state
     /// reaches the phone in a few hundred ms instead of on the next 1 s poll.
@@ -1612,6 +1619,188 @@ fn get_deck_config(state: &AppState) -> Option<DeckConfig> {
     state.deck_config.read().ok().map(|config| config.clone())
 }
 
+/// "" for the shared deck, or the phone's id when it has a deck of its own.
+fn deck_key(state: &AppState, device_id: &str) -> String {
+    let own = !device_id.is_empty()
+        && state.device_decks.read().is_ok_and(|decks| decks.contains_key(device_id));
+    if own { device_id.to_owned() } else { String::new() }
+}
+
+fn read_deck(state: &AppState, key: &str) -> Option<DeckConfig> {
+    if key.is_empty() {
+        get_deck_config(state)
+    } else {
+        state.device_decks.read().ok()?.get(key).cloned()
+    }
+}
+
+/// The deck this phone sees: its own if it has one, else the shared deck.
+fn device_config(state: &AppState, device_id: &str) -> Option<DeckConfig> {
+    read_deck(state, &deck_key(state, device_id))
+}
+
+fn pc_name(state: &AppState) -> String {
+    state.device_name.read().map(|name| name.clone()).unwrap_or_default()
+}
+
+fn save_device_deck_file(config_dir: &Path, device_id: &str, config: &DeckConfig) -> Result<(), String> {
+    let dir = config_dir.join("device-decks");
+    fs::create_dir_all(&dir).map_err(|_| "Could not create the device deck folder".to_owned())?;
+    save_deck_config_file(&dir.join(format!("{device_id}.json")), config)
+}
+
+fn persist_known_devices(state: &AppState) {
+    let Some(config_dir) = state.config_dir.read().ok().and_then(|dir| dir.clone()) else {
+        return;
+    };
+    if let Ok(devices) = state.known_devices.read() {
+        if let Ok(bytes) = serde_json::to_vec(&*devices) {
+            let _ = fs::write(config_dir.join("devices.json"), bytes);
+        }
+    }
+}
+
+fn load_devices(state: &AppState, config_dir: &Path) {
+    if let Ok(name) = fs::read_to_string(config_dir.join("pc-name")) {
+        let name = name.trim();
+        if valid_label(name, 40) {
+            if let Ok(mut current) = state.device_name.write() {
+                *current = name.to_owned();
+            }
+        }
+    }
+    if let Some(known) = fs::read(config_dir.join("devices.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<HashMap<String, String>>(&bytes).ok())
+    {
+        if let Ok(mut devices) = state.known_devices.write() {
+            *devices = known.into_iter().filter(|(id, _)| valid_id(id)).collect();
+        }
+    }
+    if let Ok(entries) = fs::read_dir(config_dir.join("device-decks")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(id) = path.file_stem().and_then(|stem| stem.to_str()).map(str::to_owned) else {
+                continue;
+            };
+            if path.extension().is_none_or(|ext| ext != "json") || !valid_id(&id) {
+                continue;
+            }
+            let config = fs::read(&path)
+                .ok()
+                .filter(|bytes| bytes.len() <= MAX_DECK_CONFIG_BYTES)
+                .and_then(|bytes| serde_json::from_slice::<DeckConfig>(&bytes).ok())
+                .filter(|config| validate_deck_config(config).is_ok());
+            if let (Some(config), Ok(mut decks)) = (config, state.device_decks.write()) {
+                decks.insert(id, config);
+            }
+        }
+    }
+}
+
+fn register_device(state: &AppState, id: &str, name: Option<&str>) {
+    if let Ok(mut online) = state.online_devices.lock() {
+        *online.entry(id.to_owned()).or_insert(0) += 1;
+    }
+    let name = name.map(str::trim).filter(|name| valid_label(name, 40));
+    let changed = state.known_devices.write().is_ok_and(|mut devices| {
+        let current = devices.get(id).cloned();
+        let next = name.map(str::to_owned).or_else(|| current.clone()).unwrap_or_else(|| "Phone".to_owned());
+        let changed = current.as_deref() != Some(next.as_str());
+        if changed {
+            devices.insert(id.to_owned(), next);
+        }
+        changed
+    });
+    if changed {
+        persist_known_devices(state);
+    }
+}
+
+fn unregister_device(state: &AppState, id: &str) {
+    if let Ok(mut online) = state.online_devices.lock() {
+        if let Some(count) = online.get_mut(id) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                online.remove(id);
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeviceInfo {
+    id: String,
+    name: String,
+    online: bool,
+    /// Has its own deck instead of the shared one.
+    own_deck: bool,
+}
+
+#[tauri::command]
+fn list_devices(state: tauri::State<'_, Arc<AppState>>) -> Vec<DeviceInfo> {
+    let online = state.online_devices.lock().map(|online| online.clone()).unwrap_or_default();
+    let decks = state.device_decks.read().map(|decks| decks.keys().cloned().collect::<Vec<_>>()).unwrap_or_default();
+    let mut devices: Vec<DeviceInfo> = state
+        .known_devices
+        .read()
+        .map(|known| {
+            known
+                .iter()
+                .map(|(id, name)| DeviceInfo {
+                    id: id.clone(),
+                    name: name.clone(),
+                    online: online.contains_key(id),
+                    own_deck: decks.contains(id),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    devices.sort_by(|a, b| b.online.cmp(&a.online).then_with(|| a.name.cmp(&b.name)));
+    devices
+}
+
+/// Gives a phone back the shared deck and deletes its own.
+#[tauri::command]
+fn reset_device_deck(device_id: String, state: tauri::State<'_, Arc<AppState>>) -> Result<DeckConfig, String> {
+    if !valid_id(&device_id) {
+        return Err("Unknown device".into());
+    }
+    let config_dir = state
+        .config_dir
+        .read()
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
+        .clone()
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
+    state
+        .device_decks
+        .write()
+        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?
+        .remove(&device_id);
+    let _ = fs::remove_file(config_dir.join("device-decks").join(format!("{device_id}.json")));
+    let shared = get_deck_config(&state).ok_or_else(|| "Open Dock deck config is unavailable".to_owned())?;
+    let _ = state.deck_updates.send((String::new(), shared.clone()));
+    Ok(shared)
+}
+
+#[tauri::command]
+fn set_pc_name(name: String, state: tauri::State<'_, Arc<AppState>>) -> Result<String, String> {
+    let name = name.trim().to_owned();
+    if !valid_label(&name, 40) {
+        return Err("Use 1 to 40 characters".into());
+    }
+    let config_dir = state
+        .config_dir
+        .read()
+        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
+        .clone()
+        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
+    fs::write(config_dir.join("pc-name"), &name).map_err(|_| "Could not save the name".to_owned())?;
+    *state.device_name.write().map_err(|_| "Open Dock settings are unavailable".to_owned())? = name.clone();
+    Ok(name)
+}
+
 /// The deck config as a phone speaking `protocol` understands it. Protocol 2 gets the config as stored,
 /// minus what only the PC needs. Protocol 1 phones know nothing of widgets on the page grid or of folders:
 /// widgets move into a one-page widget area of the same size, and folder buttons are left out.
@@ -1724,13 +1913,14 @@ fn device_deck_snapshot(
 
 fn update_device_selection(
     state: &AppState,
+    key: &str,
     expected_revision: u64,
     profile_id: Option<&str>,
     page_id: Option<&str>,
     selected_profile_id: &mut String,
     selected_page_id: &mut String,
 ) -> Result<(), String> {
-    let config = get_deck_config(state).ok_or_else(|| "Deck config is unavailable".to_owned())?;
+    let config = read_deck(state, key).ok_or_else(|| "Deck config is unavailable".to_owned())?;
     if config.revision != expected_revision {
         return Err("stale_revision".into());
     }
@@ -1879,6 +2069,10 @@ enum ClientMessage {
         selected_profile_id: Option<String>,
         #[serde(default, rename = "selectedPageId")]
         selected_page_id: Option<String>,
+        #[serde(default, rename = "deviceId")]
+        device_id: Option<String>,
+        #[serde(default, rename = "deviceName")]
+        device_name: Option<String>,
     },
     InvokeButton {
         #[serde(rename = "requestId")]
@@ -2023,7 +2217,7 @@ fn pc_stats_history(
 fn connection_info(state: tauri::State<'_, Arc<AppState>>) -> ConnectionInfo {
     ConnectionInfo {
         host: state.host.clone(),
-        device_name: state.device_name.clone(),
+        device_name: pc_name(&state),
         port: PORT,
         token: state
             .token
@@ -2041,12 +2235,12 @@ fn connection_info(state: tauri::State<'_, Arc<AppState>>) -> ConnectionInfo {
 }
 
 #[tauri::command]
-fn deck_config(state: tauri::State<'_, Arc<AppState>>) -> Result<DeckConfig, String> {
-    state
-        .deck_config
-        .read()
-        .map(|config| config.clone())
-        .map_err(|_| "Open Dock deck config is unavailable".to_owned())
+fn deck_config(
+    device_id: Option<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<DeckConfig, String> {
+    device_config(&state, &device_id.unwrap_or_default())
+        .ok_or_else(|| "Open Dock deck config is unavailable".to_owned())
 }
 
 #[tauri::command]
@@ -2387,7 +2581,7 @@ fn import_legacy_deck(
         .write()
         .map_err(|_| "Pending phone imports are unavailable".to_owned())?
         .remove(&source_id);
-    let _ = state.deck_updates.send(result.clone());
+    let _ = state.deck_updates.send((String::new(), result.clone()));
     Ok(result)
 }
 
@@ -2434,24 +2628,41 @@ fn validate_legacy_deck(deck: &LegacyPhonePageSet) -> Result<(), String> {
 #[tauri::command]
 fn save_deck_config(
     mut config: DeckConfig,
+    device_id: Option<String>,
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<DeckConfig, String> {
     normalize_deck_layout(&mut config);
     validate_deck_config(&config)?;
-    let mut current = state
-        .deck_config
-        .write()
-        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?;
     let config_dir = state
         .config_dir
         .read()
         .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
         .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
+    let device_id = device_id.unwrap_or_default();
+    if !device_id.is_empty() {
+        if !valid_id(&device_id) {
+            return Err("Unknown device".into());
+        }
+        let base = get_deck_config(&state).map_or(0, |shared| shared.revision);
+        let mut decks = state
+            .device_decks
+            .write()
+            .map_err(|_| "Open Dock deck config is unavailable".to_owned())?;
+        config.revision = decks.get(&device_id).map_or(base, |own| own.revision).saturating_add(1);
+        save_device_deck_file(&config_dir, &device_id, &config)?;
+        decks.insert(device_id.clone(), config.clone());
+        let _ = state.deck_updates.send((device_id, config.clone()));
+        return Ok(config);
+    }
+    let mut current = state
+        .deck_config
+        .write()
+        .map_err(|_| "Open Dock deck config is unavailable".to_owned())?;
     config.revision = current.revision.saturating_add(1);
     save_deck_config_file(&config_dir.join("deck-config.json"), &config)?;
     *current = config.clone();
-    let _ = state.deck_updates.send(config.clone());
+    let _ = state.deck_updates.send((String::new(), config.clone()));
     Ok(config)
 }
 
@@ -2588,7 +2799,7 @@ fn switch_profile_for_foreground(state: &AppState, foreground: &ForegroundApp) {
         eprintln!("Could not save automatic profile switch: {error}");
         return;
     }
-    let _ = state.deck_updates.send(config.clone());
+    let _ = state.deck_updates.send((String::new(), config.clone()));
     let _ = state.auto_profile_updates.send(target_id);
 }
 
@@ -2989,7 +3200,7 @@ fn run_usb_monitor(state: Arc<AppState>) {
         let connected = state.usb_clients.load(Ordering::Relaxed) > 0;
         if pairing.should_send(&phone.serial, connected, now) {
             let token = state.token.read().map(|token| token.clone()).unwrap_or_default();
-            let link = usb_pair::pair_link(&state.host, PORT, &token, &state.device_name);
+            let link = usb_pair::pair_link(&state.host, PORT, &token, &pc_name(&state));
             last_error = match adb::find().ok_or_else(|| adb::MISSING.to_owned()).and_then(|adb| usb_pair::send_link(&adb, &phone.serial, &link)) {
                 Ok(()) => String::new(),
                 Err(error) => error,
@@ -3088,6 +3299,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
     // 1: phones that know buttons and widget areas only. 2: phones that draw widgets on the page grid and open folders.
     let mut protocol: u32 = 1;
     let mut supports_independent_navigation = false;
+    let mut device_id = String::new();
     let mut selected_profile_id = String::new();
     let mut selected_page_id = String::new();
     let mut session_epoch = 0;
@@ -3123,7 +3335,10 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
             message = socket.recv() => message,
             update = deck_updates.recv(), if authenticated => {
                 match update {
-                    Ok(config) => {
+                    Ok((target, config)) => {
+                        if target != deck_key(&state, &device_id) {
+                            continue;
+                        }
                         if !state.independent_navigation.load(Ordering::Relaxed) {
                             selected_profile_id = config.active_profile_id.clone();
                             selected_page_id = config.profiles.iter().find(|profile| profile.id == selected_profile_id).map(|profile| profile.active_page_id.clone()).unwrap_or_default();
@@ -3132,7 +3347,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                         if socket.send(Message::Text(message.to_string().into())).await.is_err() { break; }
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
-                        if let Some(config) = get_deck_config(&state) {
+                        if let Some(config) = device_config(&state, &device_id) {
                             if !state.independent_navigation.load(Ordering::Relaxed) {
                                 selected_profile_id = config.active_profile_id.clone();
                                 selected_page_id = config.profiles.iter().find(|profile| profile.id == selected_profile_id).map(|profile| profile.active_page_id.clone()).unwrap_or_default();
@@ -3152,7 +3367,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                         break;
                     }
                     Ok(enabled) => {
-                        if let Some(config) = get_deck_config(&state) {
+                        if let Some(config) = device_config(&state, &device_id) {
                             if !enabled || selected_profile_id.is_empty() {
                                 selected_profile_id = config.active_profile_id.clone();
                                 selected_page_id = config.profiles.iter().find(|profile| profile.id == selected_profile_id).map(|profile| profile.active_page_id.clone()).unwrap_or_default();
@@ -3162,7 +3377,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
-                        if let Some(config) = get_deck_config(&state) {
+                        if let Some(config) = device_config(&state, &device_id) {
                             let enabled = state.independent_navigation.load(Ordering::Relaxed);
                             let message = device_deck_snapshot(protocol, &config, enabled, &mut selected_profile_id, &mut selected_page_id);
                             if socket.send(Message::Text(message.to_string().into())).await.is_err() { break; }
@@ -3176,13 +3391,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 match profile_id {
                     Ok(profile_id) => {
                         selected_profile_id = profile_id;
-                        if let Some(config) = get_deck_config(&state) {
+                        if let Some(config) = device_config(&state, &device_id) {
                             let message = device_deck_snapshot(protocol, &config, true, &mut selected_profile_id, &mut selected_page_id);
                             if socket.send(Message::Text(message.to_string().into())).await.is_err() { break; }
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
-                        if let Some(config) = get_deck_config(&state) {
+                        if let Some(config) = device_config(&state, &device_id) {
                             selected_profile_id = config.active_profile_id.clone();
                             selected_page_id = config.profiles.iter().find(|profile| profile.id == selected_profile_id).map(|profile| profile.active_page_id.clone()).unwrap_or_default();
                             let message = device_deck_snapshot(protocol, &config, true, &mut selected_profile_id, &mut selected_page_id);
@@ -3302,6 +3517,8 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 supports_independent_navigation: supports_navigation,
                 selected_profile_id: requested_profile_id,
                 selected_page_id: requested_page_id,
+                device_id: requested_device_id,
+                device_name: requested_device_name,
             } if !authenticated => {
                 if !matches!(protocol_version, Some(1 | 2)) {
                     let _ = socket
@@ -3336,8 +3553,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
                 supports_independent_navigation = supports_navigation;
+                device_id = requested_device_id.filter(|id| valid_id(id)).unwrap_or_default();
                 protocol = protocol_version.unwrap_or(1);
-                if let Some(config) = get_deck_config(&state) {
+                if let Some(config) = device_config(&state, &device_id) {
                     selected_profile_id = requested_profile_id
                         .filter(|id| valid_id(id))
                         .unwrap_or_else(|| config.active_profile_id.clone());
@@ -3365,6 +3583,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 authenticated = true;
                 session_epoch = state.session_epoch.load(Ordering::Relaxed);
                 state.active_devices.fetch_add(1, Ordering::Relaxed);
+                if !device_id.is_empty() {
+                    register_device(&state, &device_id, requested_device_name.as_deref());
+                }
                 if over_usb {
                     state.usb_clients.fetch_add(1, Ordering::Relaxed);
                 }
@@ -3400,13 +3621,17 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     }
                 }
                 if socket
-                    .send(Message::Text(r#"{"type":"ready"}"#.into()))
+                    .send(Message::Text(
+                        serde_json::json!({ "type": "ready", "name": pc_name(&state) })
+                            .to_string()
+                            .into(),
+                    ))
                     .await
                     .is_err()
                 {
                     break;
                 }
-                if let Some(config) = get_deck_config(&state) {
+                if let Some(config) = device_config(&state, &device_id) {
                     let message = device_deck_snapshot(
                         protocol,
                         &config,
@@ -3453,6 +3678,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 } else {
                     invoke_button(
                         &state,
+                        &deck_key(&state, &device_id),
                         revision,
                         &button_id,
                         state.independent_navigation.load(Ordering::Relaxed),
@@ -3493,7 +3719,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
                 if stale_revision {
-                    if let Some(config) = get_deck_config(&state) {
+                    if let Some(config) = device_config(&state, &device_id) {
                         let snapshot = device_deck_snapshot(
                             protocol,
                             &config,
@@ -3511,7 +3737,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     }
                 } else if changed_selection && state.independent_navigation.load(Ordering::Relaxed)
                 {
-                    if let Some(config) = get_deck_config(&state) {
+                    if let Some(config) = device_config(&state, &device_id) {
                         let snapshot = device_deck_snapshot(
                             protocol,
                             &config,
@@ -3599,6 +3825,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     if independent {
                         update_device_selection(
                             &state,
+                            &deck_key(&state, &device_id),
                             revision,
                             Some(&profile_id),
                             None,
@@ -3606,7 +3833,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                             &mut selected_page_id,
                         )
                     } else {
-                        update_selection(&state, revision, Some(&profile_id), None)
+                        update_selection(&state, &deck_key(&state, &device_id), revision, Some(&profile_id), None)
                     }
                 } else {
                     Err("invalid_request".to_owned())
@@ -3622,7 +3849,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
                 if independent && succeeded {
-                    if let Some(config) = get_deck_config(&state) {
+                    if let Some(config) = device_config(&state, &device_id) {
                         let snapshot = device_deck_snapshot(
                             protocol,
                             &config,
@@ -3640,7 +3867,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     }
                 }
                 if stale_revision {
-                    if let Some(config) = get_deck_config(&state) {
+                    if let Some(config) = device_config(&state, &device_id) {
                         let snapshot = device_deck_snapshot(
                             protocol,
                             &config,
@@ -3668,6 +3895,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     if independent {
                         update_device_selection(
                             &state,
+                            &deck_key(&state, &device_id),
                             revision,
                             None,
                             Some(&page_id),
@@ -3675,7 +3903,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                             &mut selected_page_id,
                         )
                     } else {
-                        update_selection(&state, revision, None, Some(&page_id))
+                        update_selection(&state, &deck_key(&state, &device_id), revision, None, Some(&page_id))
                     }
                 } else {
                     Err("invalid_request".to_owned())
@@ -3691,7 +3919,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
                 if independent && succeeded {
-                    if let Some(config) = get_deck_config(&state) {
+                    if let Some(config) = device_config(&state, &device_id) {
                         let snapshot = device_deck_snapshot(
                             protocol,
                             &config,
@@ -3709,7 +3937,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     }
                 }
                 if stale_revision {
-                    if let Some(config) = get_deck_config(&state) {
+                    if let Some(config) = device_config(&state, &device_id) {
                         let snapshot = device_deck_snapshot(
                             protocol,
                             &config,
@@ -3839,7 +4067,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 remove_id,
             } if authenticated => {
                 let result = if valid_id(&request_id) {
-                    edit_button(&state, revision, &page_id, folder_id.as_deref(), button, remove_id.as_deref())
+                    edit_button(&state, &deck_key(&state, &device_id), revision, &page_id, folder_id.as_deref(), button, remove_id.as_deref())
                 } else {
                     Err("invalid_request".into())
                 };
@@ -3916,6 +4144,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
         // A drag the phone started must not stay held after it drops.
         remote::release_buttons();
         state.active_devices.fetch_sub(1, Ordering::Relaxed);
+        if !device_id.is_empty() {
+            unregister_device(&state, &device_id);
+        }
         if over_usb {
             state.usb_clients.fetch_sub(1, Ordering::Relaxed);
         }
@@ -3935,50 +4166,70 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
 
 fn update_selection(
     state: &AppState,
+    key: &str,
     expected_revision: u64,
     profile_id: Option<&str>,
     page_id: Option<&str>,
 ) -> Result<(), String> {
-    let mut config = state
-        .deck_config
-        .write()
-        .map_err(|_| "Deck config is unavailable".to_owned())?;
-    if config.revision != expected_revision {
-        return Err("stale_revision".into());
-    }
-    if let Some(profile_id) = profile_id {
-        if !config
+    mutate_deck(state, key, |config| {
+        if config.revision != expected_revision {
+            return Err("stale_revision".into());
+        }
+        if let Some(profile_id) = profile_id {
+            if !config.profiles.iter().any(|profile| profile.id == profile_id) {
+                return Err("unknown_profile".into());
+            }
+            config.active_profile_id = profile_id.to_owned();
+        }
+        let active_profile_id = config.active_profile_id.clone();
+        let profile = config
             .profiles
-            .iter()
-            .any(|profile| profile.id == profile_id)
-        {
-            return Err("unknown_profile".into());
+            .iter_mut()
+            .find(|profile| profile.id == active_profile_id)
+            .ok_or_else(|| "unknown_profile".to_owned())?;
+        if let Some(page_id) = page_id {
+            if !profile.pages.iter().any(|page| page.id == page_id) {
+                return Err("unknown_page".into());
+            }
+            profile.active_page_id = page_id.to_owned();
         }
-        config.active_profile_id = profile_id.to_owned();
-    }
-    let active_profile_id = config.active_profile_id.clone();
-    let profile = config
-        .profiles
-        .iter_mut()
-        .find(|profile| profile.id == active_profile_id)
-        .ok_or_else(|| "unknown_profile".to_owned())?;
-    if let Some(page_id) = page_id {
-        if !profile.pages.iter().any(|page| page.id == page_id) {
-            return Err("unknown_page".into());
-        }
-        profile.active_page_id = page_id.to_owned();
-    }
-    config.revision = config.revision.saturating_add(1);
+        Ok(())
+    })
+}
+
+/// Edits the shared deck (`key` ""), or one phone's own deck, saves it and tells the phones that use it.
+fn mutate_deck(
+    state: &AppState,
+    key: &str,
+    edit: impl FnOnce(&mut DeckConfig) -> Result<(), String>,
+) -> Result<(), String> {
     let config_dir = state
         .config_dir
         .read()
         .map_err(|_| "Open Dock settings are unavailable".to_owned())?
         .clone()
         .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
-    save_deck_config_file(&config_dir.join("deck-config.json"), &config)?;
-    let next = config.clone();
-    drop(config);
-    let _ = state.deck_updates.send(next);
+    let next = if key.is_empty() {
+        let mut config = state
+            .deck_config
+            .write()
+            .map_err(|_| "Deck config is unavailable".to_owned())?;
+        edit(&mut config)?;
+        config.revision = config.revision.saturating_add(1);
+        save_deck_config_file(&config_dir.join("deck-config.json"), &config)?;
+        config.clone()
+    } else {
+        let mut decks = state
+            .device_decks
+            .write()
+            .map_err(|_| "Deck config is unavailable".to_owned())?;
+        let config = decks.get_mut(key).ok_or_else(|| "unknown_device".to_owned())?;
+        edit(config)?;
+        config.revision = config.revision.saturating_add(1);
+        save_device_deck_file(&config_dir, key, config)?;
+        config.clone()
+    };
+    let _ = state.deck_updates.send((key.to_owned(), next));
     Ok(())
 }
 
@@ -4048,35 +4299,24 @@ fn apply_button_edit(
 
 fn edit_button(
     state: &AppState,
+    key: &str,
     expected_revision: u64,
     page_id: &str,
     folder_id: Option<&str>,
     button: Option<DeckButton>,
     remove_id: Option<&str>,
 ) -> Result<(), String> {
-    let mut config = state
-        .deck_config
-        .write()
-        .map_err(|_| "Deck config is unavailable".to_owned())?;
-    if config.revision != expected_revision {
-        return Err("stale_revision".into());
-    }
-    let mut next = config.clone();
-    apply_button_edit(&mut next, page_id, folder_id, button, remove_id)?;
-    normalize_deck_layout(&mut next);
-    validate_deck_config(&next)?;
-    next.revision = config.revision.saturating_add(1);
-    let config_dir = state
-        .config_dir
-        .read()
-        .map_err(|_| "Open Dock settings are unavailable".to_owned())?
-        .clone()
-        .ok_or_else(|| "Open Dock settings are unavailable".to_owned())?;
-    save_deck_config_file(&config_dir.join("deck-config.json"), &next)?;
-    *config = next.clone();
-    drop(config);
-    let _ = state.deck_updates.send(next);
-    Ok(())
+    mutate_deck(state, key, |config| {
+        if config.revision != expected_revision {
+            return Err("stale_revision".into());
+        }
+        let mut next = config.clone();
+        apply_button_edit(&mut next, page_id, folder_id, button, remove_id)?;
+        normalize_deck_layout(&mut next);
+        validate_deck_config(&next)?;
+        *config = next;
+        Ok(())
+    })
 }
 
 fn selection_reply(request_id: &str, result: Result<(), String>) -> serde_json::Value {
@@ -4092,17 +4332,14 @@ fn selection_reply(request_id: &str, result: Result<(), String>) -> serde_json::
 
 fn invoke_button(
     state: &AppState,
+    key: &str,
     revision: u64,
     button_id: &str,
     independent: bool,
     selected_profile_id: &mut String,
     selected_page_id: &mut String,
 ) -> Result<bool, String> {
-    let config = state
-        .deck_config
-        .read()
-        .map_err(|_| "Deck config is unavailable".to_owned())?
-        .clone();
+    let config = read_deck(state, key).ok_or_else(|| "Deck config is unavailable".to_owned())?;
     if config.revision != revision {
         return Err("stale_revision".into());
     }
@@ -4145,6 +4382,7 @@ fn invoke_button(
     run_deck_action(
         &button.action,
         state,
+        key,
         revision,
         independent,
         selected_profile_id,
@@ -4156,6 +4394,7 @@ fn invoke_button(
 fn run_deck_action(
     action: &DeckAction,
     state: &AppState,
+    key: &str,
     revision: u64,
     independent: bool,
     selected_profile_id: &mut String,
@@ -4220,6 +4459,7 @@ fn run_deck_action(
             if independent {
                 update_device_selection(
                     state,
+                    key,
                     revision,
                     Some(profile_id),
                     None,
@@ -4227,13 +4467,14 @@ fn run_deck_action(
                     selected_page_id,
                 )
             } else {
-                update_selection(state, revision, Some(profile_id), None)
+                update_selection(state, key, revision, Some(profile_id), None)
             }
         }
         DeckAction::SelectPage { page_id } => {
             if independent {
                 update_device_selection(
                     state,
+                    key,
                     revision,
                     None,
                     Some(page_id),
@@ -4241,7 +4482,7 @@ fn run_deck_action(
                     selected_page_id,
                 )
             } else {
-                update_selection(state, revision, None, Some(page_id))
+                update_selection(state, key, revision, None, Some(page_id))
             }
         }
         // The phone shows the folder itself; the PC has nothing to run.
@@ -4429,7 +4670,7 @@ async fn run_voice(
                 // The user's own deck buttons come first, then installed apps, then well-known sites.
                 if let Some(button) = deck_button_named(state, &name, independent, selected_profile_id) {
                     let revision = state.deck_config.read().map(|config| config.revision).unwrap_or_default();
-                    invoke_button(state, revision, &button.0, independent, selected_profile_id, selected_page_id)?;
+                    invoke_button(state, "", revision, &button.0, independent, selected_profile_id, selected_page_id)?;
                     done.push(format!("Pressed {}", button.1));
                     continue;
                 }
@@ -4917,7 +5158,7 @@ fn parse_key(key: &str) -> Result<Key, String> {
 
 /// Answers phones sweeping the network for Open Dock PCs. Gives the name only; pairing needs the PIN or QR code.
 async fn discover(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    axum::Json(serde_json::json!({ "app": "opendock", "name": state.device_name, "port": PORT }))
+    axum::Json(serde_json::json!({ "app": "opendock", "name": pc_name(&state), "port": PORT }))
 }
 
 #[derive(Deserialize)]
@@ -4937,7 +5178,7 @@ async fn pair(State(state): State<Arc<AppState>>, axum::Json(request): axum::Jso
     let token = state.token.read().map(|token| token.clone()).unwrap_or_default();
     (
         axum::http::StatusCode::OK,
-        axum::Json(serde_json::json!({ "token": token, "name": state.device_name, "port": PORT })),
+        axum::Json(serde_json::json!({ "token": token, "name": pc_name(&state), "port": PORT })),
     )
 }
 
@@ -5035,6 +5276,23 @@ fn restart_app(app: tauri::AppHandle) {
     app.restart();
 }
 
+/// The taskbar draws a window's big icon. Tauri's set_icon only sets the small one, and with no big icon
+/// Windows shows a generic app icon, so the exe's own icon resource goes in as the big one.
+#[cfg(windows)]
+fn set_taskbar_icon(hwnd: windows::Win32::Foundation::HWND) {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{HINSTANCE, LPARAM, WPARAM};
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::WindowsAndMessaging::{LoadImageW, SendMessageW, ICON_BIG, IMAGE_ICON, LR_DEFAULTSIZE, WM_SETICON};
+    unsafe {
+        let Ok(module) = GetModuleHandleW(None) else { return };
+        let resource = PCWSTR(tauri::utils::platform::WINDOWS_APP_ICON_RESOURCE_ID as usize as *const u16);
+        if let Ok(icon) = LoadImageW(Some(HINSTANCE(module.0)), resource, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE) {
+            SendMessageW(hwnd, WM_SETICON, Some(WPARAM(ICON_BIG as usize)), Some(LPARAM(icon.0 as isize)));
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Open Dock runs as administrator so it can read the CPU temperature: a manual launch asks once,
@@ -5055,11 +5313,14 @@ pub fn run() {
     let (auto_profile_updates, _) = broadcast::channel(16);
     let state = Arc::new(AppState {
         host,
-        device_name: machine_name(),
+        device_name: RwLock::new(machine_name()),
         token: RwLock::new(String::new()),
         config_dir: RwLock::new(None),
         deck_config: RwLock::new(default_deck_config()),
         deck_updates,
+        device_decks: RwLock::new(HashMap::new()),
+        known_devices: RwLock::new(HashMap::new()),
+        online_devices: std::sync::Mutex::new(HashMap::new()),
         media_state,
         media_refresh: Arc::new(tokio::sync::Notify::new()),
         pc_stats,
@@ -5095,6 +5356,9 @@ pub fn run() {
             delta::install_delta_update,
             connection_info,
             deck_config,
+            list_devices,
+            reset_device_deck,
+            set_pc_name,
             list_open_dock_plugins,
             install_open_dock_plugin,
             uninstall_open_dock_plugin,
@@ -5142,7 +5406,7 @@ pub fn run() {
 
             let independent_navigation =
                 fs::read_to_string(config_dir.join("independent-navigation"))
-                    .is_ok_and(|value| value.trim() == "true");
+                    .map_or(true, |value| value.trim() == "true");
             state
                 .independent_navigation
                 .store(independent_navigation, Ordering::Relaxed);
@@ -5164,6 +5428,8 @@ pub fn run() {
                 .write()
                 .map_err(|_| std::io::Error::other("Open Dock deck config lock poisoned"))? =
                 deck_config;
+
+            load_devices(&state, &config_dir);
 
             let usb_enabled = fs::read_to_string(config_dir.join("android-usb-enabled"))
                 .is_ok_and(|value| value.trim() == "true");
@@ -5208,6 +5474,8 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
                 apply_appearance(&window, clean_appearance(&saved));
+                // Starts in the taskbar; the tray or taskbar button opens it.
+                let _ = window.minimize();
             }
 
             if let Err(error) = island::init(app.handle()) {
@@ -5223,10 +5491,13 @@ pub fn run() {
                 .default_window_icon()
                 .ok_or("missing default window icon")?
                 .clone();
-            // Give every window the icon itself: without one the taskbar takes Windows' cached icon for the
-            // exe's path, which kept showing the pre-1.4 icon after an update.
+            // Give every window the icon itself, small (title bar, Alt+Tab) and big (taskbar).
             for window in app.webview_windows().values() {
                 let _ = window.set_icon(icon.clone());
+                #[cfg(windows)]
+                if let Ok(hwnd) = window.hwnd() {
+                    set_taskbar_icon(hwnd);
+                }
             }
 
             TrayIconBuilder::new()
@@ -5259,7 +5530,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.hide();
+                // Closing minimizes to the taskbar; the tray menu's Quit exits.
+                let _ = window.minimize();
             }
         })
         .build(tauri::generate_context!())

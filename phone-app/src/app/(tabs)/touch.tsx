@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
-import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, StyleSheet, Text, TextInput, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
+import { Pressable } from '../../motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CornerDownLeft, Delete, Gauge, Grab, Keyboard, Monitor, MousePointer2, PenLine } from 'lucide-react-native';
 import { SignaturePad } from '../../signature-pad';

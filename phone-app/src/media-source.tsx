@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from './motion';
 import { ChevronDown, Info } from 'lucide-react-native';
 import { usePcConnection } from './connection';
 import { canChoosePlayer, offerSwitch, otherPlayersOpen, playerColor, playerInitial, type MediaPlayer, type PlayersState } from './media-players';

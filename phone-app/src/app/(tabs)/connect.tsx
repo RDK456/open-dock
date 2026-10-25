@@ -1,10 +1,11 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable } from '../../motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTabBarClearance } from '../../tab-inset';
 import { Camera, Check, ChevronDown, ChevronRight, Monitor, QrCode, Radar, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react-native';
-import { connectionId, PcConnection, usePcConnection } from '../../connection';
+import { connectionId, getPhoneName, PcConnection, setPhoneName, usePcConnection } from '../../connection';
 import { findPcs, pairWithPin, type FoundPc } from '../../discovery';
 import { useStyles, useTheme, type Colors } from '../../theme';
 import { AppearanceSection, ScreenSettingsSection } from '../../screen-power';
@@ -50,6 +51,17 @@ export default function ConnectScreen() {
   const [pinTarget, setPinTarget] = useState<FoundPc | null>(null);
   const [pin, setPin] = useState('');
   const [pairing, setPairing] = useState(false);
+  const [phoneName, setPhoneNameDraft] = useState('');
+  const [savedPhoneName, setSavedPhoneName] = useState('');
+  useEffect(() => { void getPhoneName().then((name) => { setPhoneNameDraft(name); setSavedPhoneName(name); }); }, []);
+  async function savePhoneName() {
+    const name = phoneName.trim();
+    if (!name || name === savedPhoneName) return;
+    await setPhoneName(name);
+    setSavedPhoneName(name);
+    // The PC learns the new name when the phone signs in again.
+    if (connection && (status === 'connected' || status === 'connecting')) await connect(connection);
+  }
   const form = draft ?? { host: connection?.host ?? '', port: String(connection?.port ?? 39421), token: connection?.token ?? '', deviceName: connection?.deviceName ?? '' };
   const connected = status === 'connected';
   const connecting = status === 'connecting';
@@ -155,7 +167,7 @@ export default function ConnectScreen() {
             <Monitor size={17} color={connected ? colors.mint : colors.muted} />
             <View style={styles.statusCopy}>
               <Text style={styles.statusTitle}>{connected ? 'Connected to your PC' : connecting ? 'Connecting…' : status === 'error' ? 'Could not connect' : 'No PC connected'}</Text>
-              <Text style={styles.statusSub}>{connected ? connection?.transport === 'usb' ? 'Connected by Android USB' : `${connection?.host}:${connection?.port}` : protocolError ?? (connecting && connection?.transport === 'usb' ? 'Reconnecting over USB…' : status === 'error' ? 'Check the connection and confirm the PC app is running.' : connection ? connection.transport === 'usb' ? 'Check the USB cable and that USB debugging is on, then tap Retry.' : 'Tap Retry when the PC is available.' : 'Scan the code on the PC to connect.')}</Text>
+              <Text style={styles.statusSub}>{connected ? connection?.transport === 'usb' ? 'Connected by Android USB' : connection?.deviceName || `${connection?.host}:${connection?.port}` : protocolError ?? (connecting && connection?.transport === 'usb' ? 'Reconnecting over USB…' : status === 'error' ? 'Check the connection and confirm the PC app is running.' : connection ? connection.transport === 'usb' ? 'Check the USB cable and that USB debugging is on, then tap Retry.' : 'Tap Retry when the PC is available.' : 'Scan the code on the PC to connect.')}</Text>
             </View>
             {connected && <Check size={16} color={colors.mint} />}
             {connection && !connected && !connecting ? <Pressable style={styles.retryButton} onPress={() => void connect(connection)} accessibilityRole="button" accessibilityLabel="Retry connecting"><RefreshCw size={12} color={colors.text} /><Text style={styles.deviceButtonText}>Retry</Text></Pressable> : null}
@@ -204,6 +216,12 @@ export default function ConnectScreen() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
+          <View style={styles.manualCard}>
+            <Text style={styles.label}>This phone&apos;s name</Text>
+            <TextInput value={phoneName} onChangeText={setPhoneNameDraft} onSubmitEditing={() => void savePhoneName()} onBlur={() => void savePhoneName()} maxLength={40} placeholder="My phone" placeholderTextColor={colors.faint} autoCapitalize="words" returnKeyType="done" style={styles.input} accessibilityLabel="This phone's name" />
+            <Text style={styles.portHint}>The PC lists this phone by this name.</Text>
+          </View>
+
           <Pressable style={styles.manualToggle} onPress={() => setManualOpen(!manualOpen)} accessibilityRole="button" accessibilityState={{ expanded: manualOpen }}>
             <Text style={styles.manualTitle}>Manual setup</Text>
             {manualOpen ? <ChevronDown size={16} color={colors.faint} /> : <ChevronRight size={16} color={colors.faint} />}
@@ -231,7 +249,7 @@ export default function ConnectScreen() {
               return <View key={connectionId(device)} style={styles.deviceRow}>
                 <View style={styles.deviceCopy}>
                   <Text style={styles.deviceName} numberOfLines={1}>{device.deviceName || device.host}</Text>
-                  <Text style={styles.deviceAddress} numberOfLines={1}>{device.host}:{device.port}</Text>
+                  {device.deviceName && device.deviceName !== device.host ? null : <Text style={styles.deviceAddress} numberOfLines={1}>{device.host}:{device.port}</Text>}
                 </View>
                 <View style={styles.deviceActions}>
                   <View style={styles.deviceStatus}><View style={[styles.statusDot, deviceStatus === 'Connected' && styles.statusDotConnected, deviceStatus === 'Connecting' && styles.statusDotConnecting]} /><Text style={[styles.deviceStatusText, deviceStatus === 'Connected' && styles.deviceStatusConnected]}>{deviceStatus}</Text></View>

@@ -1,7 +1,8 @@
-import { forwardRef, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View, type PressableProps, type View as ViewType } from 'react-native';
+import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Animated, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View, type PressableProps, type View as ViewType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { usePathname, useRouter } from 'expo-router';
 import { TabList, Tabs, TabSlot, TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
 import { useTheme, type Colors, type Look } from '../theme';
 
@@ -15,6 +16,10 @@ const TABS = [
   { name: 'connect', href: '/connect', label: 'Connect' },
 ] as const;
 type TabName = (typeof TABS)[number]['name'];
+
+const TAB_PATHS = TABS.map((tab) => tab.href as string);
+/** Which tab a path is on (the Deck tab is '/'). */
+const tabIndexOf = (path: string) => Math.max(0, TAB_PATHS.findIndex((href) => (href === '/' ? path === '/' || path === '/index' : path.startsWith(href))));
 
 const RAIL = 64;
 const GAP = 12;
@@ -53,6 +58,17 @@ const Item = forwardRef<ViewType, ItemProps>(function Item({ tab, look, badge, r
   const { colors, key } = useTheme();
   const s = itemStyles(look, colors, !!isFocused, rail);
   const ink = s.ink;
+  // A tab springs when pressed and pops when it becomes the current one.
+  const [scale] = useState(() => new Animated.Value(1));
+  const wasFocused = useRef(!!isFocused);
+  useEffect(() => {
+    if (isFocused && !wasFocused.current) {
+      scale.setValue(0.82);
+      Animated.spring(scale, { toValue: 1, speed: 16, bounciness: 14, useNativeDriver: true }).start();
+    }
+    wasFocused.current = !!isFocused;
+  }, [isFocused, scale]);
+  const squash = (to: number) => Animated.spring(scale, { toValue: to, speed: 40, bounciness: 8, useNativeDriver: true }).start();
   let body: ReactNode;
   switch (rail ? 'rail' : look) {
     case 'rail':
@@ -68,8 +84,8 @@ const Item = forwardRef<ViewType, ItemProps>(function Item({ tab, look, badge, r
       body = <><Icon name={tab.name} color={ink} stroke={key.iconStroke} size={20} /><Text style={[look === 'funk' ? styles.funkLabel : styles.dockLabel, { color: ink }]}>{tab.label}</Text></>;
   }
   return (
-    <Pressable ref={ref} {...(press as PressableProps)} style={s.item} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected: !!isFocused }}>
-      {body}
+    <Pressable ref={ref} {...(press as PressableProps)} onPressIn={(event) => { squash(0.88); (press as PressableProps).onPressIn?.(event); }} onPressOut={(event) => { squash(1); (press as PressableProps).onPressOut?.(event); }} style={s.item} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected: !!isFocused }}>
+      <Animated.View style={[styles.itemInner, { transform: [{ scale }] }]}>{body}</Animated.View>
       {badge ? <View style={[styles.badge, { backgroundColor: colors.red }]} /> : null}
     </Pressable>
   );
@@ -109,6 +125,36 @@ export function LookTabs({ hidden, badge }: { hidden: boolean; badge: boolean })
   const { colors, look } = useTheme();
   const insets = useSafeAreaInsets();
   const rail = useRail(look);
+  const pathname = usePathname();
+  const router = useRouter();
+  const index = tabIndexOf(pathname);
+
+  // Changing tab zooms the new screen in, from the side the tab sits on: forward grows into place, back shrinks into it.
+  const [zoom] = useState(() => new Animated.Value(1));
+  const from = useRef(index);
+  const [offset] = useState(() => new Animated.Value(-0.08));
+  useEffect(() => {
+    if (from.current === index) return;
+    offset.setValue(index > from.current ? -0.08 : 0.08);
+    from.current = index;
+    zoom.setValue(0);
+    Animated.spring(zoom, { toValue: 1, speed: 14, bounciness: 6, useNativeDriver: true }).start();
+  }, [index, zoom, offset]);
+
+  // A sideways swipe anywhere moves to the next or previous tab. Screens that use sideways drags themselves
+  // (the deck's pages, scrolling chips, the touchpad) claim the gesture first, so this only gets the rest.
+  const latest = useRef({ index, router });
+  useEffect(() => { latest.current = { index, router }; });
+  // PanResponder calls these after render, when the ref holds the live tab.
+  // eslint-disable-next-line react-hooks/refs
+  const [swipe] = useState(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 28 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+    onPanResponderRelease: (_, g) => {
+      const { index: now, router: nav } = latest.current;
+      const next = now + (g.dx < -60 || g.vx < -0.6 ? 1 : g.dx > 60 || g.vx > 0.6 ? -1 : 0);
+      if (next !== now && next >= 0 && next < TABS.length) nav.navigate(TABS[next].href);
+    },
+  }));
 
   const barStyle = (() => {
     if (rail) {
@@ -139,7 +185,12 @@ export function LookTabs({ hidden, badge }: { hidden: boolean; badge: boolean })
   return (
     <Tabs style={[styles.fill, { backgroundColor: colors.bg }]}>
       {/* TabSlot ignores padding, so the lane is a View around it. */}
-      <View style={[styles.fill, lane]}><TabSlot style={styles.fill} /></View>
+      <View style={[styles.fill, lane]} {...swipe.panHandlers}>
+        <Animated.View style={[styles.fill, {
+          opacity: zoom.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
+          transform: [{ scale: Animated.add(1, Animated.multiply(Animated.subtract(1, zoom), offset)) }],
+        }]}><TabSlot style={styles.fill} /></Animated.View>
+      </View>
       <TabList style={[barStyle, hidden && styles.gone]}>
         {TABS.map((tab) => (
           <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
@@ -153,6 +204,7 @@ export function LookTabs({ hidden, badge }: { hidden: boolean; badge: boolean })
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  itemInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   gone: { display: 'none' },
   badge: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
 

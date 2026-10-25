@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, AppState, Animated, Easing, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, AppState, Animated, Easing, KeyboardAvoidingView, Modal, PanResponder, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from './motion';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Storage from 'expo-sqlite/kv-store';
 import type { SystemMediaState } from './connection';

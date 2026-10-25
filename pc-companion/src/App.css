@@ -1154,11 +1154,6 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 .deck-button:hover { transform: translateY(-2px); border-color: var(--accent); }
 .nav-item:active, .primary-button:active:not(:disabled), .secondary-button:active:not(:disabled), .icon-button:active, .deck-button:active { transform: scale(.97); }
 
-@media (prefers-reduced-motion: reduce) {
-  .content { animation: none; }
-  .nav-item, .primary-button, .secondary-button, .icon-button, .panel-tile, .deck-button { transition: none; transform: none !important; }
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
-}
 
 /* Open Dock v2: one bold element per screen (the pairing PIN), a floating glass rail, quieter cards.
    Radii are concentric: a card is 18px, things inset 8px inside it are 10px. */
@@ -1213,7 +1208,6 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 @keyframes deck-open { from { opacity: 0; transform: scale(.9); } }
 .deck-canvas.enter-page { animation: deck-deal 280ms cubic-bezier(.2, .8, .2, 1); }
 .deck-canvas.enter-folder { animation: deck-open 260ms cubic-bezier(.2, .8, .2, 1); transform-origin: 50% 30%; }
-@media (prefers-reduced-motion: reduce) { .deck-canvas.enter-page, .deck-canvas.enter-folder { animation: none; } }
 
 /* Motion pass: springy easing, cards and keys dealt in one after another, a living nav indicator. */
 :root { --spring: cubic-bezier(.34, 1.56, .64, 1); --glide: cubic-bezier(.2, .8, .2, 1); }
@@ -1237,10 +1231,6 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 .sidebar .nav-item svg { transition: transform 260ms var(--spring); }
 .sidebar .nav-item:hover svg { transform: translateX(2px) scale(1.08); }
 .deck-page-tabs button.active { animation: key-in 260ms var(--spring); }
-@media (prefers-reduced-motion: reduce) {
-  .content > *, .deck-canvas > *, .deck-page-tabs button.active { animation: none; }
-  .sidebar .nav-item::before, .sidebar .nav-item svg { transition: none; }
-}
 
 /* Designed looks: the keys take the look's shape (empty cells and widgets keep theirs), and each look has its backdrop. */
 [data-look] .deck-button:not(.deck-slot):not(.clock-widget) { border: var(--key-border-width) solid var(--key-border); border-radius: var(--key-radius); background: var(--key-bg); box-shadow: var(--key-shadow); color: var(--key-ink); }
@@ -1377,10 +1367,6 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 @keyframes signal-boot { from { opacity: 0; } 50% { opacity: .4; } }
 @keyframes signal-blink { 50% { opacity: 0; } }
 
-@media (prefers-reduced-motion: reduce) {
-  [data-look] .content > *, [data-look] .deck-canvas > *, [data-look="signal"] .page-heading h1::after { animation: none; }
-  [data-look="atelier"] .sidebar .nav-item::before { transition: none; }
-}
 /* The canvas in the phone's own proportions; upright, it stands as narrow as a phone. */
 .deck-canvas.phone-shaped { min-height: 0; align-content: stretch; }
 .deck-canvas.phone-shaped > .deck-button { min-height: 0; }
@@ -1395,3 +1381,20 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 .shortcut-record:hover:not(:disabled) { border-color: var(--z600); }
 .shortcut-record.recording { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--foreground); }
 .shortcut-record kbd { padding: 2px 7px; border: 1px solid var(--z700); border-bottom-width: 2px; border-radius: 5px; background: var(--z900); color: var(--foreground); font: 600 11px "IBM Plex Mono", ui-monospace, monospace; }
+
+.device-picker { display: flex; align-items: center; gap: 8px; }
+.device-picker select, .name-field input { min-height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--z900); color: var(--z200); font-size: 13px; }
+.name-field { display: flex; gap: 8px; align-items: center; }
+
+/* Hover bounce: a spring overshoot on lift, a quick squash on press. !important so every look keeps it. */
+.nav-item, .primary-button, .secondary-button, .icon-button, .panel-icon-button, .deck-library-item, .update-pill, .clock-browser-tile, .app-browse-button, .transport-tab { transition: transform 280ms cubic-bezier(.34, 1.56, .64, 1), background 140ms ease, border-color 140ms ease, color 140ms ease !important; }
+.nav-item:hover, .primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled), .icon-button:hover, .panel-icon-button:hover:not(:disabled), .deck-library-item:hover:not(:disabled), .update-pill:hover, .clock-browser-tile:hover, .app-browse-button:hover:not(:disabled), .transport-tab:hover { transform: translateY(-2px) scale(1.04) !important; }
+.nav-item:hover svg { animation: icon-bounce 520ms cubic-bezier(.28, .84, .42, 1) 1 !important; }
+.nav-item:active, .primary-button:active:not(:disabled), .secondary-button:active:not(:disabled), .icon-button:active, .panel-icon-button:active:not(:disabled), .deck-library-item:active:not(:disabled), .transport-tab:active { transform: scale(.96) !important; transition-duration: 90ms !important; }
+@keyframes icon-bounce { 0% { transform: translateY(0); } 30% { transform: translateY(-4px); } 55% { transform: translateY(0); } 75% { transform: translateY(-2px); } 100% { transform: translateY(0); } }
+
+/* Screen changes zoom in; menus, pickers and dialogs pop open. Kept on even when the OS turns animations off. */
+@keyframes screen-zoom { from { opacity: 0; transform: scale(.94); } }
+@keyframes pop-zoom { from { opacity: 0; transform: scale(.9); } }
+.content { animation: screen-zoom 380ms cubic-bezier(.34, 1.3, .64, 1) both !important; }
+[role="dialog"], [role="menu"], [role="listbox"], .deck-menu, .select-menu, .app-picker, .icon-picker-menu { animation: pop-zoom 220ms cubic-bezier(.34, 1.4, .64, 1) both; }

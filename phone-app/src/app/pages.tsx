@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Pressable } from '../motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Layers2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';

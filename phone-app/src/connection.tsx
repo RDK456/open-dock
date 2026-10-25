@@ -79,6 +79,29 @@ const DECK_CACHE_KEY = 'opendock.deck-snapshot';
 const DEVICE_SELECTION_KEY = 'opendock.device-navigation';
 const LEGACY_SOURCE_KEY = 'opendock.legacy-import-source';
 const LEGACY_IMPORTED_KEY = 'opendock.legacy-imported';
+const PHONE_ID_KEY = 'opendock.phone-id';
+const PHONE_NAME_KEY = 'opendock.phone-name';
+
+/** This phone's name as the PC lists it; a model name until the user picks one. */
+export async function getPhoneName(): Promise<string> {
+  const saved = (await SecureStore.getItemAsync(PHONE_NAME_KEY).catch(() => null))?.trim();
+  const model = (Platform.constants as { Model?: string } | undefined)?.Model;
+  return saved || model || 'Phone';
+}
+
+export async function setPhoneName(name: string): Promise<void> {
+  await SecureStore.setItemAsync(PHONE_NAME_KEY, name.trim().slice(0, 40));
+}
+
+/** Who this phone is to the PC, so the PC can keep a deck for it. */
+async function phoneIdentity(): Promise<{ deviceId: string; deviceName: string }> {
+  let deviceId = await SecureStore.getItemAsync(PHONE_ID_KEY).catch(() => null);
+  if (!deviceId) {
+    deviceId = `phone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    await SecureStore.setItemAsync(PHONE_ID_KEY, deviceId).catch(() => {});
+  }
+  return { deviceId, deviceName: await getPhoneName() };
+}
 const ConnectionContext = createContext<ConnectionContextValue | null>(null);
 const EMPTY_MEDIA_STATE: SystemMediaState = { playbackState: 'unavailable' };
 // The PC's playback speed: 0 while a browser buffers; missing means normal speed.
@@ -358,13 +381,13 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       socket.onopen = () => {
         opened = true;
         clearTimeout(giveUp);
-        void Promise.all([legacyDeckForPairing(next), Storage.getItem(`${DEVICE_SELECTION_KEY}.${connectionId(next)}`)]).then(([legacyDeck, savedSelection]) => {
+        void Promise.all([legacyDeckForPairing(next), Storage.getItem(`${DEVICE_SELECTION_KEY}.${connectionId(next)}`), phoneIdentity()]).then(([legacyDeck, savedSelection, identity]) => {
           let selection: { profileId: string; pageId: string } | null = null;
           try {
             const parsed = savedSelection ? JSON.parse(savedSelection) as Partial<{ profileId: string; pageId: string }> : null;
             if (typeof parsed?.profileId === 'string' && typeof parsed.pageId === 'string') selection = { profileId: parsed.profileId, pageId: parsed.pageId };
           } catch { void Storage.removeItem(`${DEVICE_SELECTION_KEY}.${connectionId(next)}`); }
-          if (socketRef.current === socket) socket.send(JSON.stringify({ type: 'authenticate', token: next.token, protocolVersion: 2, legacyDeckAvailable: Boolean(legacyDeck), supportsIndependentNavigation: true, ...(selection ? { selectedProfileId: selection.profileId, selectedPageId: selection.pageId } : {}), ...(legacyDeck ? { legacySourceId: legacyDeck.sourceId } : {}) }));
+          if (socketRef.current === socket) socket.send(JSON.stringify({ type: 'authenticate', token: next.token, protocolVersion: 2, legacyDeckAvailable: Boolean(legacyDeck), supportsIndependentNavigation: true, ...identity, ...(selection ? { selectedProfileId: selection.profileId, selectedPageId: selection.pageId } : {}), ...(legacyDeck ? { legacySourceId: legacyDeck.sourceId } : {}) }));
           else socket.close();
         }).catch(() => {
           if (socketRef.current === socket) socket.send(JSON.stringify({ type: 'authenticate', token: next.token, protocolVersion: 2, supportsIndependentNavigation: true }));
@@ -373,9 +396,17 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       socket.onmessage = async (event) => {
         if (socketRef.current !== socket || typeof event.data !== 'string') return;
         try {
-          const message = JSON.parse(event.data) as { type?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown };
+          const message = JSON.parse(event.data) as { type?: string; name?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown };
           countMessage(message.type ?? 'unknown');
           if (message.type === 'ready') {
+            // The PC's own name for itself replaces whatever the pairing saved (often its IP address).
+            const pcName = typeof message.name === 'string' ? message.name.trim() : '';
+            if (pcName && pcName !== next.deviceName) {
+              const renamed = { ...next, deviceName: pcName };
+              setConnection((current) => current && connectionId(current) === connectionId(next) ? renamed : current);
+              void persistPairedDevices(pairedDevicesRef.current.map((device) => connectionId(device) === connectionId(next) ? renamed : device));
+              void SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(renamed));
+            }
             reconnectAttemptRef.current = 0;
             setStatus('connected');
             if (widgetSurfaceRef.current) socket.send(JSON.stringify({ type: 'widget_surface', surface: widgetSurfaceRef.current }));

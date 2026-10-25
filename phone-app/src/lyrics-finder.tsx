@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable } from './motion';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react-native';
 import type { SystemMediaState } from './connection';
 import { guessFields, searchEntries, type EntryFields, type EntryList, type LyricsEntry } from './lyrics';

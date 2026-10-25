@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable } from '../../motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Mic, Send } from 'lucide-react-native';

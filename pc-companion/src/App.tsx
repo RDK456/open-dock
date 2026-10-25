@@ -79,6 +79,8 @@ import { version } from "../package.json";
 import { UpdatesSetting, useUpdater } from "./updates";
 import { AppearanceSetting, inkIcon, useTheme } from "./theme";
 
+type DeviceInfo = { id: string; name: string; online: boolean; ownDeck: boolean };
+
 type ConnectionInfo = {
   host: string;
   deviceName: string;
@@ -202,7 +204,11 @@ function App() {
     return () => { void stop.then((unlisten) => unlisten()); };
   }, [checkNow]);
   const [deckConfig, setDeckConfig] = useState<DeckConfig | null>(null);
-  const [independentNavigation, setIndependentNavigation] = useState(false);
+  const [independentNavigation, setIndependentNavigation] = useState(true);
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState('');
+  const [pcNameDraft, setPcNameDraft] = useState('');
+  const [pcNameError, setPcNameError] = useState('');
   const [navigationSettingBusy, setNavigationSettingBusy] = useState(false);
   const [navigationSettingError, setNavigationSettingError] = useState('');
   const [playbackState, setPlaybackState] = useState<PlaybackState>('unavailable');
@@ -225,6 +231,10 @@ function App() {
       } catch {
         if (live) setLoadError(true);
       }
+      try {
+        const list = await invoke<DeviceInfo[]>('list_devices');
+        if (live) setDevices(list);
+      } catch { /* Companion startup may still be initializing. */ }
       try {
         const offers = await invoke<LegacyImportSummary[]>('pending_legacy_imports');
         if (live) setLegacyImports(offers);
@@ -393,6 +403,29 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (connection && !pcNameDraft) setPcNameDraft(connection.deviceName);
+  }, [connection, pcNameDraft]);
+  useEffect(() => {
+    let live = true;
+    void invoke<DeckConfig>('deck_config', { deviceId: deviceId || null }).then((config) => { if (live) setDeckConfig(config); }).catch(() => {});
+    return () => { live = false; };
+  }, [deviceId]);
+  const selectedDevice = devices.find((device) => device.id === deviceId);
+  async function resetDeviceDeck() {
+    if (!deviceId) return;
+    try {
+      setDeckConfig(await invoke<DeckConfig>('reset_device_deck', { deviceId }));
+      setDevices(await invoke<DeviceInfo[]>('list_devices'));
+    } catch { /* the list refreshes itself */ }
+  }
+  async function savePcName() {
+    setPcNameError('');
+    try {
+      setPcNameDraft(await invoke<string>('set_pc_name', { name: pcNameDraft }));
+      setConnection(await invoke<ConnectionInfo>('connection_info'));
+    } catch (cause) { setPcNameError(String(cause)); }
+  }
   const online = connection?.serverOnline ?? false;
   const pairingQr = connection
     ? JSON.stringify({
@@ -439,7 +472,13 @@ function App() {
 
       <section className="main-panel">
         <header className="topbar" data-tauri-drag-region>
-          <span />
+          {screen === 'deck' && devices.length > 0 ? <div className="device-picker">
+            <select aria-label="Device to customise" value={deviceId} onChange={(event) => setDeviceId(event.target.value)}>
+              <option value="">All devices (shared deck)</option>
+              {devices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.online ? ' · connected' : ''}{device.ownDeck ? ' · custom' : ''}</option>)}
+            </select>
+            {selectedDevice?.ownDeck ? <button type="button" className="secondary-button" onClick={() => void resetDeviceDeck()}>Use shared deck</button> : null}
+          </div> : <span />}
           <div className="network-badge">
             <Wifi size={14} strokeWidth={1.8} />
             {transport === 'usb' ? 'Android USB' : 'Local network'}
@@ -452,9 +491,17 @@ function App() {
             <div className="legacy-import-actions">{legacyImports.map((item) => <button key={item.sourceId} className="secondary-button" onClick={() => void (item.ready ? importPhoneDeck(item.sourceId) : requestPhoneDeck(item.sourceId))}>{item.ready ? 'Import phone deck' : item.requested ? 'Request again' : 'Transfer phone deck'}</button>)}</div>
             {importError ? <p className="usb-error" role="alert">{importError}</p> : null}
           </section> : null}
-          {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} onSaved={setDeckConfig} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={openDockPlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'settings' ? <>
+          {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} deviceId={deviceId} onSaved={(config) => { setDeckConfig(config); void invoke<DeviceInfo[]>('list_devices').then(setDevices).catch(() => {}); }} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={openDockPlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'settings' ? <>
           <div className="page-heading"><div><h1>Settings</h1><p>Manage updates, voice, device navigation and Open Dock plugins.</p></div></div>
           <AppearanceSetting />
+          <section className="device-navigation-setting pc-name-setting">
+            <div className="device-navigation-copy"><h2>This PC's name</h2><p>Phones show this name instead of the IP address.</p></div>
+            <form className="name-field" onSubmit={(event) => { event.preventDefault(); void savePcName(); }}>
+              <input value={pcNameDraft} maxLength={40} aria-label="PC name" onChange={(event) => setPcNameDraft(event.target.value)} />
+              <button type="submit" className="secondary-button" disabled={!pcNameDraft.trim() || pcNameDraft.trim() === connection?.deviceName}>Save</button>
+            </form>
+            {pcNameError ? <p className="setting-error" role="alert">{pcNameError}</p> : null}
+          </section>
           <UpdatesSetting updater={updater} />
           <StartWithWindowsSetting />
           <VoiceSettings voice={voice} />
@@ -645,7 +692,7 @@ function OpenDockPluginSettings({ plugins, warnings, onChange }: { plugins: Open
   </section>;
 }
 
-function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaState, isMacos, plugins, widgetSurface }: { config: DeckConfig | null; onSaved: (config: DeckConfig) => void; playbackState: PlaybackState; mediaState: SystemMediaState; isMacos: boolean; plugins: OpenDockPlugin[]; widgetSurface: WidgetSurface | null }) {
+function DesktopDeckEditor({ config: savedConfig, deviceId, onSaved, playbackState, mediaState, isMacos, plugins, widgetSurface }: { config: DeckConfig | null; deviceId: string; onSaved: (config: DeckConfig) => void; playbackState: PlaybackState; mediaState: SystemMediaState; isMacos: boolean; plugins: OpenDockPlugin[]; widgetSurface: WidgetSurface | null }) {
   const theme = useTheme();
   const [workingConfig, setWorkingConfig] = useState<DeckConfig | null>(savedConfig);
   const [profileId, setProfileId] = useState('');
@@ -823,7 +870,7 @@ function DesktopDeckEditor({ config: savedConfig, onSaved, playbackState, mediaS
     setBusy(true);
     setError('');
     try {
-      const saved = await invoke<DeckConfig>('save_deck_config', { config: normalized });
+      const saved = await invoke<DeckConfig>('save_deck_config', { config: normalized, deviceId: deviceId || null });
       failedRef.current = null;
       onSaved(saved);
     } catch (cause) {

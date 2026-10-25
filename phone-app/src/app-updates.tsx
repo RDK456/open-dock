@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from './motion';
 import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { startActivityAsync } from 'expo-intent-launcher';
