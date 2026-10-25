@@ -5530,8 +5530,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                // Closing minimizes to the taskbar; the tray menu's Quit exits.
-                let _ = window.minimize();
+                // Closing tucks the app into the tray (the hidden icons); the tray menu's Quit exits.
+                let _ = window.hide();
             }
         })
         .build(tauri::generate_context!())
