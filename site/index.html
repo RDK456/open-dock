@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open Dock — your phone is a PC dock</title>
+<meta name="description" content="Open Dock turns your phone into a control deck for your PC: media keys, hotkeys, app launch, widgets, voice and touchpad over Wi-Fi or USB. Free and open source.">
+<meta name="theme-color" content="#17140f">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Open Dock — your phone is a PC dock">
+<meta property="og:description" content="A phone control deck and PC companion. Free and open source.">
+<meta property="og:image" content="assets/s_deck.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <img src="assets/icon.png" alt="" width="36" height="36"><b>Open Dock</b>
+    <a href="https://github.com/RDK456/open-dock">GitHub</a>
+  </nav>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Phone control deck · PC companion</p>
+      <h1>Your phone is a PC dock.</h1>
+      <p>Turn any phone into a deck of buttons, widgets and gestures for your computer. Free and open source.</p>
+      <a class="btn" href="https://github.com/RDK456/open-dock/releases/latest">Download</a>
+      <a class="btn ghost" href="#install">How to install</a>
+      <p class="small">Windows installer <code>Open Dock_*_x64-setup.exe</code> · Android <code>OpenDock.apk</code></p>
+    </div>
+    <div class="phone"><div class="scr"><img src="assets/s_deck.png" width="2400" height="1080" alt="Open Dock deck on a phone: play, next, previous, volume and mute buttons with a media rail"></div></div>
+  </header>
+
+  <section>
+    <h2 class="reveal">What it does</h2>
+    <div class="grid">
+      <div class="card reveal"><h3>Media keys</h3><p>Play, skip and volume, straight from the phone.</p></div>
+      <div class="card reveal"><h3>Hotkeys</h3><p>Custom keyboard shortcuts and ordered shortcut sequences.</p></div>
+      <div class="card reveal"><h3>Apps and files</h3><p>Launch apps and open files with one tap.</p></div>
+      <div class="card reveal"><h3>Scripts and plugins</h3><p>Run your own scripts and extend the deck with plugins.</p></div>
+      <div class="card reveal"><h3>Folders and profiles</h3><p>Multiple pages, folders and profiles to organise buttons.</p></div>
+      <div class="card reveal"><h3>Widgets</h3><p>Clock, now playing, lyrics and PC stats.</p></div>
+      <div class="card reveal"><h3>Voice and touchpad</h3><p>Talk to your PC or use the phone as a touchpad.</p></div>
+      <div class="card reveal"><h3>Wi-Fi or USB</h3><p>Pair once by QR code. Android can switch to USB.</p></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div class="reveal">
+      <h2>Every phone gets its own deck.</h2>
+      <p>Pair several phones to one PC and customise each one separately. Give each device a name instead of an IP address.</p>
+    </div>
+    <div class="phone reveal"><div class="scr"><img src="assets/s_connect.png" width="2400" height="1080" loading="lazy" alt="Open Dock Connect screen showing the paired PC"></div></div>
+  </section>
+
+  <section>
+    <h2 class="reveal">Touchpad and voice</h2>
+    <div class="shots">
+      <div class="phone reveal"><div class="scr"><img src="assets/s_touch.png" width="2400" height="1080" loading="lazy" alt="Open Dock touchpad screen"></div></div>
+      <div class="phone reveal"><div class="scr"><img src="assets/s_voice.png" width="2400" height="1080" loading="lazy" alt="Open Dock voice screen"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="reveal">Six looks, light and dark.</h2>
+    <p class="reveal">Pick the style that suits your desk.</p>
+    <div class="looks reveal"><span>Classic</span><span>Studio</span><span>Atelier</span><span>Signal</span><span>Glass</span><span>Funk</span></div>
+  </section>
+
+  <section id="install">
+    <h2 class="reveal">Install in two steps</h2>
+    <div class="grid">
+      <div class="card reveal"><h3>Windows</h3>
+        <ol><li>Download <code>Open Dock_*_x64-setup.exe</code> from the <a href="https://github.com/RDK456/open-dock/releases/latest">latest release</a>.</li>
+        <li>If Windows says it protected your PC, choose <b>More info</b>, then <b>Run anyway</b>.</li></ol></div>
+      <div class="card reveal"><h3>Android</h3>
+        <ol><li>Download <code>OpenDock.apk</code> from the same release.</li>
+        <li>Allow installs from your browser or file manager when Android asks.</li>
+        <li>Scan the QR code shown in the PC app from the phone's Connect tab.</li></ol></div>
+    </div>
+    <p class="reveal small" style="margin-top:20px">The installer isn't signed, hence the Windows warning. After the first install, Open Dock updates itself.</p>
+  </section>
+
+  <section class="reveal">
+    <h2>Free and open source.</h2>
+    <p>Open Dock is free software under the GNU General Public License v3.0.</p>
+    <a class="btn" href="https://github.com/RDK456/open-dock">View on GitHub</a>
+    <a class="btn ghost" href="https://github.com/RDK456/open-dock/releases/latest">Download</a>
+  </section>
+
+  <footer>Open Dock · GPL-3.0 · <a href="https://github.com/RDK456/open-dock">github.com/RDK456/open-dock</a></footer>
+</div>
+</body>
+</html>
