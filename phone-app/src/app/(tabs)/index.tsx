@@ -14,7 +14,7 @@ import { LyricsWidget } from '../../lyrics-widget';
 import { WebWidgetLayer, type WebWidget } from '../../web-widgets';
 import { countRender, PerfOverlay } from '../../perf-overlay';
 import { useDeckScreenPower } from '../../screen-power';
-import { DockBackdrop, Wallpaper } from '../../wallpaper';
+import { DockBackdrop, fade, useWallpaperSettings, Wallpaper } from '../../wallpaper';
 import { ButtonEditor, type EditTarget } from '../../button-editor';
 import { DeckStack } from '../../deck-stack';
 import { PuckRail, usePins } from '../../puck-rail';
@@ -388,16 +388,17 @@ function ChipRow({ label, items, selectedId, onSelect }: { label: string; items:
 
 export default function DeckScreen() {
   const { colors, scheme, look, key: design } = useTheme();
+  const { keyOpacity } = useWallpaperSettings();
   // A key's surface in the chosen look; Bento deals its saturated blocks out to the keys in turn.
   const keySurface = (order: number, dock = false, plate = false) => {
     const tile = design.tiles?.[order % design.tiles.length];
     // Immersive mode: frosted squircle plates with a lit top edge, an accent LED and a label under the icon.
-    if (plate) return { ink: design.ink, style: { borderRadius: 28, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, boxShadow: `inset 0px 1px 0px ${colors.glassBorder}`, overflow: 'hidden' as const } };
+    if (plate) return { ink: design.ink, style: { borderRadius: 28, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: fade(colors.panel, keyOpacity), boxShadow: `inset 0px 1px 0px ${colors.glassBorder}`, overflow: 'hidden' as const } };
     // The Dock look's own keys are bare icons on the backdrop, no key box.
     if (dock) return { ink: design.ink, style: { borderRadius: design.radius, borderWidth: 0, backgroundColor: 'transparent' } };
     return {
       ink: tile?.[1] ?? design.ink,
-      style: { borderRadius: design.radius, borderWidth: design.borderWidth, borderColor: design.border, backgroundColor: tile?.[0] ?? design.bg, boxShadow: design.shadow, overflow: design.touchLight ? 'hidden' as const : undefined },
+      style: { borderRadius: design.radius, borderWidth: design.borderWidth, borderColor: design.border, backgroundColor: tile?.[0] ?? fade(design.bg, keyOpacity), boxShadow: design.shadow, overflow: design.touchLight ? 'hidden' as const : undefined },
     };
   };
   // Icons the PC saved as SVG are drawn in the dark deck's light ink; give them the key's ink.

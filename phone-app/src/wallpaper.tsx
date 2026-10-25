@@ -11,12 +11,15 @@ import { backdrops, wallpaperGlows } from './theme-colors';
 // Soft light behind the Deck and Touch screens, under glass panels. Kept on this phone only, like the theme.
 export type WallpaperId = 'none' | 'aurora' | 'ember' | 'ocean' | 'forest';
 // image: a picture of your own (file uri) shown under the gradient; imageOpacity and gradient are 0–1.
-export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean; image: string | null; imageOpacity: number; gradient: number };
+export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean; image: string | null; imageOpacity: number; gradient: number; keyOpacity: number };
+
+/** A #rrggbb color at the given opacity; anything else (rgba, transparent) is returned as it is. */
+export const fade = (color: string, opacity: number) => opacity >= 1 || !/^#[0-9a-f]{6}$/i.test(color) ? color : `${color}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
 
 export const WALLPAPERS: [WallpaperId, string][] = [['none', 'None'], ['aurora', 'Aurora'], ['ember', 'Ember'], ['ocean', 'Ocean'], ['forest', 'Forest']];
 
 const KEY = 'opendock.wallpaper';
-const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true, image: null, imageOpacity: 1, gradient: 0.5 };
+const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true, image: null, imageOpacity: 1, gradient: 0.5, keyOpacity: 0.55 };
 const unit = (value: unknown, fallback: number) => typeof value === 'number' && value >= 0 && value <= 1 ? value : fallback;
 
 /** Lets the user pick a picture and keeps a copy in the app's own storage, so it outlives the picker's cache. */
@@ -46,6 +49,7 @@ function read(): WallpaperSettings {
       image: typeof saved.image === 'string' ? saved.image : null,
       imageOpacity: unit(saved.imageOpacity, DEFAULTS.imageOpacity),
       gradient: unit(saved.gradient, DEFAULTS.gradient),
+      keyOpacity: unit(saved.keyOpacity, DEFAULTS.keyOpacity),
     };
   } catch {
     return DEFAULTS;

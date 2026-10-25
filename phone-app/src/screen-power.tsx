@@ -112,7 +112,7 @@ export function AppearanceSection() {
   const styles = useStyles(makeStyles);
   const mode = useThemeMode();
   const look = useLook();
-  const { wallpaper, motion, image, imageOpacity, gradient } = useWallpaperSettings();
+  const { wallpaper, motion, image, imageOpacity, gradient, keyOpacity } = useWallpaperSettings();
   const options: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
   return <View style={styles.card}>
     <Text style={styles.title}>Appearance</Text>
@@ -129,6 +129,8 @@ export function AppearanceSection() {
     <Choice options={[[false, 'Still'], [true, 'Drift']]} value={motion} onChange={(value) => setWallpaperSettings({ motion: value })} />
     <Text style={styles.hint}>Shows behind the Deck and Touch screens. Drift also stops when Motion is off below.</Text>
     </> : null}
+    <Text style={styles.label}>Key transparency</Text>
+    <Choice options={[[1, 'Solid'], [0.55, 'Glass'], [0.25, 'Clear'], [0, 'Hidden']]} value={keyOpacity} onChange={(value) => setWallpaperSettings({ keyOpacity: value })} />
     {look !== 'signal' ? <>
     <Text style={styles.label}>Your own background</Text>
     <View style={styles.segments}>

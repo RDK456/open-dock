@@ -3,7 +3,7 @@
     "name": "Open Dock",
     "slug": "open-dock-phone",
     "scheme": "opendock",
-    "version": "1.5.4",
+    "version": "1.5.5",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "backgroundColor": "#09090b",
