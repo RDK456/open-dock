@@ -143,12 +143,15 @@ export function LookTabs({ hidden, badge }: { hidden: boolean; badge: boolean })
 
   // A sideways swipe anywhere moves to the next or previous tab. Screens that use sideways drags themselves
   // (the deck's pages, scrolling chips, the touchpad) claim the gesture first, so this only gets the rest.
-  const latest = useRef({ index, router });
-  useEffect(() => { latest.current = { index, router }; });
+  const { height } = useWindowDimensions();
+  const latest = useRef({ index, router, hidden, height });
+  useEffect(() => { latest.current = { index, router, hidden, height }; });
   // PanResponder calls these after render, when the ref holds the live tab.
   // eslint-disable-next-line react-hooks/refs
   const [swipe] = useState(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 28 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+    // Only a swipe that starts in the strip along the bottom edge (where the dock floats) changes tab, and never in
+    // immersive mode, so the deck's own swipes (pages, profiles) are never taken over.
+    onMoveShouldSetPanResponder: (_, g) => !latest.current.hidden && g.y0 > latest.current.height - 150 && Math.abs(g.dx) > 28 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
     onPanResponderRelease: (_, g) => {
       const { index: now, router: nav } = latest.current;
       const next = now + (g.dx < -60 || g.vx < -0.6 ? 1 : g.dx > 60 || g.vx > 0.6 ? -1 : 0);
