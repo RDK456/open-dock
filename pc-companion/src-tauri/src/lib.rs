@@ -1764,6 +1764,59 @@ fn load_devices(state: &AppState, config_dir: &Path) {
     }
 }
 
+/// Re-reads every saved app icon once, at the sharper sizes the shell offers. Icons saved before 1.5.2 are 32 px
+/// and blur on a phone. A deck whose upgraded copy would not save (too big) keeps its old icons.
+#[cfg(target_os = "windows")]
+fn upgrade_app_icons(state: &AppState, config_dir: &Path) {
+    let marker = config_dir.join("icon-quality-v2");
+    if marker.exists() {
+        return;
+    }
+    fn upgraded(config: &DeckConfig) -> Option<DeckConfig> {
+        let mut next = config.clone();
+        let mut changed = false;
+        for profile in &mut next.profiles {
+            for page in &mut profile.pages {
+                let folders = page.folders.iter_mut().flat_map(|folder| folder.buttons.iter_mut());
+                for button in page.buttons.iter_mut().chain(folders) {
+                    let DeckAction::LaunchApp { app } = &button.action else {
+                        continue;
+                    };
+                    if button.icon != "app-icon" {
+                        continue;
+                    }
+                    if let Ok(data) = read_app_icon(app.clone(), true) {
+                        if button.app_icon_data.as_deref() != Some(data.as_str()) {
+                            button.app_icon_data = Some(data);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+        // A phone holding the old deck sees the change through the revision.
+        next.revision = next.revision.saturating_add(1);
+        changed.then_some(next)
+    }
+    if let Ok(mut shared) = state.deck_config.write() {
+        if let Some(next) = upgraded(&shared) {
+            if save_deck_config_file(&config_dir.join("deck-config.json"), &next).is_ok() {
+                *shared = next;
+            }
+        }
+    }
+    if let Ok(mut decks) = state.device_decks.write() {
+        for (id, deck) in decks.iter_mut() {
+            if let Some(next) = upgraded(deck) {
+                if save_device_deck_file(config_dir, id, &next).is_ok() {
+                    *deck = next;
+                }
+            }
+        }
+    }
+    let _ = fs::write(marker, "done");
+}
+
 fn register_device(state: &AppState, id: &str, name: Option<&str>) {
     if let Ok(mut online) = state.online_devices.lock() {
         *online.entry(id.to_owned()).or_insert(0) += 1;
@@ -3061,7 +3114,8 @@ fn read_app_icon(app: String, use_shortcut_icon: bool) -> Result<String, String>
         // file the shell cannot read.
         let is_shortcut = Path::new(&app).extension().is_some_and(|extension| extension.eq_ignore_ascii_case("lnk"));
         if use_shortcut_icon || !is_shortcut || in_shell {
-            if let Ok(png) = win_icon::app_icon_png(&app) {
+            // 65_500 base64 characters is the most an icon may take; that is 3 bytes of PNG for every 4.
+            if let Ok(png) = win_icon::app_icon_png(&app, 65_500 / 4 * 3) {
                 use base64::Engine;
                 let encoded = base64::engine::general_purpose::STANDARD.encode(png);
                 if encoded.len() <= 65_500 {
@@ -5562,6 +5616,12 @@ pub fn run() {
                 deck_config;
 
             load_devices(&state, &config_dir);
+            #[cfg(target_os = "windows")]
+            {
+                let icon_state = state.clone();
+                let icon_dir = config_dir.clone();
+                thread::spawn(move || upgrade_app_icons(&icon_state, &icon_dir));
+            }
 
             let usb_enabled = fs::read_to_string(config_dir.join("android-usb-enabled"))
                 .is_ok_and(|value| value.trim() == "true");

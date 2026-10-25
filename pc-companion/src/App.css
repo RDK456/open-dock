@@ -335,6 +335,45 @@
   --tile-5: #d9ccff; --tile-ink-5: #1a1033;
 }
 
+/* Dock: bare icons with no key boxes, on a deep navy gradient with a soft green light. */
+:root[data-look="dock"] {
+  --background: #06101a;
+  --sidebar: #0a1624;
+  --card: #0c1826;
+  --card-raised: #12233a;
+  --border: #1d3047;
+  --foreground: #f2f6fb;
+  --muted: #a9b6c8;
+  --subtle: #95a3b8;
+  --blue: #8fb4ff;
+  --red: #ff7a90;
+  --green: #5ef0b8;
+  --star: #ffd166;
+  --z850: #1a2f4a;
+  --z900: #12233a;
+  --z950: #0c1826;
+  --rail: #0a1624;
+  --rail-text: #f2f6fb;
+  --rail-muted: #a9b6c8;
+  --rail-hover: #12233a;
+  --rail-selected: #6fd3a8;
+  --rail-selected-text: #06101a;
+  --brand: #6fd3a8;
+  --accent: #6fd3a8;
+  --accent-hover: #8fe3be;
+  --accent-text: #06101a;
+  --key-bg: transparent;
+  --key-border: transparent;
+  --key-border-width: 0px;
+  --key-radius: 20px;
+  --key-shadow: none;
+  --key-shadow-hover: none;
+  --key-ink: #f2f6fb;
+  --key-label-size: 12px;
+  --key-label-weight: 500;
+  --look-glow: rgba(111, 211, 168, 0.3);
+}
+
 /* Each look's other half: the native blocks above are Studio, Signal, Glass and Funk in dark and Atelier in light;
    these redraw them for the other choice. They replace everything their native block sets. */
 :root[data-look="studio"][data-theme="light"] {
@@ -504,6 +543,36 @@
   --key-shadow: 0 5px 0 #1a1033;
   --key-shadow-hover: 0 8px 0 #1a1033;
   --key-ink: #1a1033;
+}
+
+:root[data-look="dock"][data-theme="light"] {
+  --background: #eef2f8;
+  --sidebar: #e3e9f3;
+  --card: #ffffff;
+  --card-raised: #f0f3f9;
+  --border: #d5dde9;
+  --foreground: #0e1724;
+  --muted: #44516a;
+  --subtle: #586680;
+  --blue: #3657c7;
+  --red: #b4234a;
+  --green: #0f7a55;
+  --star: #c98a00;
+  --z850: #dfe6f1;
+  --z900: #f0f3f9;
+  --z950: #ffffff;
+  --rail: #e3e9f3;
+  --rail-text: #0e1724;
+  --rail-muted: #44516a;
+  --rail-hover: #d5dde9;
+  --rail-selected: #0b5f43;
+  --rail-selected-text: #ffffff;
+  --brand: #0b5f43;
+  --accent: #0b5f43;
+  --accent-hover: #094c36;
+  --accent-text: #ffffff;
+  --key-ink: #0e1724;
+  --look-glow: rgba(15, 122, 85, 0.2);
 }
 
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--z700) transparent; }
@@ -1247,6 +1316,11 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 [data-look="glass"] body { background: radial-gradient(60% 50% at 15% 10%, var(--aurora-1), transparent 70%) fixed, radial-gradient(50% 50% at 85% 35%, var(--aurora-2), transparent 70%) fixed, radial-gradient(60% 60% at 50% 100%, var(--aurora-3), transparent 70%) fixed, var(--background); }
 [data-look="glass"] .deck-canvas-wrap { background: var(--key-bg); }
 [data-look="glass"] .deck-canvas-wrap, [data-look="glass"] .deck-button:not(.deck-slot):not(.clock-widget) { backdrop-filter: blur(18px) saturate(1.4); }
+[data-look="dock"] body { background: radial-gradient(70% 55% at 12% 0%, var(--look-glow), transparent 70%) fixed, linear-gradient(135deg, var(--background), var(--z900)) fixed; }
+[data-look="dock"] .deck-canvas-wrap { border-color: transparent; box-shadow: none; background: transparent; }
+[data-look="dock"] .deck-button:not(.deck-slot):not(.clock-widget) { align-items: center; justify-content: center; }
+[data-look="dock"] .deck-button:not(.deck-slot):not(.clock-widget) strong, [data-look="dock"] .deck-button:not(.deck-slot):not(.clock-widget) small { display: none; }
+[data-look="dock"] .deck-button:not(.deck-slot):not(.clock-widget):hover { background: var(--z850); }
 
 /* The widget shelf under the grid: every widget in reach, laid out as tiles across the free space. */
 .deck-widget-shelf { flex: none; padding: 4px 2px 0; }

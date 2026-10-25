@@ -15,6 +15,7 @@ const LOOK_HINTS: Record<Look, string> = {
   signal: 'Black and white like a device: a dot grid, monospace capitals and stepped motion.',
   glass: 'Frosted glass over a moving aurora that lights up where you touch.',
   funk: 'Neon keys with thick outlines and a hard shadow, on deep purple.',
+  dock: 'Bare icons with no key boxes, on a deep gradient, like a phone dock.',
 };
 
 // The screen is a deck's biggest power draw. These settings decide whether the deck keeps it on and

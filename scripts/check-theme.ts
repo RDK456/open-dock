@@ -45,7 +45,7 @@ assert.ok(Object.keys(pcDark).length >= 30, 'PC app: tokens not read');
 
 // The designed looks: each replaces some of its base theme's tokens, in light and in dark. The plain block is the
 // look's original half; its [data-theme] block redraws it for the other choice and must replace every color it sets.
-const LOOK_NATIVE = { studio: 'dark', atelier: 'light', signal: 'dark', glass: 'dark', funk: 'dark' } as const;
+const LOOK_NATIVE = { studio: 'dark', atelier: 'light', signal: 'dark', glass: 'dark', funk: 'dark', dock: 'dark' } as const;
 const base = (scheme: string) => (scheme === 'dark' ? pcDark : pcLight);
 const pcLooks = Object.entries(LOOK_NATIVE).flatMap(([look, native]) => {
   const own = tokens(`:root[data-look="${look}"]`);

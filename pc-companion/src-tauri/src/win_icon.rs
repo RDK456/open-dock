@@ -12,7 +12,8 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::Storage::FileSystem::FILE_FLAGS_AND_ATTRIBUTES;
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
-use windows::Win32::UI::Shell::{ILFree, SHGetFileInfoW, SHParseDisplayName, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_PIDL};
+use windows::Win32::UI::Controls::{IImageList, ILD_TRANSPARENT};
+use windows::Win32::UI::Shell::{ILFree, SHGetFileInfoW, SHGetImageList, SHParseDisplayName, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_PIDL, SHGFI_SYSICONINDEX, SHIL_EXTRALARGE, SHIL_JUMBO};
 use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO};
 
 use super::icon_png;
@@ -29,17 +30,17 @@ struct MaskInfo {
 
 /// The icon the shell shows for `path`: an app's own icon, or for a shortcut the icon Explorer shows for it
 /// (its chosen icon, else its target's), without the little arrow. PNG bytes.
-pub(super) fn app_icon_png(path: &str) -> Result<Vec<u8>, String> {
+pub(super) fn app_icon_png(path: &str, max_png: usize) -> Result<Vec<u8>, String> {
     // The shell wants COM on the calling thread. Joining one that is already set up differently is fine.
     let started = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
-    let result = read_icon(path);
+    let result = read_icon(path, max_png);
     if started {
         unsafe { CoUninitialize() };
     }
     result
 }
 
-fn read_icon(path: &str) -> Result<Vec<u8>, String> {
+fn read_icon(path: &str, max_png: usize) -> Result<Vec<u8>, String> {
     let wide: Vec<u16> = OsStr::new(path).encode_wide().chain(std::iter::once(0)).collect();
     let mut info = SHFILEINFOW::default();
     let size = size_of::<SHFILEINFOW>() as u32;
@@ -47,19 +48,41 @@ fn read_icon(path: &str) -> Result<Vec<u8>, String> {
         // Not a file: the shell finds the app by its address, and the icon is asked for by that item's id.
         let mut item = std::ptr::null_mut();
         unsafe { SHParseDisplayName(PCWSTR(wide.as_ptr()), None, &mut item, 0, None) }.map_err(|error| error.to_string())?;
-        let found = unsafe { SHGetFileInfoW(PCWSTR(item as *const u16), FILE_FLAGS_AND_ATTRIBUTES(0), Some(&mut info), size, SHGFI_PIDL | SHGFI_ICON | SHGFI_LARGEICON) };
+        let found = unsafe { SHGetFileInfoW(PCWSTR(item as *const u16), FILE_FLAGS_AND_ATTRIBUTES(0), Some(&mut info), size, SHGFI_PIDL | SHGFI_ICON | SHGFI_LARGEICON | SHGFI_SYSICONINDEX) };
         unsafe { ILFree(Some(item)) };
         found
     } else {
-        unsafe { SHGetFileInfoW(PCWSTR(wide.as_ptr()), FILE_FLAGS_AND_ATTRIBUTES(0), Some(&mut info), size, SHGFI_ICON | SHGFI_LARGEICON) }
+        unsafe { SHGetFileInfoW(PCWSTR(wide.as_ptr()), FILE_FLAGS_AND_ATTRIBUTES(0), Some(&mut info), size, SHGFI_ICON | SHGFI_LARGEICON | SHGFI_SYSICONINDEX) }
     };
     if found == 0 || info.hIcon.is_invalid() {
+        return Err("Windows has no icon for that file".into());
+    }
+    let _ = unsafe { DestroyIcon(info.hIcon) };
+    // The shell's own 32 px icon is small and blurs on a phone. Ask for its 256 px, then 48 px, version first;
+    // the 32 px one below is the fallback when those are missing or too big to store.
+    for shil in [SHIL_JUMBO, SHIL_EXTRALARGE] {
+        if let Some(png) = sized_png(info.iIcon, shil).filter(|png| png.len() <= max_png) {
+            return Ok(png);
+        }
+    }
+    let large = unsafe { SHGetFileInfoW(PCWSTR(wide.as_ptr()), FILE_FLAGS_AND_ATTRIBUTES(0), Some(&mut info), size, SHGFI_ICON | SHGFI_LARGEICON) };
+    if large == 0 || info.hIcon.is_invalid() {
         return Err("Windows has no icon for that file".into());
     }
     let result = icon_pixels(info.hIcon);
     let _ = unsafe { DestroyIcon(info.hIcon) };
     let (width, height, rgba) = result?;
     icon_png::encode_png(width, height, &rgba)
+}
+
+/// The shell icon at `index` from one of its image lists (extra large 48 px, jumbo 256 px), as a PNG.
+fn sized_png(index: i32, list_size: u32) -> Option<Vec<u8>> {
+    let list: IImageList = unsafe { SHGetImageList(list_size as i32) }.ok()?;
+    let icon = unsafe { list.GetIcon(index, ILD_TRANSPARENT.0 as u32) }.ok()?;
+    let pixels = icon_pixels(icon);
+    let _ = unsafe { DestroyIcon(icon) };
+    let (width, height, rgba) = pixels.ok()?;
+    icon_png::encode_png(width, height, &rgba).ok()
 }
 
 fn icon_pixels(icon: HICON) -> Result<(u32, u32, Vec<u8>), String> {

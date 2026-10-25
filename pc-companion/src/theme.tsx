@@ -8,7 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Theme = 'light' | 'dark';
 /** Classic is the plain design. The others are complete designs. Every look comes in light and dark. */
-export type Look = 'classic' | 'studio' | 'atelier' | 'signal' | 'glass' | 'funk';
+export type Look = 'classic' | 'studio' | 'atelier' | 'signal' | 'glass' | 'funk' | 'dock';
 
 const KEY = 'opendock.appearance';
 const LOOK_KEY = 'opendock.look';
@@ -23,7 +23,7 @@ const RETIRED: Record<string, Look> = { console: 'signal', bento: 'studio', desk
 
 export function parseLook(value: unknown): Look {
   if (typeof value === 'string' && value in RETIRED) return RETIRED[value];
-  return value === 'studio' || value === 'atelier' || value === 'signal' || value === 'glass' || value === 'funk' ? value : 'classic';
+  return value === 'studio' || value === 'atelier' || value === 'signal' || value === 'glass' || value === 'funk' || value === 'dock' ? value : 'classic';
 }
 
 const systemIsLight = () => window.matchMedia('(prefers-color-scheme: light)').matches;
@@ -109,6 +109,7 @@ const LOOKS: [Look, string, string][] = [
   ['signal', 'Signal', 'Monochrome like a device: a floating dock, monospace capitals, a dot grid and one red dot.'],
   ['glass', 'Glass', 'Frosted glass over an aurora.'],
   ['funk', 'Funk', 'Neon keys with thick outlines and a hard shadow.'],
+  ['dock', 'Dock', 'Bare icons with no key boxes, on a deep gradient, like a phone dock.'],
 ];
 
 export function AppearanceSetting() {

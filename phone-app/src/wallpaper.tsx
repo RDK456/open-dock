@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Animated, Easing, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Storage from 'expo-sqlite/kv-store';
 import { usePrefs } from './prefs';
 import { useTheme } from './theme';
@@ -68,6 +68,7 @@ export function Wallpaper() {
   // changes size (the tab bar hiding, rotation) so the light reaches the bottom edge.
   const [size, setSize] = useState('');
 
+  if (look === 'dock') return <DockBackdrop />;
   if (look === 'signal') return <DotBackdrop key={size} onSize={setSize} dot={backdrops.signalDot[scheme]} />;
   if (wallpaper === 'none') return null;
   const glows = wallpaperGlows[wallpaper];
@@ -93,7 +94,30 @@ export function Wallpaper() {
   );
 }
 
-type BackdropProps = { onSize: (size: string) => void };
+/** Immersive mode's backdrop: a deep gradient with a soft green light in one corner, so bare icons stand out. */
+export function DockBackdrop() {
+  const { scheme } = useTheme();
+  const [size, setSize] = useState('');
+  const [from, to, glow] = backdrops.dock[scheme];
+  return <View pointerEvents="none" style={styles.fill} onLayout={measure(setSize)}>
+    <Svg key={size} width="100%" height="100%">
+      <Defs>
+        <LinearGradient id="dockBase" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={from} />
+          <Stop offset="1" stopColor={to} />
+        </LinearGradient>
+        <RadialGradient id="dockGlow" cx="12%" cy="0%" r="70%">
+          <Stop offset="0" stopColor={glow} stopOpacity={scheme === 'light' ? 0.4 : 0.5} />
+          <Stop offset="1" stopColor={glow} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Rect width="100%" height="100%" fill="url(#dockBase)" />
+      <Rect width="100%" height="100%" fill="url(#dockGlow)" />
+    </Svg>
+  </View>;
+}
+
+type BackdropProps ={ onSize: (size: string) => void };
 const measure = (onSize: BackdropProps['onSize']) => ({ nativeEvent: { layout } }: LayoutChangeEvent) => onSize(`${layout.width}x${layout.height}`);
 
 /** Signal: a fine dot grid, like the dots of a matrix display. */

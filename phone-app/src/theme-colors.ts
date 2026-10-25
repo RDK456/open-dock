@@ -125,15 +125,15 @@ export function parseMode(value: unknown): ThemeMode {
  * The deck's look. Classic is the plain design above. The others are complete designs with their own palette and
  * key shape. Every look comes in light and dark and follows the light/dark choice.
  */
-export type Look = 'classic' | 'studio' | 'atelier' | 'signal' | 'glass' | 'funk';
-export const LOOKS: [Look, string][] = [['classic', 'Classic'], ['studio', 'Studio'], ['atelier', 'Atelier'], ['signal', 'Signal'], ['glass', 'Glass'], ['funk', 'Funk']];
+export type Look = 'classic' | 'studio' | 'atelier' | 'signal' | 'glass' | 'funk' | 'dock';
+export const LOOKS: [Look, string][] = [['classic', 'Classic'], ['studio', 'Studio'], ['atelier', 'Atelier'], ['signal', 'Signal'], ['glass', 'Glass'], ['funk', 'Funk'], ['dock', 'Dock']];
 
 // Looks that were retired move to the nearest design that replaced them.
 const RETIRED: Record<string, Look> = { console: 'signal', bento: 'studio', desk: 'atelier' };
 
 export function parseLook(value: unknown): Look {
   if (typeof value === 'string' && value in RETIRED) return RETIRED[value];
-  return value === 'studio' || value === 'atelier' || value === 'signal' || value === 'glass' || value === 'funk' ? value : 'classic';
+  return value === 'studio' || value === 'atelier' || value === 'signal' || value === 'glass' || value === 'funk' || value === 'dock' ? value : 'classic';
 }
 
 /** How a deck key is drawn in a look. */
@@ -159,6 +159,8 @@ export type KeyLook = {
   tiles?: [string, string][];
   /** A soft light that follows the finger across the key. */
   touchLight?: string;
+  /** Bare, larger icons with no label, as in a phone's dock. */
+  iconOnly?: boolean;
 };
 
 // Studio: a precise dark tool. Near-black with a cool tint, hairlines, one violet accent.
@@ -253,8 +255,27 @@ const funkLight: Colors = {
   glass: '#fffaf0', glassBorder: '#1a1033', glow: 'rgba(106,44,240,0.16)',
 };
 
+// Dock: bare icons on a deep navy gradient with a soft green light, like a phone's dock.
+const dockColors: Colors = {
+  bg: '#06101a', panel: '#0c1826', panelRaised: '#12233a', pressed: '#1a2f4a', border: '#1d3047', borderStrong: '#2b4263',
+  borderActive: '#456088', borderFocus: '#6fd3a8', text: '#f2f6fb', onAccent: '#06101a', muted: '#a9b6c8', faint: '#8795aa',
+  accent: '#6fd3a8', mint: '#5ef0b8', onMint: '#03261a', red: '#ff7a90', blue: '#8fb4ff', artOpacity: 0.3, star: '#ffd166',
+  warn: '#ffd166', warnFill: '#ffd166', warnBorder: '#4d4020', goodBg: '#0f1c1a', goodBorder: '#1f3b35', playingBorder: '#1f6b55',
+  scrim: 'rgba(0,0,0,0.6)', tint: 'rgba(6,16,26,0.7)', float: 'rgba(12,24,38,0.9)', floatSoft: 'rgba(12,24,38,0.65)',
+  glass: 'rgba(255,255,255,0.06)', glassBorder: 'rgba(255,255,255,0.14)', glow: 'rgba(111,211,168,0.3)',
+};
+const dockLight: Colors = {
+  bg: '#eef2f8', panel: '#ffffff', panelRaised: '#f0f3f9', pressed: '#dfe6f1', border: '#d5dde9', borderStrong: '#c0cbdc',
+  borderActive: '#8f9db5', borderFocus: '#0b5f43', text: '#0e1724', onAccent: '#ffffff', muted: '#44516a', faint: '#586680',
+  accent: '#0b5f43', mint: '#0f7a55', onMint: '#ffffff', red: '#b4234a', blue: '#3657c7', artOpacity: 0.38, star: '#c98a00',
+  warn: '#855000', warnFill: '#ffd166', warnBorder: '#e0b64a', goodBg: '#e6f6ef', goodBorder: '#b6e0cc', playingBorder: '#6cc2a0',
+  scrim: 'rgba(14,23,36,0.35)', tint: 'rgba(238,242,248,0.7)', float: 'rgba(255,255,255,0.88)', floatSoft: 'rgba(255,255,255,0.65)',
+  glass: 'rgba(255,255,255,0.55)', glassBorder: 'rgba(255,255,255,0.85)', glow: 'rgba(15,122,85,0.2)',
+};
+
 /** Each designed look's palette in light and in dark. */
 export const LOOK_THEMES: Record<Exclude<Look, 'classic'>, Record<Scheme, Colors>> = {
+  dock: { dark: dockColors, light: dockLight },
   studio: { dark: studioColors, light: studioLight },
   atelier: { dark: atelierDark, light: atelierColors },
   signal: { dark: signalColors, light: signalLight },
@@ -273,6 +294,8 @@ export function keyLook(look: Look, colors: Colors, scheme: Scheme): KeyLook {
       return { radius: 20, borderWidth: 1, bg: colors.panel, border: colors.glassBorder, ink: colors.text, labelSize: 11, labelWeight: '500', font: 'monospace', caps: true, tracking: 1.2, iconStroke: 2, motion: 'step' };
     case 'glass':
       return { radius: 20, borderWidth: 1, bg: colors.glass, border: colors.glassBorder, shadow: light ? '0px 8px 24px rgba(40, 50, 90, 0.12)' : '0px 8px 24px rgba(0, 0, 0, 0.35)', ink: colors.text, labelSize: 13, labelWeight: '600', iconStroke: 1.7, motion: 'spring', touchLight: light ? 'rgba(120, 140, 255, 0.35)' : 'rgba(205, 215, 255, 0.55)' };
+    case 'dock':
+      return { radius: 20, borderWidth: 0, bg: 'transparent', border: 'transparent', ink: colors.text, labelSize: 12, labelWeight: '500', iconStroke: 1.6, motion: 'spring', iconOnly: true };
     case 'funk':
       return { radius: 16, borderWidth: 3, bg: colors.panel, border: colors.glassBorder, shadow: `0px 5px 0px ${colors.glassBorder}`, ink: colors.text, labelSize: 13, labelWeight: '800', iconStroke: 2.2, motion: 'spring',
         tiles: [['#c6ff3d', '#16200a'], ['#3fd9ff', '#04202b'], ['#ff4fd8', '#2b0024'], ['#ffa53d', '#2a1500'], ['#d9ccff', '#1a1033']] };
@@ -310,6 +333,8 @@ export function surfaceLook(look: Look): SurfaceLook {
       return { radius: 20, border: 1, lift: false, title: { fontFamily: 'monospace', fontSize: 12, fontWeight: '500', letterSpacing: 2.2, textTransform: 'uppercase' }, chipRadius: 999, pip: { size: 4, on: 4, radius: 0 }, railRadius: 999, puck: 0.5 };
     case 'funk':
       return { radius: 22, border: 3, base: 7, lift: false, title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 }, chipRadius: 10, pip: { size: 9, on: 22, radius: 5 }, railRadius: 24, puck: 0.32 };
+    case 'dock':
+      return { radius: 28, border: 0, lift: false, title: { fontSize: 17, fontWeight: '600', letterSpacing: -0.2 }, chipRadius: 11, pip: { size: 6, on: 18, radius: 3 }, railRadius: 999, puck: 0.5 };
     case 'glass':
       return { radius: 28, border: 1, lift: true, title: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 }, chipRadius: 11, pip: { size: 6, on: 18, radius: 3 }, railRadius: 999, puck: 0.5 };
     default:
@@ -337,7 +362,11 @@ export function inkIcon(svg: string, scheme: Scheme): string {
 export const inkIconAs = (svg: string, ink: string) => svg.replace(/stroke="#f4f4f5"/gi, `stroke="${ink}"`);
 
 /** Signal's dot grid (see wallpaper.tsx). */
-export const backdrops: { signalDot: Record<Scheme, string> } = { signalDot: { dark: '#ffffff', light: '#000000' } };
+export const backdrops: { signalDot: Record<Scheme, string>; dock: Record<Scheme, [string, string, string]> } = {
+  signalDot: { dark: '#ffffff', light: '#000000' },
+  // The dock's gradient: from, to and the corner glow.
+  dock: { dark: ['#06101a', '#13233a', '#3f9c78'], light: ['#f2f5fa', '#d9e3f2', '#7fcfa8'] },
+};
 
 /** The phone wallpapers: three soft glows each, as color and where it sits (fractions of the screen). */
 export const wallpaperGlows: Record<'aurora' | 'ember' | 'ocean' | 'forest', [string, number, number][]> = {
