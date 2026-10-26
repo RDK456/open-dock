@@ -252,13 +252,14 @@ export function HandsFreeProvider({ children }: PropsWithChildren) {
   const hasConnection = Boolean(connection);
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    if (!hasConnection || status === 'disconnected' || status === 'error') {
+    // The connection keeps retrying while the PC is away, so the service stays until the PC is forgotten or disconnected by the user.
+    if (!hasConnection) {
       stopKeepAlive();
       return;
     }
     // Android only lets the app start (or change) the service while it is in front.
     if (AppState.currentState !== 'active') return;
-    const where = status === 'connected' ? `Connected to ${deviceName}` : `Reconnecting to ${deviceName}…`;
+    const where = status === 'connected' ? `Connected to ${deviceName}` : `Waiting for ${deviceName}…`;
     startKeepAlive('Open Dock', enabled ? `${where}. Say “${phrase}” and a command.` : where, enabled);
   }, [hasConnection, deviceName, enabled, phrase, status]);
 
