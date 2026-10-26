@@ -397,7 +397,8 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         if (shouldReconnectRef.current) retry();
         else if (!terminalErrorRef.current) setStatus('disconnected');
       }, CONNECT_TIMEOUT_MS);
-      void Storage.getItem(`${DECK_CACHE_KEY}.${connectionId(next)}`).then((saved) => {
+      // Only on a fresh connect: re-parsing the cached deck (with its icons) on every retry while the PC is away exhausts memory.
+      if (!retrying) void Storage.getItem(`${DECK_CACHE_KEY}.${connectionId(next)}`).then((saved) => {
         if (socketRef.current !== socket || !saved) return;
         try {
           const cached: unknown = JSON.parse(saved);
