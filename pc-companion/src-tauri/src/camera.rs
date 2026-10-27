@@ -32,6 +32,8 @@ static HOST: Mutex<Option<Host>> = Mutex::new(None);
 static HOST_STATE: Mutex<HostState> = Mutex::new(HostState { ready: false, error: String::new(), consumer: false });
 static CONSUMER: AtomicBool = AtomicBool::new(false);
 static INSTALLED: AtomicBool = AtomicBool::new(false);
+/// Cameras being connected right now.
+static CONNECTING: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 struct Host {
     child: Child,
@@ -173,9 +175,28 @@ fn resolve(id: &str) -> Result<(SocketAddr, String), String> {
 pub async fn camera_connect(app: AppHandle, state: tauri::State<'_, Arc<crate::AppState>>, id: String) -> Result<(), String> {
     let token = state.token.read().map_err(|_| "busy".to_owned())?.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        if find(&id).is_some() {
-            return Ok(());
+        // One attempt per phone at a time: the phone drops its older link when a second one arrives, so overlapping
+        // attempts (the panel retries every few seconds) would knock each other out.
+        {
+            let mut trying = CONNECTING.lock().map_err(|_| "busy".to_owned())?;
+            if find(&id).is_some() || trying.contains(&id) {
+                return Ok(());
+            }
+            trying.push(id.clone());
         }
+        let result = open_session(app, token, &id);
+        if let Ok(mut trying) = CONNECTING.lock() {
+            trying.retain(|known| known != &id);
+        }
+        result
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn open_session(app: AppHandle, token: String, id: &str) -> Result<(), String> {
+    let id = id.to_owned();
+    {
         let (addr, name) = resolve(&id)?;
         let socket = TcpStream::connect_timeout(&addr, Duration::from_secs(3))
             .map_err(|_| "The phone's camera is not running. Open the Camera tab on the phone and tap Start camera.".to_owned())?;
@@ -199,9 +220,7 @@ pub async fn camera_connect(app: AppHandle, state: tauri::State<'_, Arc<crate::A
         std::thread::spawn(move || ticker_loop(ticker));
         std::thread::spawn(move || read_loop(app, session, reader));
         Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    }
 }
 
 fn find(id: &str) -> Option<Arc<Session>> {
