@@ -1488,3 +1488,24 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 /* The Motion switch in Settings: with it off everything holds still (the specificity beats the !important rules above). */
 html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation: none !important; transition: none !important; }
 html[data-motion="off"] .nav-item:hover, html[data-motion="off"] .primary-button:hover:not(:disabled), html[data-motion="off"] .secondary-button:hover:not(:disabled), html[data-motion="off"] .transport-tab:hover { transform: none !important; }
+
+/* Camera section */
+.camera-virtual { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); }
+.camera-virtual > div { display: grid; gap: 2px; }
+.camera-virtual span, .camera-item span, .camera-empty { color: var(--muted); font-size: 12px; }
+.camera-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; align-items: start; }
+.camera-list { display: grid; gap: 6px; }
+.camera-item { display: grid; gap: 2px; padding: 10px 12px; text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); cursor: pointer; }
+.camera-item.selected { background: var(--z800); }
+.camera-detail { display: grid; gap: 12px; }
+.camera-actions, .camera-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.camera-row > span { min-width: 90px; color: var(--muted); font-size: 12px; }
+.camera-preview { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 9px; background: #000; }
+.camera-preview canvas { width: 100%; height: 100%; object-fit: contain; }
+.camera-preview span { position: absolute; color: var(--muted); font-size: 12px; }
+.camera-controls { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); }
+.camera-slider { display: grid; grid-template-columns: 90px minmax(0, 1fr) 80px; align-items: center; gap: 10px; font-size: 12px; }
+.camera-slider span { color: var(--muted); }
+.camera-slider b { text-align: right; font-weight: 600; }
+.camera-slider.off { opacity: 0.4; }
+@media (max-width: 760px) { .camera-layout { grid-template-columns: 1fr; } }

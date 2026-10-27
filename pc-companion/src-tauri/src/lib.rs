@@ -30,6 +30,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
 mod adb;
+mod camera;
 mod delta;
 mod icon_png;
 mod island;
@@ -3470,10 +3471,10 @@ async fn upgrade_socket(
     let over_usb = peer.ip().is_loopback();
     ws.max_message_size(MAX_DECK_CONFIG_BYTES + 65_536)
         .max_frame_size(MAX_DECK_CONFIG_BYTES + 65_536)
-        .on_upgrade(move |socket| handle_socket(socket, state, over_usb))
+        .on_upgrade(move |socket| handle_socket(socket, state, over_usb, peer.ip()))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bool) {
+async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bool, peer_ip: std::net::IpAddr) {
     let mut authenticated = false;
     // 1: phones that know buttons and widget areas only. 2: phones that draw widgets on the page grid and open folders.
     let mut protocol: u32 = 1;
@@ -3764,6 +3765,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 state.active_devices.fetch_add(1, Ordering::Relaxed);
                 if !device_id.is_empty() {
                     register_device(&state, &device_id, requested_device_name.as_deref());
+                    // A phone camera over Wi-Fi is reached at the address its deck link came from.
+                    let phone_name = state.known_devices.read().ok().and_then(|devices| devices.get(&device_id).cloned()).unwrap_or_else(|| "Phone".to_owned());
+                    camera::note_phone(&device_id, &phone_name, peer_ip);
                 }
                 if over_usb {
                     state.usb_clients.fetch_add(1, Ordering::Relaxed);
@@ -5538,6 +5542,16 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             delta::download_delta_update,
             delta::install_delta_update,
+            camera::camera_sources,
+            camera::camera_connect,
+            camera::camera_disconnect,
+            camera::camera_set,
+            camera::camera_snapshot,
+            camera::camera_preview,
+            camera::camera_preview_stop,
+            camera::camera_host_status,
+            camera::camera_install,
+            camera::camera_set_active,
             connection_info,
             deck_config,
             list_devices,

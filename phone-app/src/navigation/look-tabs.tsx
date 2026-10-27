@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View, type PressableProps, type View as ViewType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { usePathname, useRouter } from 'expo-router';
 import { TabList, Tabs, TabSlot, TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
 import { useTheme, type Colors, type Look } from '../theme';
@@ -13,6 +13,7 @@ const TABS = [
   { name: 'index', href: '/', label: 'Deck' },
   { name: 'touch', href: '/touch', label: 'Touch' },
   { name: 'voice', href: '/voice', label: 'Voice' },
+  { name: 'camera', href: '/camera', label: 'Camera' },
   { name: 'connect', href: '/connect', label: 'Connect' },
 ] as const;
 type TabName = (typeof TABS)[number]['name'];
@@ -44,8 +45,10 @@ function Icon({ name, color, stroke, size = 22 }: { name: TabName; color: string
         <Path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" {...line} />
       </> : name === 'voice' ? <>
         <Path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" {...line} /><Path d="M19 10v2a7 7 0 0 1-14 0v-2" {...line} /><Path d="M12 19v3" {...line} />
+      </> : name === 'camera' ? <>
+        <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" {...line} /><Circle cx={12} cy={13} r={3.5} {...line} />
       </> : <>
-        <Path d="M12 20h.01" {...line} /><Path d="M2 8.82a15 15 0 0 1 20 0" {...line} /><Path d="M5 12.86a10 10 0 0 1 14 0" {...line} /><Path d="M8.5 16.43a5 5 0 0 1 7 0" {...line} />
+        <Path d="M12 20h.01"{...line} /><Path d="M2 8.82a15 15 0 0 1 20 0" {...line} /><Path d="M5 12.86a10 10 0 0 1 14 0" {...line} /><Path d="M8.5 16.43a5 5 0 0 1 7 0" {...line} />
       </>}
     </Svg>
   );

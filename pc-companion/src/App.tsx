@@ -70,6 +70,7 @@ import { DeckLibrary, type LibraryChoice } from "./DeckLibrary";
 import { AppPicker } from "./AppPicker";
 import { DeckSelect } from "./DeckSelect";
 import { PanelHeader, PanelSection } from "./SettingsPanel";
+import { CameraPanel } from "./CameraPanel";
 import { applyPageMove, clonePage, copyName, fitBytes, freshId, planPageMove, reorderProfile, type MoveDecisions, type MoveRequest, type Resolution } from "./deck-move";
 import { canReceiveIcon, type IconTarget } from "./deck-icons";
 import { COMMON_SHORTCUTS, mainKey, shortcutFromPress } from "./shortcut-keys";
@@ -188,7 +189,7 @@ function App() {
   const [adbDownloadMb, setAdbDownloadMb] = useState<number | null>(null);
   const [adbProgress, setAdbProgress] = useState('');
   const [pairingError, setPairingError] = useState('');
-  const [screen, setScreen] = useState<'overview' | 'deck' | 'settings'>('overview');
+  const [screen, setScreen] = useState<'overview' | 'deck' | 'camera' | 'settings'>('overview');
   const voice = usePcVoice();
   // Switching pages glides the sidebar's selected pill to its new item (a view transition), where the browser can.
   const go = (next: typeof screen) => {
@@ -484,6 +485,9 @@ function App() {
           <button className={`nav-item ${screen === 'deck' ? 'selected' : ''}`} title="Deck" aria-label="Deck" aria-current={screen === 'deck' ? 'page' : undefined} onClick={() => go('deck')}>
             <Layers size={16} strokeWidth={1.8} /><span>Deck</span>
           </button>
+          <button className={`nav-item ${screen === 'camera' ? 'selected' : ''}`} title="Camera" aria-label="Camera" aria-current={screen === 'camera' ? 'page' : undefined} onClick={() => go('camera')}>
+            <Camera size={16} strokeWidth={1.8} /><span>Camera</span>
+          </button>
           <button className={`nav-item ${screen === 'settings' ? 'selected' : ''}`} title="Settings" aria-label="Settings" aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => go('settings')}>
             <Settings size={16} strokeWidth={1.8} /><span>Settings</span>
           </button>
@@ -525,7 +529,7 @@ function App() {
             <div className="legacy-import-actions">{legacyImports.map((item) => <button key={item.sourceId} className="secondary-button" onClick={() => void (item.ready ? importPhoneDeck(item.sourceId) : requestPhoneDeck(item.sourceId))}>{item.ready ? 'Import phone deck' : item.requested ? 'Request again' : 'Transfer phone deck'}</button>)}</div>
             {importError ? <p className="usb-error" role="alert">{importError}</p> : null}
           </section> : null}
-          {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} deviceId={deviceId} onSaved={(config) => { setDeckConfig(config); void invoke<DeviceInfo[]>('list_devices').then(setDevices).catch(() => {}); }} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={openDockPlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'settings' ? <>
+          {screen === 'deck' ? <DesktopDeckEditor config={deckConfig} deviceId={deviceId} onSaved={(config) => { setDeckConfig(config); void invoke<DeviceInfo[]>('list_devices').then(setDevices).catch(() => {}); }} playbackState={playbackState} mediaState={mediaState} isMacos={connection?.isMacos ?? false} plugins={openDockPlugins} widgetSurface={connection?.widgetSurface ?? null} /> : screen === 'camera' ? <CameraPanel /> : screen === 'settings' ? <>
           <div className="page-heading"><div><h1>Settings</h1><p>Appearance, this PC, connected phones, voice and plugins.</p></div></div>
           <h2 className="settings-group">Appearance</h2>
           <AppearanceSetting />

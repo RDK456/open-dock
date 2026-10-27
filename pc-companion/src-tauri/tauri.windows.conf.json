@@ -1,7 +1,9 @@
 {
   "bundle": {
     "resources": {
-      "resources/PawnIO_setup.exe": "PawnIO_setup.exe"
+      "resources/PawnIO_setup.exe": "PawnIO_setup.exe",
+      "resources/dockcam.exe": "dockcam.exe",
+      "resources/opendock_vcam.dll": "opendock_vcam.dll"
     },
     "windows": {
       "nsis": {
