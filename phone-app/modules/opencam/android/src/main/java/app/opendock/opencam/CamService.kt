@@ -434,29 +434,37 @@ class CamService : Service() {
         val (w, h) = state.optString("res", "1920x1080").split('x').map { it.toInt() }
         val fps = state.optInt("fps", 30)
         val mbps = state.optInt("mbps", 0).takeIf { it > 0 } ?: max(4, (w.toLong() * h * fps * 0.15 / 1e6).roundToInt())
-        val enc: MediaCodec
-        val es: Surface
-        try {
-            enc = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-            enc.setCallback(encCallback, Handler(encThread.looper))
-            enc.configure(MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                setInteger(MediaFormat.KEY_BIT_RATE, mbps * 1_000_000)
-                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-                setInteger(MediaFormat.KEY_PRIORITY, 0)
-                // Live video: steady bitrate, no B-frames (they make the PC wait for later frames) and the encoder's low-latency mode.
+        fun format(lowLatency: Boolean) = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, mbps * 1_000_000)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            setInteger(MediaFormat.KEY_PRIORITY, 0)
+            if (lowLatency) {
+                // Live video: steady bitrate, no B-frames (they make the PC wait for later frames), low-latency mode.
                 setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
                 setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
                 setInteger(MediaFormat.KEY_LATENCY, 1)
                 setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
-            }, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            es = enc.createInputSurface()
-            enc.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "encoder", e)
-            return
+            }
         }
+        // Some phones' encoders refuse the low-latency settings; then the plain ones are used.
+        fun open(lowLatency: Boolean): Pair<MediaCodec, Surface>? {
+            var codec: MediaCodec? = null
+            return try {
+                codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+                codec.setCallback(encCallback, Handler(encThread.looper))
+                codec.configure(format(lowLatency), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                val surface = codec.createInputSurface()
+                codec.start()
+                codec to surface
+            } catch (e: Exception) {
+                Log.e(TAG, "encoder (lowLatency=$lowLatency)", e)
+                codec?.release()
+                null
+            }
+        }
+        val (enc, es) = open(true) ?: open(false) ?: return
         encoder = enc
         encSurface = es
 

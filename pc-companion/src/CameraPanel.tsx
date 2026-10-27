@@ -43,6 +43,7 @@ function Preview({ id, state }: { id: string; state: State | null }) {
     let decoder: VideoDecoder | null = null;
     let config = new Uint8Array();
     let skipping = false;
+    let drawn = false;
     const channel = new Channel<ArrayBuffer>();
     channel.onmessage = (buffer) => {
       if (closed) return;
@@ -57,6 +58,7 @@ function Preview({ id, state }: { id: string; state: State | null }) {
             if (target) {
               if (target.width !== frame.displayWidth || target.height !== frame.displayHeight) { target.width = frame.displayWidth; target.height = frame.displayHeight; }
               target.getContext('2d')?.drawImage(frame, 0, 0);
+              drawn = true;
               setWaiting(false);
             }
             frame.close();
@@ -78,8 +80,11 @@ function Preview({ id, state }: { id: string; state: State | null }) {
       decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: Number(new DataView(buffer).getBigInt64(2)), data: payload }));
     };
     void invoke('camera_preview', { id, channel });
+    // No picture yet (the phone's camera was still starting, or a packet was lost): ask again for config and a keyframe.
+    const retry = window.setInterval(() => { if (!drawn) void invoke('camera_preview', { id, channel }); }, 3000);
     return () => {
       closed = true;
+      window.clearInterval(retry);
       void invoke('camera_preview_stop', { id });
       try { decoder?.close(); } catch { /* already closed */ }
     };
@@ -100,6 +105,8 @@ export function CameraPanel() {
   const [busy, setBusy] = useState('');
   const started = useRef(false);
   const autoUsed = useRef(new Set<string>());
+  // Cameras the user disconnected: not reconnected on their own until the user presses Connect.
+  const userOff = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
     const [list, snapshot, status] = await Promise.all([
@@ -115,7 +122,9 @@ export function CameraPanel() {
     }
     // No Connect button needed: a Wi-Fi phone whose camera is running is picked up on its own (a phone that isn't running just refuses).
     const live = new Set(snapshot.map((feed) => feed.id));
-    for (const source of list) if (source.transport === 'wifi' && !live.has(source.id)) void invoke('camera_connect', { id: source.id }).catch(() => {});
+    for (const source of list) {
+      if (source.transport === 'wifi' && !live.has(source.id) && !userOff.current.has(source.id)) void invoke('camera_connect', { id: source.id }).catch(() => {});
+    }
     // The first camera that connects feeds the virtual camera; after that the choice is the user's.
     const first = snapshot[0];
     if (first && !status.active && !autoUsed.current.has(first.id)) {
@@ -176,7 +185,7 @@ export function CameraPanel() {
       <div>
         <strong>Open Dock Camera</strong>
         <span>{host?.error ? `Could not start (${host.error})` : !host?.available ? 'Needs Windows 11.' : !host.installed ? 'Not installed yet. Windows asks for permission once.'
-          : activeId ? `${host.consumer ? 'In use by an app' : 'Ready'} · showing ${sources.find((s) => s.id === activeId)?.name ?? 'a phone'}` : 'Off. Choose a camera below to turn it on.'}</span>
+          : activeId ? `${host.consumer ? 'In use by an app' : 'Ready: choose “Open Dock Camera” in Discord, OBS or Zoom'} · showing ${sources.find((s) => s.id === activeId)?.name ?? 'a phone'}` : 'Off. Choose a camera below to turn it on.'}</span>
       </div>
       {host?.available && !host.installed
         ? <button className="secondary-button" disabled={busy === 'install'} onClick={() => void act('install', () => invoke('camera_install'))}>{busy === 'install' ? 'Installing…' : 'Install'}</button>
@@ -199,8 +208,12 @@ export function CameraPanel() {
         {current ? <div className="camera-detail">
           <div className="camera-actions">
             {connected
-              ? <button className="secondary-button" onClick={() => void act('disconnect', () => invoke('camera_disconnect', { id: current.id }))}>Disconnect</button>
-              : <button className="primary-button" disabled={busy === 'connect'} onClick={() => void act('connect', () => invoke('camera_connect', { id: current.id }))}>{busy === 'connect' ? 'Connecting…' : 'Connect'}</button>}
+              ? <button className="secondary-button" onClick={() => { userOff.current.add(current.id); void act('disconnect', async () => {
+                if (activeId === current.id) await invoke('camera_set_active', { id: null });
+                await invoke('camera_disconnect', { id: current.id });
+                setFeeds((all) => { const next = { ...all }; delete next[current.id]; return next; });
+              }); }}>Disconnect</button>
+              : <button className="primary-button" disabled={busy === 'connect'} onClick={() => { userOff.current.delete(current.id); void act('connect', () => invoke('camera_connect', { id: current.id })); }}>{busy === 'connect' ? 'Connecting…' : 'Connect'}</button>}
             {connected ? <button className={activeId === current.id ? 'secondary-button' : 'primary-button'} disabled={!host?.available || !host.installed || activeId === current.id}
               onClick={() => void act('use', () => invoke('camera_set_active', { id: current.id }))}>{activeId === current.id ? 'Feeding Open Dock Camera' : 'Use as Open Dock Camera'}</button> : null}
           </div>

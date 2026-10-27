@@ -36,7 +36,8 @@ static INSTALLED: AtomicBool = AtomicBool::new(false);
 static CONNECTING: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 struct Host {
-    child: Child,
+    /// Held so the helper lives as long as this; it exits when stdin closes.
+    _child: Child,
     stdin: ChildStdin,
 }
 
@@ -338,6 +339,10 @@ fn to_host(kind: u8, payload: &[u8]) {
 pub fn camera_disconnect(id: String) {
     if let Some(session) = find(&id) {
         session.stop.store(true, Ordering::Relaxed);
+        // Gone from the list at once, not when its reader notices the closed socket.
+        if let Ok(mut sessions) = SESSIONS.lock() {
+            sessions.retain(|s| !Arc::ptr_eq(s, &session));
+        }
         if let Ok(socket) = session.writer.lock() {
             let _ = socket.shutdown(std::net::Shutdown::Both);
         }
@@ -414,7 +419,7 @@ fn start_host(app: &AppHandle) -> Result<(), String> {
     let stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     *HOST_STATE.lock().map_err(|_| "busy")? = HostState { ready: false, error: String::new(), consumer: false };
-    *HOST.lock().map_err(|_| "busy")? = Some(Host { child, stdin });
+    *HOST.lock().map_err(|_| "busy")? = Some(Host { _child: child, stdin });
     let app = app.clone();
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -442,17 +447,6 @@ fn start_host(app: &AppHandle) -> Result<(), String> {
         let _ = app.emit("camera-host", host_status_value(&app));
     });
     Ok(())
-}
-
-fn stop_host() {
-    if let Ok(mut host) = HOST.lock() {
-        if let Some(mut running) = host.take() {
-            drop(running.stdin);
-            let _ = running.child.kill();
-            let _ = running.child.wait();
-        }
-    }
-    CONSUMER.store(false, Ordering::Relaxed);
 }
 
 fn host_status_value(app: &AppHandle) -> Value {
@@ -522,8 +516,9 @@ pub fn camera_set_active(app: AppHandle, id: Option<String>) -> Result<(), Strin
         to_host(3, &[flags]);
         session.demand.store(false, Ordering::Relaxed); // the ticker asks for a keyframe when frames are wanted
     } else {
+        // The camera stays in apps' lists (black) so they don't lose it; it just has no phone behind it.
         *ACTIVE.lock().map_err(|_| "busy")? = None;
-        stop_host();
+        to_host(4, &[]);
     }
     for session in SESSIONS.lock().map_err(|_| "busy")?.iter() {
         let _ = app.emit("camera-state", session.view(true));
