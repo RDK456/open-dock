@@ -50,7 +50,8 @@ export function useUpdater() {
     } catch (error) {
       // The updater reports ReleaseNotFound when GitHub answers without a release file (404: nothing
       // published yet, or the repo isn't public), so there's nothing newer. Network failures differ.
-      if (String(error).includes("Could not fetch a valid release JSON")) setState({ kind: "current", checkedAt: Date.now() });
+      // An Android-only release lists no PC file, so the updater sees a newer version with nothing to download.
+      if (/Could not fetch a valid release JSON|`url` field was not set/.test(String(error))) setState({ kind: "current", checkedAt: Date.now() });
       else setState({ kind: "error", message: String(error) });
     } finally {
       busy.current = false;

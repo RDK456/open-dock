@@ -356,8 +356,8 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       // Keep trying in the background so the deck comes back by itself when the PC does; show it as offline meanwhile.
       setStatus(unauthorizedRef.current ? 'error' : attempt >= MAX_RECONNECT_ATTEMPTS ? 'disconnected' : 'connecting');
       // A PC that is not answering may have a new address on this Wi-Fi (or the cable came out): look for it by name and follow it there.
-      // Scans early and then every third try, so a PC that stays off does not keep the radio busy.
-      if (next.deviceName && !discoveringRef.current && AppState.currentState === 'active' && (attempt <= 2 || attempt % 3 === 0)) {
+      // Scans early and then about every two minutes: a /24 sweep is 254 requests, and repeating it every 12 s while the PC is off leaks memory.
+      if (next.deviceName && !discoveringRef.current && AppState.currentState === 'active' && (attempt <= 2 || attempt % 30 === 0)) {
         discoveringRef.current = true;
         void findPcs().then((pcs) => {
           const moved = pcs.find((pc) => pc.name === next.deviceName && (next.transport === 'usb' || pc.host !== next.host || pc.port !== next.port));

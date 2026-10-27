@@ -18,7 +18,8 @@ class KeepAliveModule : Module() {
         .putExtra(KeepAliveService.TITLE, title)
         .putExtra(KeepAliveService.TEXT, text)
         .putExtra(KeepAliveService.MICROPHONE, microphone)
-      ContextCompat.startForegroundService(context, intent)
+      // Android 12+ throws when the app is not in front (a state change can race the effect); that must not kill the app.
+      try { ContextCompat.startForegroundService(context, intent) } catch (error: Exception) { }
     }
 
     // Back on the deck sends the app behind others instead of closing it, so the connection keeps going.

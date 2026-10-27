@@ -53,7 +53,13 @@ class KeepAliveService : Service() {
       ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, types)
     } catch (error: Exception) {
       // Android 14+ refuses a microphone service started from the background; keep the connection part.
-      ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, connected)
+      try {
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, connected)
+      } catch (again: Exception) {
+        // Not allowed to run in the foreground right now; an uncaught throw here would kill the whole app.
+        stopSelf()
+        return START_NOT_STICKY
+      }
     }
     if (wakeLock == null) {
       wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
