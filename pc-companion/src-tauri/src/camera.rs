@@ -31,6 +31,7 @@ static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
 static HOST: Mutex<Option<Host>> = Mutex::new(None);
 static HOST_STATE: Mutex<HostState> = Mutex::new(HostState { ready: false, error: String::new(), consumer: false });
 static CONSUMER: AtomicBool = AtomicBool::new(false);
+static INSTALLED: AtomicBool = AtomicBool::new(false);
 
 struct Host {
     child: Child,
@@ -451,11 +452,21 @@ fn host_status_value(app: &AppHandle) -> Value {
 pub async fn camera_host_status(app: AppHandle) -> Value {
     tauri::async_runtime::spawn_blocking(move || {
         let mut value = host_status_value(&app);
-        value["installed"] = json!(host_exe(&app).is_some_and(|exe| installed(&exe)));
+        // Checking spawns the helper; once it says yes the answer is kept.
+        if !INSTALLED.load(Ordering::Relaxed) {
+            INSTALLED.store(host_exe(&app).is_some_and(|exe| installed(&exe)), Ordering::Relaxed);
+        }
+        value["installed"] = json!(INSTALLED.load(Ordering::Relaxed));
         value
     })
     .await
     .unwrap_or(Value::Null)
+}
+
+/// Puts "Open Dock Camera" in the list of cameras (it shows black until a phone is chosen), so apps can pick it.
+#[tauri::command]
+pub async fn camera_host_start(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || start_host(&app)).await.map_err(|e| e.to_string())?
 }
 
 /// One Windows permission prompt: copies the camera DLL to Program Files and registers it.

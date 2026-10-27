@@ -42,6 +42,7 @@ function Preview({ id, state }: { id: string; state: State | null }) {
     let closed = false;
     let decoder: VideoDecoder | null = null;
     let config = new Uint8Array();
+    let skipping = false;
     const channel = new Channel<ArrayBuffer>();
     channel.onmessage = (buffer) => {
       if (closed) return;
@@ -68,8 +69,12 @@ function Preview({ id, state }: { id: string; state: State | null }) {
       }
       if (!decoder || decoder.state !== 'configured') return;
       const key = bytes[1] === 1;
-      if (!key && decoder.decodeQueueSize > 6) return; // behind: wait for the next keyframe
-      const payload = key ? Uint8Array.from([...config, ...data]) : data;
+      // Behind: drop frames until the next keyframe instead of showing a smeared picture or building delay.
+      if (decoder.decodeQueueSize > 4) skipping = true;
+      if (key) skipping = false;
+      if (skipping) return;
+      let payload = data;
+      if (key) { payload = new Uint8Array(config.length + data.length); payload.set(config); payload.set(data, config.length); }
       decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: Number(new DataView(buffer).getBigInt64(2)), data: payload }));
     };
     void invoke('camera_preview', { id, channel });
@@ -93,6 +98,8 @@ export function CameraPanel() {
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
+  const started = useRef(false);
+  const autoUsed = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
     const [list, snapshot, status] = await Promise.all([
@@ -101,6 +108,20 @@ export function CameraPanel() {
     setSources(list);
     setFeeds(Object.fromEntries(snapshot.map((feed) => [feed.id, feed])));
     setHost(status);
+    // The camera must be running for Discord, OBS and the rest to list it.
+    if (status.installed && !status.running && !started.current) {
+      started.current = true;
+      await invoke('camera_host_start').catch(() => { started.current = false; });
+    }
+    // No Connect button needed: a Wi-Fi phone whose camera is running is picked up on its own (a phone that isn't running just refuses).
+    const live = new Set(snapshot.map((feed) => feed.id));
+    for (const source of list) if (source.transport === 'wifi' && !live.has(source.id)) void invoke('camera_connect', { id: source.id }).catch(() => {});
+    // The first camera that connects feeds the virtual camera; after that the choice is the user's.
+    const first = snapshot[0];
+    if (first && !status.active && !autoUsed.current.has(first.id)) {
+      autoUsed.current.add(first.id);
+      await invoke('camera_set_active', { id: first.id }).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {

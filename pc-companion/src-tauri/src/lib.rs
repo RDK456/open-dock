@@ -5551,6 +5551,7 @@ pub fn run() {
             camera::camera_preview_stop,
             camera::camera_host_status,
             camera::camera_install,
+            camera::camera_host_start,
             camera::camera_set_active,
             connection_info,
             deck_config,
