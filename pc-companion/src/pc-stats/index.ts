@@ -20,7 +20,7 @@ type OpenDockStatsApi = {
   push(sample: unknown): void;
   latest(): PcStatsSample | null;
   setTheme(theme: 'light' | 'dark', background?: string): void;
-  mount(host: HTMLElement, options: { style: string; metric?: string; color?: string; gpu?: string; width: number; height: number; columns: number; rows: number }): { destroy(): void };
+  mount(host: HTMLElement, options: { style: string; metric?: string; color?: string; gpu?: string; width: number; height: number; columns: number; rows: number; opacity?: number }): { destroy(): void };
 };
 
 export const OpenDockStats = (globalThis as unknown as { OpenDockStats: OpenDockStatsApi }).OpenDockStats;

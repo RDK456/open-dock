@@ -679,11 +679,18 @@ function readable(hex) {
   while (l > 6 && lum(hexOf(h, sat, l)) > cap) l -= 1;
   return hexOf(h, sat, l);
 }
+// A #rrggbb colour at `pct` percent (0 to 100) opacity; anything else is returned as it is.
+function withOpacity(colour, pct) {
+  const m = /^#([0-9a-f]{6})$/i.exec(colour || '');
+  if (!m || pct >= 100) return colour;
+  const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${(Math.max(0, pct) / 100).toFixed(2)})`;
+}
 function styleRoot(entry) {
-  const { root, color, background } = entry;
+  const { root, color, background, opacity } = entry;
   for (const [key, value] of Object.entries(THEMES[theme])) root.style.setProperty(`--${key}`, value);
   root.style.setProperty('--accent', readable(color || '#93c5fd'));
-  root.style.background = background || '';
+  root.style.background = background ? withOpacity(background, opacity) : '';
 }
 
 function injectCss() {
@@ -696,12 +703,12 @@ function injectCss() {
 // 0.8 s glide keeps the widget animating most of the time, which a phone pays for in battery and heat.
 // `background` paints the tile colour behind the widget. The phone passes it: Android's WebView
 // composites translucent pixels onto the app poorly, so fades and tints must blend inside the page.
-function mount(host, { style, metric, color, gpu, background, still = false, width, height, columns = 1, rows = 1 }) {
+function mount(host, { style, metric, color, gpu, background, opacity = 100, still = false, width, height, columns = 1, rows = 1 }) {
   injectCss();
   const root = document.createElement('div');
   root.className = still ? 'ps-root ps-still' : 'ps-root';
   root.style.cssText = `width:${width}px;height:${height}px`;
-  const entry = { root, color, background };
+  const entry = { root, color, background, opacity };
   styleRoot(entry);
   shown.add(entry);
   host.replaceChildren(root);

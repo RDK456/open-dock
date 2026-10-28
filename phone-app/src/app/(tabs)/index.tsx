@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
-import { Animated, BackHandler, Easing, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, BackHandler, Easing, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +11,7 @@ import { SvgXml } from 'react-native-svg';
 import { DeckButton, DeckMediaCommand, DeckPlacement, DeckWidget, PlaybackState, SystemMediaState, livePositionMs, useMediaState, usePcConnection } from '../../connection';
 import { nowPlayingLayout, NowPlayingRow } from '../../now-playing-layout';
 import { LyricsWidget } from '../../lyrics-widget';
-import { WebWidgetLayer, type WebWidget } from '../../web-widgets';
+import { sendWidgetTouch, WebWidgetLayer, type WebWidget, type WidgetTouch } from '../../web-widgets';
 import { countRender, PerfOverlay } from '../../perf-overlay';
 import { useDeckScreenPower } from '../../screen-power';
 import { DockBackdrop, fade, useWallpaperSettings, Wallpaper } from '../../wallpaper';
@@ -25,6 +25,13 @@ import { TabBarHiddenContext } from '../../navigation/tab-bar-context';
 import { useTabBarClearance } from '../../tab-inset';
 import { MediaToastView, PlayerSheet, SourceChip, useMediaSource } from '../../media-source';
 import { playerColor, type PlayersState } from '../../media-players';
+// A clock, PC stats or pet widget can have a see-through background: the tile under it fades by the same amount.
+function widgetOpacityStyle(widget: { type: string; opacity?: number }, panel: string) {
+  const opacity = (widget.type === 'clock' || widget.type === 'pc_stats' || widget.type === 'pet') ? widget.opacity : undefined;
+  if (opacity === undefined || opacity >= 100) return null;
+  return { backgroundColor: fade(panel, opacity / 100), borderColor: 'transparent', boxShadow: 'none' } as const;
+}
+
 const appIcon = require('../../../assets/favicon.png') as number;
 
 const shortcutIcons: Record<string, typeof Command> = {
@@ -595,6 +602,12 @@ export default function DeckScreen() {
 
   const enterImmersive = () => setImmersive(true);
 
+  // The pet lives in the web layer, which ignores touches; its native tile passes every finger on to it.
+  const petTouches = (id: string) => {
+    const send = (kind: WidgetTouch['kind']) => (event: GestureResponderEvent) => sendWidgetTouch({ id, kind, x: event.nativeEvent.locationX - widgetKeyInset, y: event.nativeEvent.locationY - widgetKeyInset });
+    return { onTouchStart: send('down'), onTouchMove: send('move'), onTouchEnd: send('up'), onTouchCancel: send('cancel') };
+  };
+
   const cellFrame = (row: number, column: number, rowSpan = 1, columnSpan = 1, cellWidth = regularCellWidth, cellHeight = regularCellHeight, gap = regularGap, inset = 0, offsetY = 0) => ({
     position: 'absolute' as const,
     left: inset + column * (cellWidth + gap),
@@ -607,12 +620,12 @@ export default function DeckScreen() {
   // their tiles provide only the border and background. Each rectangle is a tile's content area.
   const webWidgets = (frame: (placement: DeckPlacement) => { left: number; top: number; width: number; height: number }): WebWidget[] =>
     (surface?.widgets ?? []).flatMap((widget): WebWidget[] => {
-      if (widget.type !== 'clock' && widget.type !== 'pc_stats') return [];
+      if (widget.type !== 'clock' && widget.type !== 'pc_stats' && widget.type !== 'pet') return [];
       const box = frame(widget.placement);
       const rect = { id: widget.id, x: box.left + widgetKeyInset, y: box.top + widgetKeyInset, width: Math.max(1, box.width - 2 * widgetKeyInset), height: Math.max(1, box.height - 2 * widgetKeyInset) };
-      return widget.type === 'clock'
-        ? [{ ...rect, kind: 'clock', face: widget.face, color: widget.color }]
-        : [{ ...rect, kind: 'stats', face: widget.face, metric: widget.metric, color: widget.color, gpu: widget.gpu, columns: widget.placement.columnSpan, rows: widget.placement.rowSpan }];
+      return widget.type === 'clock' || widget.type === 'pet'
+        ? [{ ...rect, kind: widget.type, face: widget.face, color: widget.color, opacity: widget.opacity, ...(widget.type === 'pet' ? { pet: widget.pet } : {}) }]
+        : [{ ...rect, kind: 'stats', face: widget.face, metric: widget.metric, color: widget.color, gpu: widget.gpu, opacity: widget.opacity, columns: widget.placement.columnSpan, rows: widget.placement.rowSpan }];
     });
 
   // Every cell of the grid, buttons and widgets alike. `big` draws it for landscape mode.
@@ -638,7 +651,7 @@ export default function DeckScreen() {
       if (item.type === 'widget') {
         const placement = item.widget.placement;
         if (placement.row !== row || placement.column !== column) return null;
-        return <View key={item.widget.id} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' ? null : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
+        return <View key={item.widget.id} {...(item.widget.type === 'pet' ? petTouches(item.widget.id) : {})} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement), widgetOpacityStyle(item.widget, colors.panel)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' || item.widget.type === 'pet' ? null : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
       }
       const button = item.button;
       const placement = buttonPlacement(columns, button, surface?.buttons.indexOf(button) ?? 0);

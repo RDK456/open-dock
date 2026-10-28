@@ -4,6 +4,10 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useCalendars } from 'expo-localization';
 import { CLOCK_FACES_SOURCE } from './clock-faces-source';
 import { PC_STATS_SOURCE } from './pc-stats-source';
+import { PET_SOURCE } from './pet-source';
+import type { PetOptions } from './connection';
+import { startPetSensors } from './pet-sensors';
+import { getPetWorld, subscribePetWorld } from './pet-world';
 import { pcStatsHistory, setLayerNeeds, subscribePcStats, validNeeds } from './pc-stats-feed';
 import { countWakes, WAKE_COUNTER_JS } from './perf-overlay';
 import { useTheme } from './theme';
@@ -14,14 +18,20 @@ import { widgetPageHtml } from './web-widgets-page';
 
 /** A clock or PC stats widget, and the rectangle (px, in the layer) of its tile's content area. */
 export type WebWidget = { id: string; x: number; y: number; width: number; height: number } & (
-  | { kind: 'clock'; face?: string; color?: string }
-  | { kind: 'stats'; face?: string; metric?: string; color?: string; gpu?: string; columns: number; rows: number }
+  | { kind: 'clock'; face?: string; color?: string; opacity?: number }
+  | { kind: 'pet'; face?: string; color?: string; opacity?: number; pet?: PetOptions }
+  | { kind: 'stats'; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number; columns: number; rows: number }
 );
 
 // The page is built once; a stable source object keeps the WebView from reloading on re-render.
-const SOURCE = { html: widgetPageHtml({ wakeCounterJs: WAKE_COUNTER_JS, background: darkColors.panel, clockFaces: CLOCK_FACES_SOURCE, pcStats: PC_STATS_SOURCE, fontsCss: WEB_FONTS_CSS, fontLoads: WEB_FONT_LOADS }) };
+const SOURCE = { html: widgetPageHtml({ wakeCounterJs: WAKE_COUNTER_JS, background: darkColors.panel, clockFaces: CLOCK_FACES_SOURCE, pcStats: PC_STATS_SOURCE, pet: PET_SOURCE, fontsCss: WEB_FONTS_CSS, fontLoads: WEB_FONT_LOADS }) };
 
 let nextLayer = 0;
+
+/** A finger on a widget's tile (x, y in the widget's own px). The tile is native and keeps every touch; layers pass it on to the page. */
+export type WidgetTouch = { id: string; kind: 'down' | 'move' | 'up' | 'cancel'; x: number; y: number };
+const touchListeners = new Set<(touch: WidgetTouch) => void>();
+export const sendWidgetTouch = (touch: WidgetTouch) => touchListeners.forEach((listener) => listener(touch));
 
 type LayerView = { mounted: boolean; instance: number; ready: boolean; visible: boolean };
 const viewOf = (s: State): LayerView => ({ mounted: s.mounted, instance: s.instance, ready: s.ready, visible: s.focused && s.appActive });
@@ -59,7 +69,7 @@ export function WebWidgetLayer({ widgets, focused = true }: { widgets: WebWidget
           webView.current?.injectJavaScript(`${themeCallRef.current}window.openDockWidgets(${command.list}, ${command.hour12}, ${command.force}, ${command.seq});true;`);
           break;
         case 'pause':
-          webView.current?.injectJavaScript(`OpenDockClock.setPaused(${command.paused});true;`);
+          webView.current?.injectJavaScript(`OpenDockClock.setPaused(${command.paused});OpenDockPet.setPaused(${command.paused});true;`);
           break;
         case 'needs':
           setLayerNeeds(layer, command.needs);
@@ -89,6 +99,30 @@ export function WebWidgetLayer({ widgets, focused = true }: { widgets: WebWidget
   useEffect(() => { if (view.mounted && view.ready) webView.current?.injectJavaScript(`${themeCall}true;`); }, [themeCall, view.mounted, view.ready]);
   // Leaving the screen frees the WebView and withdraws this layer's stats needs.
   useEffect(() => () => dispatch({ type: 'unmount' }), [dispatch]);
+
+  // Touches on this layer's widgets go to the page once it can take them.
+  const touchable = useRef(new Set<string>());
+  touchable.current = new Set(widgets.map((widget) => widget.id));
+  const ready = view.mounted && view.ready;
+  useEffect(() => {
+    if (!ready) return;
+    const listener = ({ id, kind, x, y }: WidgetTouch) => {
+      if (touchable.current.has(id)) webView.current?.injectJavaScript(`window.openDockTouch(${JSON.stringify(id)},${JSON.stringify(kind)},${Math.round(x)},${Math.round(y)});true;`);
+    };
+    touchListeners.add(listener);
+    return () => { touchListeners.delete(listener); };
+  }, [ready, view.instance]);
+
+  // What the pet should know about the world (music, a game on the PC) goes to the page when it is ready, and on every change.
+  const hasPet = widgets.some((widget) => widget.kind === 'pet');
+  useEffect(() => {
+    if (!ready || !hasPet) return;
+    const send = (world: unknown) => webView.current?.injectJavaScript(`OpenDockPet.setWorld(${JSON.stringify(world)});true;`);
+    send(getPetWorld());
+    return subscribePetWorld(send);
+  }, [ready, hasPet, view.instance]);
+  // The phone's senses run only while a pet is on screen.
+  useEffect(() => (ready && hasPet && view.visible ? startPetSensors() : undefined), [ready, hasPet, view.visible, view.instance]);
 
   // Samples go to the page while it shows stats and is on screen.
   const feeding = view.mounted && view.ready && view.visible && hasStats;

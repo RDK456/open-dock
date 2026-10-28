@@ -69,6 +69,8 @@ struct AppState {
     /// Open connections per phone id.
     online_devices: std::sync::Mutex<HashMap<String, usize>>,
     media_state: tokio::sync::watch::Sender<system_media::SystemMediaState>,
+    /// The game in the foreground on this PC (its program name), for the phone's pet to react to.
+    pet_context: tokio::sync::watch::Sender<Option<String>>,
     /// Wakes the media monitor right after a control (play/pause, seek, volume) so the new state
     /// reaches the phone in a few hundred ms instead of on the next 1 s poll.
     media_refresh: Arc<tokio::sync::Notify>,
@@ -267,7 +269,43 @@ struct DeckWidget {
     /// GPU a PC stats widget follows: an id from pc_stats (e.g. "10de-1f15-14421025-0"). Missing means automatic.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     gpu: Option<String>,
+    /// How solid the widget's own background is, 0 to 100 (missing means 100). Clock, PC stats and pet widgets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    opacity: Option<u8>,
+    /// Pet extras: outfit, mood ring, sounds, personality and quiet hours.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pet: Option<PetOptions>,
 }
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PetOptions {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    outfit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mood: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sound: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    camera: Option<bool>,
+    /// Personality sliders, 0 to 10 (5 is the default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sleepy: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hyper: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    shy: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    grumpy: Option<u8>,
+    /// Quiet hours, as hours of the day (0 to 23): the pet sleeps from `quiet_from` until `quiet_to`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    quiet_from: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    quiet_to: Option<u8>,
+}
+
+/// Outfits defined in pc-companion/src/pet/pet.js (scripts/check-pet.ts keeps them in sync).
+const PET_OUTFITS: &[&str] = &["auto", "none", "glasses", "mustache", "crown", "tophat", "bowtie"];
 
 /// Face ids defined in pc-companion/src/clock-faces/clock-faces.js (scripts/check-clock-faces.ts keeps them in sync).
 const CLOCK_FACES: &[&str] = &[
@@ -282,6 +320,9 @@ const PC_STATS_STYLES: &[&str] = &[
 ];
 const PC_STATS_METRICS: &[&str] = &["cpu", "cputemp", "gpu", "gputemp", "ram", "vram", "disk", "diskio", "net", "power"];
 
+/// Pet ids defined in pc-companion/src/pet/pet.js (scripts/check-pet.ts keeps them in sync).
+const PET_FACES: &[&str] = &["buddy", "cyclops", "pixel", "cat"];
+
 fn valid_hex_color(value: &str) -> bool {
     value.len() == 7 && value.starts_with('#') && value[1..].chars().all(|c| c.is_ascii_hexdigit())
 }
@@ -293,6 +334,7 @@ enum DeckWidgetType {
     NowPlaying,
     Lyrics,
     PcStats,
+    Pet,
     Plugin,
 }
 
@@ -792,8 +834,9 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
     let faces = match widget.kind {
         DeckWidgetType::Clock => CLOCK_FACES,
         DeckWidgetType::PcStats => PC_STATS_STYLES,
+        DeckWidgetType::Pet => PET_FACES,
         _ if widget.face.is_some() || widget.color.is_some() => {
-            return Err("Only clock and PC stats widgets have a style or colour".into());
+            return Err("Only clock, PC stats and pet widgets have a style or colour".into());
         }
         _ => &[],
     };
@@ -802,6 +845,24 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
     }
     if widget.color.as_deref().is_some_and(|color| !valid_hex_color(color)) {
         return Err("Widget colours must be #rrggbb".into());
+    }
+    if widget.opacity.is_some_and(|opacity| {
+        opacity > 100 || !matches!(widget.kind, DeckWidgetType::Clock | DeckWidgetType::PcStats | DeckWidgetType::Pet)
+    }) {
+        return Err("Widget opacity must be 0 to 100, on a clock, PC stats or pet widget".into());
+    }
+    if let Some(pet) = &widget.pet {
+        let hour = |value: Option<u8>| value.is_none_or(|hour| hour <= 23);
+        let slider = |value: Option<u8>| value.is_none_or(|level| level <= 10);
+        if widget.kind != DeckWidgetType::Pet
+            || pet.outfit.as_deref().is_some_and(|outfit| !PET_OUTFITS.contains(&outfit))
+            || ![pet.sleepy, pet.hyper, pet.shy, pet.grumpy].into_iter().all(slider)
+            || !hour(pet.quiet_from)
+            || !hour(pet.quiet_to)
+            || pet.quiet_from.is_some() != pet.quiet_to.is_some()
+        {
+            return Err("Invalid pet options".into());
+        }
     }
     if widget.metric.as_deref().is_some_and(|metric| {
         widget.kind != DeckWidgetType::PcStats || !PC_STATS_METRICS.contains(&metric)
@@ -821,6 +882,7 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         | DeckWidgetType::NowPlaying
         | DeckWidgetType::Lyrics
         | DeckWidgetType::PcStats
+        | DeckWidgetType::Pet
             if widget.plugin_id.is_none()
                 && widget.widget_id.is_none()
                 && widget.render_type.is_none()
@@ -858,7 +920,8 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         DeckWidgetType::Clock
         | DeckWidgetType::NowPlaying
         | DeckWidgetType::Lyrics
-        | DeckWidgetType::PcStats => Err("Built-in widgets cannot contain plugin metadata".into()),
+        | DeckWidgetType::PcStats
+        | DeckWidgetType::Pet => Err("Built-in widgets cannot contain plugin metadata".into()),
     }
 }
 
@@ -2907,6 +2970,16 @@ fn foreground_app() -> Option<ForegroundApp> {
     None
 }
 
+/// The program name when the foreground app looks like a game: it lives in a game store's folder or is a well-known game.
+fn game_name(foreground: &ForegroundApp) -> Option<String> {
+    let path = foreground.path.replace(char::from(92), "/").to_lowercase();
+    let stem = Path::new(&path).file_stem()?.to_str()?.to_owned();
+    const FOLDERS: &[&str] = &["/steamapps/common/", "/epic games/", "/gog galaxy/games/", "/gog games/", "/riot games/", "/ubisoft game launcher/games/", "/xboxgames/", "/origin games/", "/ea games/"];
+    const PROGRAMS: &[&str] = &["valorant-win64-shipping", "cs2", "csgo", "dota2", "fortniteclient-win64-shipping", "leagueoflegends", "gta5", "eldenring", "overwatch", "r5apex", "minecraft", "robloxplayerbeta"];
+    let launcher = ["launcher", "crashhandler", "unins", "setup", "epicgameslauncher"].iter().any(|word| stem.contains(word));
+    if !launcher && (FOLDERS.iter().any(|folder| path.contains(folder)) || PROGRAMS.contains(&stem.as_str())) { Some(stem) } else { None }
+}
+
 fn app_target_matches(target: &str, foreground: &ForegroundApp) -> bool {
     let target = target.trim();
     if target.eq_ignore_ascii_case(&foreground.identity)
@@ -3486,6 +3559,8 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
     let mut last_media_content: Option<system_media::SystemMediaState> = None;
     let mut deck_updates = state.deck_updates.subscribe();
     let mut media_updates = state.media_state.subscribe();
+    let mut pet_updates = state.pet_context.subscribe();
+    pet_updates.mark_changed();
     let mut navigation_updates = state.navigation_updates.subscribe();
     let mut auto_profile_updates = state.auto_profile_updates.subscribe();
     let mut legacy_requests = state.legacy_requests.subscribe();
@@ -3643,6 +3718,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     serde_json::json!({ "type": "pc_stats", "history": history.iter().map(pc_stats::PcStats::for_phone).collect::<Vec<_>>() })
                 };
                 pc_stats_history_sent = true;
+                if socket.send(Message::Text(message.to_string().into())).await.is_err() {
+                    break;
+                }
+                continue;
+            }
+            changed = pet_updates.changed(), if authenticated => {
+                if changed.is_err() { break; }
+                let game = pet_updates.borrow_and_update().clone();
+                let message = serde_json::json!({ "type": "pet_context", "game": game });
                 if socket.send(Message::Text(message.to_string().into())).await.is_err() {
                     break;
                 }
@@ -5495,6 +5579,7 @@ pub fn run() {
     let (media_state, _) =
         tokio::sync::watch::channel(system_media::SystemMediaState::unavailable());
     let (pc_stats, _) = tokio::sync::watch::channel(pc_stats::PcStatsHistory::default());
+    let (pet_context, _) = tokio::sync::watch::channel(None::<String>);
     let (legacy_requests, _) = broadcast::channel(16);
     let (navigation_updates, _) = broadcast::channel(16);
     let (auto_profile_updates, _) = broadcast::channel(16);
@@ -5510,6 +5595,7 @@ pub fn run() {
         device_meta: RwLock::new(HashMap::new()),
         online_devices: std::sync::Mutex::new(HashMap::new()),
         media_state,
+        pet_context,
         media_refresh: Arc::new(tokio::sync::Notify::new()),
         pc_stats,
         pc_stats_demand: Arc::new(pc_stats::Demand::default()),
@@ -5660,9 +5746,12 @@ pub fn run() {
 
             let profile_monitor = state.clone();
             thread::spawn(move || loop {
-                if let Some(foreground) = foreground_app() {
-                    switch_profile_for_foreground(&profile_monitor, &foreground);
+                let foreground = foreground_app();
+                if let Some(foreground) = &foreground {
+                    switch_profile_for_foreground(&profile_monitor, foreground);
                 }
+                let game = foreground.as_ref().and_then(game_name);
+                profile_monitor.pet_context.send_if_modified(|current| if *current == game { false } else { *current = game; true });
                 thread::sleep(Duration::from_millis(700));
             });
 

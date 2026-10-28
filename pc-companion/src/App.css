@@ -1082,7 +1082,7 @@ body.deck-dragging, body.deck-dragging * { cursor: grabbing !important; user-sel
 .panel-icon-button.danger { color: var(--red); }
 .panel-icon-button:disabled { opacity: .5; cursor: default; }
 .panel-icon-button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
-.panel-body { flex: 1; min-height: 0; padding: 16px; overflow-y: auto; display: grid; gap: 20px; align-content: start; }
+.panel-body { flex: 1; min-height: 0; padding: 16px; overflow-y: auto; display: grid; gap: 20px; align-content: start; grid-auto-rows: max-content; }
 .panel-section { min-width: 0; display: grid; gap: 12px; }
 .panel-section > h3 { margin: 0; color: var(--subtle); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
 .panel-section label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }

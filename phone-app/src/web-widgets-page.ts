@@ -23,10 +23,11 @@ export type PageSources = {
   background: string;
   clockFaces: string;
   pcStats: string;
+  pet: string;
   fontsCss: string;
   fontLoads: string[];
 };
-export function widgetPageHtml({ wakeCounterJs, background, clockFaces, pcStats, fontsCss, fontLoads }: PageSources): string {
+export function widgetPageHtml({ wakeCounterJs, background, clockFaces, pcStats, pet, fontsCss, fontLoads }: PageSources): string {
   return `<!doctype html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="color-scheme" content="light dark">
@@ -36,6 +37,7 @@ export function widgetPageHtml({ wakeCounterJs, background, clockFaces, pcStats,
 ${wakeCounterJs}
 ${clockFaces.replace(/<\/script/gi, '<\\/script')}
 ${pcStats.replace(/<\/script/gi, '<\\/script')}
+${pet.replace(/<\/script/gi, '<\\/script')}
 OpenDockClock.setFrameRate(30);
 var shown = {}, pending = null, fontsReady = false, panel = ${JSON.stringify(background)};
 function post(message) {
@@ -47,8 +49,10 @@ function mountOne(w, hour12) {
   document.body.appendChild(host);
   try {
     var handle = w.kind === 'clock'
-      ? OpenDockClock.mount(host, { face: w.face || 'digital', color: w.color || null, width: w.width, height: w.height, hour12: hour12 })
-      : OpenDockStats.mount(host, { style: w.face || 'ring', metric: w.metric || 'cpu', color: w.color || null, gpu: w.gpu || 'auto', background: panel, still: true, width: w.width, height: w.height, columns: w.columns, rows: w.rows });
+      ? OpenDockClock.mount(host, { face: w.face || 'digital', color: w.color || null, width: w.width, height: w.height, hour12: hour12, opacity: w.opacity == null ? 100 : w.opacity })
+      : w.kind === 'pet'
+      ? OpenDockPet.mount(host, { face: w.face || 'buddy', color: w.color || null, width: w.width, height: w.height, opacity: w.opacity == null ? 100 : w.opacity, pet: w.pet })
+      : OpenDockStats.mount(host, { style: w.face || 'ring', metric: w.metric || 'cpu', color: w.color || null, gpu: w.gpu || 'auto', background: panel, opacity: w.opacity == null ? 100 : w.opacity, still: true, width: w.width, height: w.height, columns: w.columns, rows: w.rows });
     return { host: host, handle: handle };
   } catch (error) {
     host.remove();
@@ -86,6 +90,12 @@ window.openDockTheme = function (scheme, tile) {
   document.documentElement.style.colorScheme = scheme;
   OpenDockClock.setTheme(scheme);
   OpenDockStats.setTheme(scheme, tile);
+};
+// A touch on a widget's tile, sent by the app: kind is down, move, up or cancel; x and y are in the widget's own pixels.
+// The layer itself ignores touches, so only widgets whose style takes them (the pet) have a use for it.
+window.openDockTouch = function (id, kind, x, y) {
+  var item = shown[id];
+  if (item && item.handle && item.handle.touch) item.handle.touch(kind, x, y);
 };
 window.openDockWidgets = function (list, hour12, force, seq) {
   var request = { list: list, hour12: hour12, force: !!force, seq: seq };

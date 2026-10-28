@@ -1343,7 +1343,8 @@ if (typeof document !== 'undefined') document.addEventListener('visibilitychange
 // live: animate (false = keep the first frame until set live). pixelRatio: canvas resolution cap.
 // background: paused by setBackgroundPaused, e.g. while the face browser covers the editor.
 // Returns { destroy, setLive(live), setVisible(visible) }.
-function mount(host, { face, color, width, height, hour12 = true, live = true, pixelRatio: ratio = 2, background = false }) {
+// `opacity` (0 to 100) is how solid the face's own background is; below 100 the plate colour is made see-through.
+function mount(host, { face, color, width, height, hour12 = true, live = true, pixelRatio: ratio = 2, background = false, opacity = 100 }) {
   const doc = host.ownerDocument;
   if (!styled.has(doc)) { const style = doc.createElement('style'); style.textContent = CSS + PAUSED_CSS; doc.head.append(style); styled.add(doc); }
   const def = FACES.find((item) => item.id === face) || FACES.find((item) => item.id === 'digital');
@@ -1365,6 +1366,10 @@ function mount(host, { face, color, width, height, hour12 = true, live = true, p
     BUILD_PAL = pal;
     const shown = pal.light ? forLight(picked) : picked;
     if (pal.light) root.style.setProperty('--onAccent', onColor(shown));
+    if (opacity < 100 && typeof getComputedStyle === 'function') {
+      const rgb = (getComputedStyle(root).backgroundColor || '').match(/\d+(\.\d+)?/g);
+      if (rgb && rgb.length >= 3) root.style.background = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(Math.max(0, opacity) / 100).toFixed(2)})`;
+    }
     const tick = def.build(root, w, h, shown);
     mounted.root = root;
     mounted.tick = (date) => { HOUR12 = hour12; tick(date); };

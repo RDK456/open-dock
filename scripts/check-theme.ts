@@ -107,7 +107,7 @@ for (const [theme, c] of [['phone dark', darkColors], ['phone light', lightColor
 }
 
 // Colors written out in the phone's own code: only where one color is right in both themes.
-const SKIP = new Set(['theme-colors.ts', 'clock-faces-source.ts', 'pc-stats-source.ts', 'web-fonts-source.ts', 'perf-overlay.tsx', 'media-players.ts']);
+const SKIP = new Set(['theme-colors.ts', 'clock-faces-source.ts', 'pc-stats-source.ts', 'pet-source.ts', 'web-fonts-source.ts', 'perf-overlay.tsx', 'media-players.ts']);
 const ALLOWED_LINES = [/badgeLetter:/];
 const phoneRoot = join(ROOT, 'phone-app/src');
 const phoneStrays: string[] = [];

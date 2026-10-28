@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { AppWindow, Clock, File, FolderClosed, FolderOpen, Gauge, Globe, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, Terminal, TextCursorInput } from 'lucide-react';
+import { AppWindow, Bot, Clock, File, FolderClosed, FolderOpen, Gauge, Globe, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, Terminal, TextCursorInput } from 'lucide-react';
 
-export type WidgetChoice = { kind: 'clock' } | { kind: 'now_playing' } | { kind: 'lyrics' } | { kind: 'pc_stats' } | { kind: 'plugin'; pluginId: string; widgetId: string };
+export type WidgetChoice = { kind: 'clock' } | { kind: 'now_playing' } | { kind: 'lyrics' } | { kind: 'pc_stats' } | { kind: 'pet' } | { kind: 'plugin'; pluginId: string; widgetId: string };
 export type ButtonPreset = 'hotkey' | 'media' | 'launch_app' | 'launch_file' | 'launch_folder' | 'type_text' | 'open_url' | 'run_script' | 'sequence' | 'select_page' | 'select_profile';
 export type LibraryChoice = WidgetChoice | { kind: 'button'; preset: ButtonPreset } | { kind: 'plugin_action'; pluginId: string; actionId: string } | { kind: 'folder' };
 
@@ -43,6 +43,7 @@ export function DeckLibrary({ shelf = false, pluginActions, pluginWidgets, targe
     { key: 'clock', icon: <Clock size={16} />, title: 'Clock', detail: '26 faces, many with your own color', choice: { kind: 'clock' } },
     { key: 'now_playing', icon: <Music size={16} />, title: 'Now Playing', detail: 'Artwork, controls and volume for this PC', choice: { kind: 'now_playing' } },
     { key: 'pc_stats', icon: <Gauge size={16} />, title: 'PC stats', detail: 'CPU, GPU, RAM and temperatures', choice: { kind: 'pc_stats' } },
+    { key: 'pet', icon: <Bot size={16} />, title: 'Pet', detail: 'A little companion that plays and reacts to touch', choice: { kind: 'pet' } },
     { key: 'lyrics', icon: <MicVocal size={16} />, title: 'Lyrics', detail: 'Synced lyrics for what this PC is playing', choice: { kind: 'lyrics' } },
     ...pluginWidgets.map((item) => ({ key: `${item.pluginId}::${item.widgetId}`, icon: <Package size={16} />, title: item.label, detail: 'Plugin widget', choice: { kind: 'plugin', pluginId: item.pluginId, widgetId: item.widgetId } as LibraryChoice })),
   ];

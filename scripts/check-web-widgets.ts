@@ -14,6 +14,7 @@ import type { Command, Props, State, TimerKind } from '../phone-app/src/web-widg
 import { widgetPageHtml } from '../phone-app/src/web-widgets-page.ts';
 import { CLOCK_FACES_SOURCE } from '../phone-app/src/clock-faces-source.ts';
 import { PC_STATS_SOURCE } from '../phone-app/src/pc-stats-source.ts';
+import { PET_SOURCE } from '../phone-app/src/pet-source.ts';
 import { WEB_FONT_LOADS, WEB_FONTS_CSS } from '../phone-app/src/web-fonts-source.ts';
 
 // --- The lifecycle ---------------------------------------------------------------------------------
@@ -262,7 +263,7 @@ const running = (list = A) => {
 }
 
 // --- The page --------------------------------------------------------------------------------------
-const html = widgetPageHtml({ wakeCounterJs: '', background: '#111113', clockFaces: CLOCK_FACES_SOURCE, pcStats: PC_STATS_SOURCE, fontsCss: WEB_FONTS_CSS, fontLoads: WEB_FONT_LOADS });
+const html = widgetPageHtml({ wakeCounterJs: '', background: '#111113', clockFaces: CLOCK_FACES_SOURCE, pcStats: PC_STATS_SOURCE, pet: PET_SOURCE, fontsCss: WEB_FONTS_CSS, fontLoads: WEB_FONT_LOADS });
 assert.ok(!/fonts\.(googleapis|gstatic)\.com|<link/i.test(html), 'the widget page must not load anything from the network');
 assert.ok(html.includes("font-family:'Bricolage Grotesque'") && html.includes('data:font/woff2;base64,'), 'the fonts are embedded');
 

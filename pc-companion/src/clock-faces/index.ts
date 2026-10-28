@@ -5,7 +5,7 @@ export type ClockCategory = 'classic' | 'retro' | 'ambient' | 'kinetic';
 export type ClockFaceInfo = { id: string; name: string; category: ClockCategory; color: boolean; blurb: string };
 type OpenDockClockApi = {
   faces: ClockFaceInfo[];
-  mount(host: HTMLElement, options: { face: string; color?: string | null; width: number; height: number; hour12?: boolean; live?: boolean; pixelRatio?: number; background?: boolean }): { destroy(): void; setLive(live: boolean): void; setVisible(visible: boolean): void };
+  mount(host: HTMLElement, options: { face: string; color?: string | null; width: number; height: number; hour12?: boolean; live?: boolean; pixelRatio?: number; background?: boolean; opacity?: number }): { destroy(): void; setLive(live: boolean): void; setVisible(visible: boolean): void };
   setPaused(paused: boolean): void;
   setBackgroundPaused(paused: boolean): void;
   setFrameRate(fps: number): void;
