@@ -27,6 +27,10 @@ const FACES = [
 const DEFAULT_COLOR = '#2dd4bf';
 const SCREEN = '#0b0d12';
 const POOL = 12;
+// What the game on the PC is, from its process name: shooters get a gun, racing games a car, the rest a gamepad.
+const SHOOTERS = /valorant|cs2|csgo|r5apex|apex|overwatch|fortnite|cod|warzone|modernwarfare|pubg|tslgame|rainbow|destiny|halo|doom|battlefield|bf\d|payday|left4dead|l4d|hunt|tarkov|ready|squad|insurgency|paladins|splitgate|deadlock|marvelrivals|thefinals|quake|crysis|farcry|metro|borderlands/;
+const RACERS = /forza|fh\d|nfs|needforspeed|assetto|acc|iracing|beamng|trackmania|dirt|wrc|f1_|f12|eurotruck|ets2|ats|grid|carx|rocketleague|horizon|burnout|motogp|ride\d/;
+const genre = (name) => (SHOOTERS.test(name || '') ? 'shooter' : RACERS.test(name || '') ? 'racer' : 'other');
 // Outfits, in the same order as PET_OUTFITS in lib.rs (scripts/check-pet.ts keeps them in sync).
 const OUTFITS = ['auto', 'none', 'glasses', 'mustache', 'crown', 'tophat', 'bowtie'];
 // Mood ring colours: low spirits, anger, tiredness, love.
@@ -462,6 +466,28 @@ function mount(host, { face, color, width, height, opacity = 100, pet: options }
         const k = age % 7000, cheer = k < 800;
         E.gaze = [0.5 + Math.sin(age / 900) * 0.3, -0.4]; E.open = 1.15; E.wide = 1.05;
         if (cheer) { E.shapes = all('happy'); E.bob = -Math.abs(Math.sin(k / 800 * Math.PI * 2)) * sh * 0.08; } else E.shake = Math.sin(age / 55) * sw * 0.002;
+        const kind = genre(WORLD.game);
+        if (kind === 'shooter') {
+          // Aiming down the sights: narrowed eyes, a gun that kicks back with a muzzle flash every couple of seconds.
+          const shot = age % 2400, kick = shot < 160 ? 1 - shot / 160 : 0;
+          E.gaze = [0.55 + Math.sin(age / 700) * 0.2, 0.05]; E.open = 0.55; E.wide = 1.05; E.shapes = all('round'); E.shake = kick * sw * 0.006;
+          const gx = p + sw * 0.78 - kick * sw * 0.02, gy = p + sh * 0.8, u = sh * 0.05;
+          const gun = rr(gx - u * 4, gy - u * 0.8, u * 6, u * 1.6, u * 0.3) + rr(gx - u * 3.4, gy + u * 0.6, u * 1.2, u * 2.2, u * 0.3) + rr(gx + u * 2, gy - u * 1.3, u * 1.6, u * 0.5, 0);
+          E.out.push([gun, 0.9, true, lw]);
+          if (kick > 0.3) E.out.push([tri(gx + u * 2, gy, gx + u * 3.6, gy - u * 1.2, gx + u * 3.6, gy + u * 1.2) + seg(gx + u * 4, gy, gx + u * 5.4, gy), 0.95, true, lw]);
+          E.out.push([circ(p + sw * 0.5, p + sh * 0.5, sh * 0.07) + seg(p + sw * 0.5 - sh * 0.11, p + sh * 0.5, p + sw * 0.5 - sh * 0.04, p + sh * 0.5) + seg(p + sw * 0.5 + sh * 0.04, p + sh * 0.5, p + sw * 0.5 + sh * 0.11, p + sh * 0.5), 0.3, false, 1]);
+          break;
+        }
+        if (kind === 'racer') {
+          // Riding the road: it leans into the corners, a little car drives along and speed lines rush past.
+          const lean = Math.sin(age / 1300);
+          E.gaze = [lean * 0.7, 0.1]; E.open = 0.8; E.wide = 1.05; E.sway = lean * sw * 0.03; E.shake = Math.sin(age / 40) * sw * 0.0012;
+          const cx2 = p + sw * 0.5 + lean * sw * 0.18, cy2 = p + sh * 0.84, u = sh * 0.05;
+          E.out.push([rr(cx2 - u * 2.2, cy2 - u * 0.4, u * 4.4, u * 1.4, u * 0.4) + rr(cx2 - u * 1.2, cy2 - u * 1.2, u * 2.4, u * 0.9, u * 0.3) + circ(cx2 - u * 1.3, cy2 + u * 1.1, u * 0.45) + circ(cx2 + u * 1.3, cy2 + u * 1.1, u * 0.45), 0.9, true, lw]);
+          let lines = ''; for (let i = 0; i < 4; i++) { const q = ((age / 450) + i / 4) % 1, x = p + sw * (i % 2 ? 0.1 : 0.9), y = p + sh * (0.45 + q * 0.5); lines += seg(x, y, x, y + sh * 0.08 * (0.4 + q)); }
+          E.out.push([lines, 0.5, false, lw]);
+          break;
+        }
         const gx = p + sw * 0.84, gy = p + sh * 0.82, gw = sw * 0.12, gh = sh * 0.09;
         E.out.push([rr(gx - gw / 2, gy - gh / 2, gw, gh, gh * 0.4) + circ(gx + gw * 0.22, gy, gh * 0.12) + seg(gx - gw * 0.3, gy, gx - gw * 0.1, gy), 0.8, false, lw]);
         break;

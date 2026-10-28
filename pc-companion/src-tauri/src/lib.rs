@@ -2933,7 +2933,11 @@ fn foreground_app() -> Option<ForegroundApp> {
         if process_id == 0 || process_id == std::process::id() {
             return None;
         }
-        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id).ok()?;
+        // Anti-cheat protected games (Valorant) refuse the handle, so fall back to the bare process name.
+        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) else {
+            let name = process_name(process_id)?;
+            return Some(ForegroundApp { identity: name.clone(), path: name });
+        };
         let mut buffer = [0u16; 32_768];
         let mut length = buffer.len() as u32;
         let result = QueryFullProcessImageNameW(
@@ -2950,6 +2954,27 @@ fn foreground_app() -> Option<ForegroundApp> {
             path,
         })
     }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn process_name(process_id: u32) -> Option<String> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+    let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?;
+    let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+    let mut found = None;
+    if Process32FirstW(snapshot, &mut entry).is_ok() {
+        loop {
+            if entry.th32ProcessID == process_id {
+                let end = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                found = String::from_utf16(&entry.szExeFile[..end]).ok();
+                break;
+            }
+            if Process32NextW(snapshot, &mut entry).is_err() { break; }
+        }
+    }
+    let _ = CloseHandle(snapshot);
+    found
 }
 
 #[cfg(target_os = "macos")]
@@ -2975,7 +3000,7 @@ fn game_name(foreground: &ForegroundApp) -> Option<String> {
     let path = foreground.path.replace(char::from(92), "/").to_lowercase();
     let stem = Path::new(&path).file_stem()?.to_str()?.to_owned();
     const FOLDERS: &[&str] = &["/steamapps/common/", "/epic games/", "/gog galaxy/games/", "/gog games/", "/riot games/", "/ubisoft game launcher/games/", "/xboxgames/", "/origin games/", "/ea games/"];
-    const PROGRAMS: &[&str] = &["valorant-win64-shipping", "cs2", "csgo", "dota2", "fortniteclient-win64-shipping", "leagueoflegends", "gta5", "eldenring", "overwatch", "r5apex", "minecraft", "robloxplayerbeta"];
+    const PROGRAMS: &[&str] = &["valorant-win64-shipping", "cs2", "csgo", "dota2", "fortniteclient-win64-shipping", "leagueoflegends", "gta5", "eldenring", "overwatch", "r5apex", "minecraft", "robloxplayerbeta", "tslgame", "cod", "forzahorizon5", "forzahorizon4", "assettocorsa", "beamng.drive", "trackmania", "rocketleague", "eurotrucks2", "rainbowsix", "deadlock", "marvel-win64-shipping", "thefinals"];
     let launcher = ["launcher", "crashhandler", "unins", "setup", "epicgameslauncher"].iter().any(|word| stem.contains(word));
     if !launcher && (FOLDERS.iter().any(|folder| path.contains(folder)) || PROGRAMS.contains(&stem.as_str())) { Some(stem) } else { None }
 }
