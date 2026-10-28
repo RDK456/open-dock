@@ -51,6 +51,14 @@ The side bar switches between five tabs: **Deck**, **Touch**, **Voice**, **Camer
 
 Tap the PC name (top right) to switch between paired PCs.
 
+#### Maximize the deck (full screen)
+
+1. On the **Deck** tab, tap the **⤢ Expand** button (top right, next to ✏️).
+2. The side bar, tab bar and Android navigation bar hide, so the keys fill the whole screen. Rotate the phone: portrait gives a tall deck, landscape a wide one.
+3. Swipe left/right for pages, up/down for profiles.
+4. Tap the background or an empty slot to show the controls (profile name, page buttons) for about 3 seconds. Tap a page button to jump to it.
+5. Press the Android **Back** button to leave full screen.
+
 ### Touch (touchpad)
 
 | Gesture | What it does |
