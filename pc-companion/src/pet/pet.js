@@ -29,7 +29,7 @@ const SCREEN = '#0b0d12';
 const POOL = 12;
 // What the game on the PC is, from its process name: shooters get a gun, racing games a car, the rest a gamepad.
 const SHOOTERS = /valorant|cs2|csgo|r5apex|apex|overwatch|fortnite|cod|warzone|modernwarfare|pubg|tslgame|rainbow|destiny|halo|doom|battlefield|bf\d|payday|left4dead|l4d|hunt|tarkov|ready|squad|insurgency|paladins|splitgate|deadlock|marvelrivals|thefinals|quake|crysis|farcry|metro|borderlands/;
-const RACERS = /forza|fh\d|nfs|needforspeed|assetto|acc|iracing|beamng|trackmania|dirt|wrc|f1_|f12|eurotruck|ets2|ats|grid|carx|rocketleague|horizon|burnout|motogp|ride\d/;
+const RACERS = /car|park|truck|drive|driving|race|racing|rally|kart|bike|moto|taxi|bus|forza|fh\d|nfs|needforspeed|assetto|acc|iracing|beamng|trackmania|dirt|wrc|f1_|f12|eurotruck|ets2|ats|grid|carx|rocketleague|horizon|burnout|motogp|ride\d/;
 const genre = (name) => (SHOOTERS.test(name || '') ? 'shooter' : RACERS.test(name || '') ? 'racer' : 'other');
 // Outfits, in the same order as PET_OUTFITS in lib.rs (scripts/check-pet.ts keeps them in sync).
 const OUTFITS = ['auto', 'none', 'glasses', 'mustache', 'crown', 'tophat', 'bowtie'];
