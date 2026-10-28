@@ -1,0 +1,3 @@
+Open Dock turns your phone into a PC dock, a webcam, a touchpad, a voice remote and a desktop pet.
+Free and open source.
+github.com/RDK456/open-dock

@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, height=1080" />
+<title>Open Dock brag</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  :root { --bg:#05070d; --panel:#0f1424; --panel2:#171d33; --line:#262e4d; --text:#f2f4ff; --muted:#9aa3c7; --accent:#cfd2ff; --ink:#0b0d1a; --green:#4ade80; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
+  #root { position:relative; width:100%; height:100%; overflow:hidden; background:var(--bg); }
+  .glow { position:absolute; border-radius:50%; filter:blur(120px); opacity:.35; }
+  #glowA { width:900px; height:900px; left:-250px; top:-300px; background:#3a46b8; }
+  #glowB { width:800px; height:800px; right:-200px; bottom:-350px; background:#6b4fd8; }
+  .scene { position:absolute; inset:0; opacity:0; }
+  .abs { position:absolute; }
+  .center { display:flex; align-items:center; justify-content:center; }
+  .cap { position:absolute; left:0; right:0; text-align:center; font-weight:700; letter-spacing:-1px; }
+  .accent { color:var(--accent); }
+
+  /* phone */
+  .phone { position:absolute; background:#02030a; border-radius:56px; padding:20px; box-shadow:0 0 0 3px var(--line), 0 40px 120px rgba(0,0,0,.6); }
+  .screen { position:relative; overflow:hidden; border-radius:38px; background:#070a14; }
+  .chip { position:absolute; display:flex; align-items:center; justify-content:center; border:2px solid var(--line); border-radius:999px; font-weight:600; color:var(--text); background:var(--panel2); }
+  .chip.on { background:var(--accent); color:var(--ink); border-color:var(--accent); }
+  .finger { position:absolute; width:56px; height:56px; border-radius:50%; background:rgba(207,210,255,.35); border:3px solid var(--accent); left:0; top:0; opacity:0; z-index:20; }
+
+  /* deck */
+  .card { position:absolute; left:120px; top:90px; width:880px; height:400px; border-radius:36px; background:var(--panel); border:2px solid var(--line); overflow:hidden; }
+  .card h3 { position:absolute; left:34px; top:20px; margin:0; font-size:44px; font-weight:700; }
+  .dots { position:absolute; right:34px; top:40px; display:flex; gap:10px; }
+  .dots i { width:12px; height:12px; border-radius:6px; background:#343c60; display:block; }
+  .dots i.cur { width:40px; background:var(--accent); }
+  .key { position:absolute; width:270px; height:125px; border-radius:18px; background:var(--panel2); border:2px solid var(--line); padding:18px 20px; font-size:28px; font-weight:600; }
+  .key small { display:block; width:30px; height:30px; border-radius:50%; background:var(--accent); opacity:.85; margin-bottom:10px; }
+  .rail { position:absolute; left:18px; top:90px; width:76px; height:340px; border-radius:38px; background:var(--panel); border:2px solid var(--line); }
+  .rail i { position:absolute; left:20px; width:34px; height:34px; border-radius:10px; border:3px solid #6f78a3; }
+  .mrail { position:absolute; left:1030px; top:120px; width:150px; height:330px; border-radius:75px; background:var(--panel); border:2px solid var(--line); }
+  .mrail b { position:absolute; left:25px; width:100px; height:100px; border-radius:50%; background:var(--panel2); border:2px solid var(--line); }
+  .mrail b.play { background:var(--accent); }
+  .stat { position:absolute; top:110px; width:164px; }
+  .stat span { font-size:20px; letter-spacing:3px; color:var(--muted); }
+  .stat strong { display:block; margin-top:34px; font-size:62px; }
+  .stat em { font-size:26px; color:var(--muted); font-style:normal; }
+  .stat u { position:absolute; left:0; top:230px; width:150px; height:10px; border-radius:5px; background:#232a45; }
+  .stat u s { position:absolute; left:0; top:0; height:10px; border-radius:5px; }
+  .ring { position:absolute; width:90px; height:90px; border-radius:50%; border:4px solid var(--accent); opacity:0; z-index:19; left:0; top:0; }
+  .pop { position:absolute; border-radius:18px; background:var(--accent); color:var(--ink); font-weight:700; font-size:24px; padding:14px 22px; z-index:21; opacity:0; white-space:nowrap; left:0; top:0; }
+
+  /* pc */
+  .pcwin { position:absolute; border-radius:22px; background:var(--panel); border:2px solid var(--line); overflow:hidden; box-shadow:0 30px 90px rgba(0,0,0,.55); }
+  .pcbar { height:52px; border-bottom:2px solid var(--line); display:flex; align-items:center; padding:0 20px; gap:10px; font-size:20px; color:var(--muted); }
+  .pcbar i { width:14px; height:14px; border-radius:50%; background:#343c60; display:block; }
+  .vf { position:absolute; left:20px; top:72px; right:20px; bottom:20px; border-radius:14px; overflow:hidden; background:#0a0e1c; }
+  .sky { position:absolute; inset:0; background:linear-gradient(#35407f,#d99a7a); }
+  .sun { position:absolute; left:360px; top:130px; width:90px; height:90px; border-radius:50%; background:#ffe3a3; }
+  .hill { position:absolute; border-radius:50%; }
+
+  /* pet */
+  .pet { position:absolute; width:260px; height:240px; }
+  .pet .body { position:absolute; left:20px; top:40px; width:220px; height:190px; border-radius:50% 50% 46% 46%; background:var(--accent); }
+  .pet .ear { position:absolute; top:6px; width:0; height:0; border-left:34px solid transparent; border-right:34px solid transparent; border-bottom:70px solid var(--accent); }
+  .pet .eye { position:absolute; top:110px; width:24px; height:30px; border-radius:50%; background:var(--ink); }
+  .pet .mouth { position:absolute; left:112px; top:152px; width:36px; height:18px; border-bottom:5px solid var(--ink); border-radius:0 0 40px 40px; }
+  .pet .cheek { position:absolute; top:142px; width:30px; height:18px; border-radius:50%; background:#f4a8c0; opacity:.8; }
+  .hat { position:absolute; left:80px; top:-14px; width:100px; height:56px; border-radius:50px 50px 8px 8px; background:#ff7a90; opacity:0; }
+  .hat:after { content:""; position:absolute; left:-18px; top:44px; width:136px; height:14px; border-radius:7px; background:#ff5b78; }
+  .shades { position:absolute; left:52px; top:98px; width:156px; height:44px; border-radius:12px; background:#0b0d1a; opacity:0; }
+
+  /* text */
+  .h1 { font-weight:800; letter-spacing:-3px; }
+  .w { display:inline-block; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="24">
+  <div class="glow" id="glowA"></div>
+  <div class="glow" id="glowB"></div>
+
+  <!-- S1 hook -->
+  <div class="scene" id="s1">
+    <img id="logo" class="abs" src="assets/img/icon.png" style="left:900px;top:270px;width:120px;height:120px;border-radius:28px" />
+    <div class="cap h1" style="top:430px;font-size:132px;line-height:1.1">
+      <span class="w">Your</span> <span class="w">phone</span> <span class="w">is</span> <span class="w">a</span> <span class="w accent">PC</span> <span class="w accent">dock.</span>
+    </div>
+  </div>
+
+  <!-- S2 deck -->
+  <div class="scene" id="s2">
+    <div class="cap" id="c2a" style="top:90px;font-size:76px;opacity:0">Tap to run</div>
+    <div class="cap" id="c2b" style="top:90px;font-size:76px;opacity:0">Long-press</div>
+    <div class="cap" id="c2c" style="top:90px;font-size:76px;opacity:0">Swipe for pages</div>
+    <div class="phone" id="phone1" style="left:320px;top:230px;width:1280px;height:600px;opacity:0">
+      <div class="screen" data-layout-ignore style="width:1240px;height:560px">
+        <div class="abs" style="left:120px;top:20px;font-size:30px;font-weight:700">Open Dock</div>
+        <div class="chip" style="right:36px;top:16px;width:200px;height:52px;font-size:22px"><span style="color:var(--green);margin-right:10px">●</span>My PC</div>
+        <div class="rail"><i style="top:30px"></i><i style="top:100px;border-radius:50%"></i><i style="top:170px;border-radius:17px 17px 8px 8px"></i><i style="top:240px;border-radius:50%"></i></div>
+        <div class="card" id="deckcard">
+          <h3 id="deckTitle">Main</h3>
+          <div class="dots"><i class="cur" id="dotA"></i><i></i><i id="dotC"></i><i></i></div>
+          <div id="deckKeys" class="abs" style="left:0;top:0;width:880px;height:400px">
+            <div class="key" style="left:24px;top:110px"><small></small>Play</div>
+            <div class="key" style="left:310px;top:110px"><small></small>Next track</div>
+            <div class="key" style="left:596px;top:110px"><small></small>Previous track</div>
+            <div class="key" id="kVol" style="left:24px;top:251px"><small></small>Volume up</div>
+            <div class="key" style="left:310px;top:251px"><small></small>Volume down</div>
+            <div class="key" id="kMute" style="left:596px;top:251px"><small></small>Mute</div>
+          </div>
+          <div id="deckStats" class="abs" style="left:880px;top:0;width:880px;height:400px">
+            <div class="stat" style="left:36px"><span>CPU</span><strong>28<em>%</em></strong><u><s style="width:30%;background:#8ab4ff"></s></u></div>
+            <div class="stat" style="left:213px"><span>GPU</span><strong>1<em>%</em></strong><u><s style="width:3%;background:#8ab4ff"></s></u></div>
+            <div class="stat" style="left:390px"><span>RAM</span><strong>32<em>%</em></strong><u><s style="width:32%;background:#8ab4ff"></s></u></div>
+            <div class="stat" style="left:567px"><span>CPU TEMP</span><strong>45<em>°</em></strong><u><s style="width:35%;background:var(--green)"></s></u></div>
+            <div class="stat" style="left:744px"><span>GPU TEMP</span><strong>36<em>°</em></strong><u><s style="width:26%;background:var(--green)"></s></u></div>
+          </div>
+        </div>
+        <div class="mrail"><b style="top:18px"></b><b class="play" style="top:115px"></b><b style="top:212px"></b></div>
+        <div class="ring" id="holdRing"></div>
+        <div class="pop" id="popMute">Second action</div>
+        <div class="finger" id="fing1"></div>
+      </div>
+    </div>
+    <div class="abs" id="pcvol" style="left:660px;top:880px;width:600px;height:70px;border-radius:35px;background:var(--panel);border:2px solid var(--line);opacity:0">
+      <div class="abs" style="left:28px;top:18px;font-size:26px;color:var(--muted)">PC volume</div>
+      <div class="abs" style="left:230px;top:28px;width:330px;height:14px;border-radius:7px;background:#232a45"><div id="pcvolFill" style="width:40%;height:14px;border-radius:7px;background:var(--accent)"></div></div>
+    </div>
+  </div>
+
+  <!-- S3 camera -->
+  <div class="scene" id="s3">
+    <div class="cap" id="c3" style="top:80px;font-size:76px;opacity:0">Your phone is also a webcam.</div>
+    <div class="phone" id="phone2" style="left:90px;top:250px;width:940px;height:560px;opacity:0">
+      <div class="screen" data-layout-ignore style="width:900px;height:520px">
+        <div class="abs" style="left:50px;top:24px;font-size:46px;font-weight:700">Camera</div>
+        <div class="abs" style="left:50px;top:92px;font-size:20px;color:var(--muted)">Use this phone as a webcam for your PC.</div>
+        <div class="abs" style="left:50px;top:140px;width:800px;height:110px;border-radius:28px;background:var(--panel);border:2px solid var(--line)">
+          <div class="abs" id="camState" style="left:30px;top:34px;font-size:30px;font-weight:700">Waiting for the PC</div>
+          <div class="abs" id="camBtn" style="right:26px;top:26px;width:260px;height:58px;border-radius:29px;background:var(--accent);color:var(--ink);font-size:24px;font-weight:700;display:flex;align-items:center;justify-content:center">Stop camera</div>
+        </div>
+        <div class="chip on" style="left:50px;top:280px;width:110px;height:56px;font-size:24px">LIVE</div>
+        <div class="chip" id="chFront" style="left:180px;top:280px;width:130px;height:56px;font-size:24px">Front</div>
+        <div class="chip" style="left:330px;top:280px;width:130px;height:56px;font-size:24px;color:#6f78a3">Torch</div>
+        <div class="chip on" style="left:480px;top:280px;width:170px;height:56px;font-size:24px">Stabilise</div>
+        <div class="abs" style="left:50px;top:372px;font-size:24px;color:var(--muted)">Zoom <span id="zoomTxt">1.0×</span></div>
+        <div class="chip on" id="z1" style="left:50px;top:416px;width:92px;height:62px;font-size:26px">1×</div>
+        <div class="chip" id="z2" style="left:160px;top:416px;width:92px;height:62px;font-size:26px">2×</div>
+        <div class="chip" style="left:270px;top:416px;width:92px;height:62px;font-size:26px">3×</div>
+        <div class="chip" style="left:380px;top:416px;width:92px;height:62px;font-size:26px">5×</div>
+        <div class="finger" id="fing2"></div>
+      </div>
+    </div>
+    <div class="pcwin" id="pcCam" style="left:1090px;top:290px;width:760px;height:480px;opacity:0">
+      <div class="pcbar"><i></i><i></i><i></i><span style="margin-left:14px">Open Dock · Camera</span></div>
+      <div class="vf">
+        <div id="vfWorld" class="abs" style="inset:0;opacity:0">
+          <div id="flip" class="abs" style="inset:0">
+            <div class="sky"></div>
+            <div class="sun"></div>
+            <div class="hill" style="left:-120px;top:230px;width:520px;height:360px;background:#1d2450"></div>
+            <div class="hill" style="left:260px;top:270px;width:640px;height:380px;background:#141a3c"></div>
+          </div>
+        </div>
+        <div class="chip" style="left:16px;top:16px;width:130px;height:52px;font-size:28px;background:rgba(5,7,13,.7)"><span style="color:#ff5b78;margin-right:8px">●</span>LIVE</div>
+        <div class="chip" id="vfZoom" style="right:16px;bottom:16px;width:130px;height:52px;font-size:28px;background:rgba(5,7,13,.7)">1.0×</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S4 pet -->
+  <div class="scene" id="s4">
+    <div class="cap" id="c4" style="top:84px;font-size:84px;opacity:0">A pet on your PC.</div>
+    <div class="pcwin" id="pcPet" style="left:380px;top:230px;width:1160px;height:640px;opacity:0">
+      <div class="pcbar"><i></i><i></i><i></i><span style="margin-left:14px">My PC</span></div>
+      <div class="pet" id="pet" style="left:450px;top:230px">
+        <div class="ear" style="left:34px"></div>
+        <div class="ear" style="right:34px"></div>
+        <div class="body"></div>
+        <div class="eye pe" style="left:78px"></div>
+        <div class="eye pe" style="left:158px"></div>
+        <div class="cheek" style="left:52px"></div>
+        <div class="cheek" style="left:178px"></div>
+        <div class="mouth"></div>
+        <div class="shades" id="shades"></div>
+        <div class="hat" id="hat"></div>
+      </div>
+      <div class="chip" id="pc1" style="left:70px;top:520px;width:300px;height:68px;font-size:30px;opacity:0">Plays games</div>
+      <div class="chip" id="pc2" style="left:430px;top:520px;width:300px;height:68px;font-size:30px;opacity:0">Wears outfits</div>
+      <div class="chip" id="pc3" style="left:790px;top:520px;width:300px;height:68px;font-size:30px;opacity:0;white-space:nowrap">Reacts to music</div>
+    </div>
+  </div>
+
+  <!-- S5 touch + voice -->
+  <div class="scene" id="s5">
+    <div class="abs" style="left:150px;top:110px;font-size:60px;font-weight:700">Touch</div>
+    <div class="abs" id="pad" style="left:150px;top:210px;width:780px;height:470px;border-radius:44px;background:var(--panel);border:2px solid var(--line);opacity:0">
+      <div class="finger" id="tf1" style="width:64px;height:64px"></div>
+      <div class="finger" id="tf2" style="width:64px;height:64px"></div>
+    </div>
+    <div class="cap" id="c5a" style="left:150px;right:auto;width:780px;top:730px;font-size:44px;opacity:0">Two fingers scroll. Pinch zooms.</div>
+    <div class="abs" style="left:1030px;top:110px;font-size:60px;font-weight:700">Voice</div>
+    <div class="abs" id="voicecard" style="left:1030px;top:210px;width:740px;height:470px;border-radius:44px;background:var(--panel);border:2px solid var(--line);opacity:0">
+      <div class="abs" id="micRing" style="left:250px;top:70px;width:240px;height:240px;border-radius:50%;border:4px solid var(--accent);opacity:0"></div>
+      <div class="abs center" id="mic" style="left:270px;top:90px;width:200px;height:200px;border-radius:50%;background:var(--accent)">
+        <svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke="#0b0d1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
+      </div>
+      <div class="abs" id="listen" style="left:0;width:740px;top:350px;text-align:center;font-size:30px;color:var(--muted);opacity:0">Listening. Say the command.</div>
+    </div>
+    <div class="cap" id="c5b" style="left:1030px;right:auto;width:740px;top:730px;font-size:44px;opacity:0">Say “hey dock”</div>
+  </div>
+
+  <!-- S6 connect -->
+  <div class="scene" id="s6">
+    <div class="abs h1" id="c6a" style="left:130px;top:360px;font-size:104px;line-height:1.05;opacity:0;width:640px">Wi-Fi<br>or USB.</div>
+    <div class="abs" id="c6b" style="left:130px;top:620px;font-size:38px;color:var(--muted);width:600px;line-height:1.3;opacity:0">Pair once. Switch modes without scanning again.</div>
+    <div class="phone" id="shot" style="left:810px;top:270px;width:1040px;height:540px;opacity:0;padding:14px;border-radius:44px">
+      <img src="assets/img/connect.png" style="width:1012px;height:455px;border-radius:30px;display:block" />
+    </div>
+  </div>
+
+  <!-- S7 outro -->
+  <div class="scene" id="s7">
+    <img id="logo2" class="abs" src="assets/img/icon.png" style="left:900px;top:220px;width:120px;height:120px;border-radius:28px;opacity:0" />
+    <div class="cap h1" id="o1" style="top:370px;font-size:128px;opacity:0">Open Dock</div>
+    <div class="cap accent" id="o2" style="top:540px;font-size:60px;opacity:0">Free and open source.</div>
+    <div class="cap" id="o3" style="top:650px;font-size:40px;color:var(--muted);font-weight:500;opacity:0">github.com/RDK456/open-dock</div>
+  </div>
+
+  <audio id="music" src="assets/music/bed.mp3" data-start="0" data-duration="24" data-track-index="0" data-volume="0.5"></audio>
+  <audio id="x1" src="assets/sfx/impactSoft_medium_001.ogg" data-start="1.2" data-duration="1" data-track-index="1" data-volume="0.5"></audio>
+  <audio id="x2" src="assets/sfx/click_003.ogg" data-start="4.02" data-duration="1" data-track-index="2" data-volume="0.8"></audio>
+  <audio id="x3" src="assets/sfx/click_002.ogg" data-start="4.52" data-duration="1" data-track-index="3" data-volume="0.8"></audio>
+  <audio id="x4" src="assets/sfx/bong_001.ogg" data-start="5.3" data-duration="1" data-track-index="4" data-volume="0.5"></audio>
+  <audio id="x5" src="assets/sfx/rollover2.ogg" data-start="5.9" data-duration="1" data-track-index="5" data-volume="0.6"></audio>
+  <audio id="x6" src="assets/sfx/bong_001.ogg" data-start="7.9" data-duration="1" data-track-index="6" data-volume="0.5"></audio>
+  <audio id="x7" src="assets/sfx/click_003.ogg" data-start="8.52" data-duration="1" data-track-index="7" data-volume="0.8"></audio>
+  <audio id="x8" src="assets/sfx/click_002.ogg" data-start="9.52" data-duration="1" data-track-index="8" data-volume="0.8"></audio>
+  <audio id="x9" src="assets/sfx/bong_001.ogg" data-start="11.5" data-duration="1" data-track-index="9" data-volume="0.5"></audio>
+  <audio id="x10" src="assets/sfx/click_003.ogg" data-start="12.02" data-duration="1" data-track-index="10" data-volume="0.7"></audio>
+  <audio id="x11" src="assets/sfx/click_003.ogg" data-start="12.52" data-duration="1" data-track-index="11" data-volume="0.7"></audio>
+  <audio id="x12" src="assets/sfx/click_003.ogg" data-start="15.02" data-duration="1" data-track-index="12" data-volume="0.7"></audio>
+  <audio id="x13" src="assets/sfx/bong_001.ogg" data-start="16.02" data-duration="1" data-track-index="13" data-volume="0.5"></audio>
+  <audio id="x14" src="assets/sfx/impactSoft_medium_001.ogg" data-start="18.02" data-duration="1" data-track-index="14" data-volume="0.5"></audio>
+  <audio id="x15" src="assets/sfx/impactSoft_heavy_003.ogg" data-start="21.01" data-duration="1" data-track-index="15" data-volume="0.6"></audio>
+</div>
+
+<script>
+const tl = gsap.timeline({ paused: true });
+const ease = "power3.out";
+const inS = (id, t) => tl.fromTo(id, { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power2.out" }, t);
+const outS = (id, t) => tl.to(id, { opacity: 0, duration: 0.35, ease: "power2.in" }, t);
+
+// ambient drift (finite)
+tl.to("#glowA", { x: 260, y: 120, duration: 24, ease: "none" }, 0);
+tl.to("#glowB", { x: -240, y: -100, duration: 24, ease: "none" }, 0);
+
+// S1 hook 0-3
+tl.set("#s1", { opacity: 1 }, 0);
+tl.fromTo("#logo", { y: 30, scale: 0.8 }, { y: 0, scale: 1, duration: 0.7, ease: "back.out(1.6)" }, 0);
+tl.fromTo("#s1 .w", { y: 50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, stagger: 0.14, ease }, 0.5);
+outS("#s1", 2.65);
+
+// S2 deck 3-7
+inS("#s2", 3.0);
+tl.fromTo("#phone1", { y: 120, scale: 0.94, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.7, ease }, 3.0);
+tl.fromTo("#c2a", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease }, 3.3);
+tl.to("#c2a", { opacity: 0, duration: 0.25 }, 4.4);
+tl.fromTo("#c2b", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease }, 4.45);
+tl.to("#c2b", { opacity: 0, duration: 0.25 }, 5.6);
+tl.fromTo("#c2c", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease }, 5.65);
+// finger: to Volume up (279,423), tap at 4.02
+tl.set("#fing1", { x: 480 - 28, y: 470 - 28 }, 0);
+tl.to("#fing1", { opacity: 1, duration: 0.2 }, 3.65);
+tl.to("#fing1", { x: 279 - 28, y: 423 - 28, duration: 0.35, ease: "power2.inOut" }, 3.65);
+tl.to("#fing1", { scale: 0.8, duration: 0.1 }, 4.0);
+tl.to("#kVol", { scale: 0.95, backgroundColor: "#262e4d", duration: 0.1 }, 4.02);
+tl.to("#kVol", { scale: 1, backgroundColor: "#171d33", duration: 0.25 }, 4.12);
+tl.to("#fing1", { scale: 1, duration: 0.1 }, 4.1);
+tl.fromTo("#pcvol", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease }, 4.02);
+tl.to("#pcvolFill", { width: "75%", duration: 0.5, ease }, 4.1);
+tl.to("#pcvol", { opacity: 0, duration: 0.3 }, 4.9);
+// long-press Mute (851,423)
+tl.to("#fing1", { x: 851 - 28, y: 423 - 28, duration: 0.4, ease: "power2.inOut" }, 4.1);
+tl.set("#holdRing", { x: 851 - 45, y: 423 - 45 }, 0);
+tl.fromTo("#holdRing", { scale: 1.6, opacity: 0 }, { scale: 0.7, opacity: 1, duration: 0.8, ease: "power1.in" }, 4.52);
+tl.to("#holdRing", { opacity: 0, duration: 0.15 }, 5.32);
+tl.to("#kMute", { scale: 0.96, backgroundColor: "#262e4d", duration: 0.2 }, 4.55);
+tl.to("#kMute", { scale: 1, backgroundColor: "#171d33", duration: 0.2 }, 5.4);
+tl.set("#popMute", { x: 700, y: 305 }, 0);
+tl.fromTo("#popMute", { scale: 0.7, opacity: 0, transformOrigin: "50% 100%" }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.8)" }, 5.3);
+tl.to("#popMute", { opacity: 0, duration: 0.25 }, 5.85);
+// swipe to stats
+tl.to("#fing1", { x: 900 - 28, y: 300 - 28, duration: 0.25, ease: "power2.inOut" }, 5.7);
+tl.to("#fing1", { x: 300 - 28, duration: 0.55, ease: "power2.inOut" }, 5.95);
+tl.to("#deckKeys", { x: -880, duration: 0.55, ease: "power2.inOut" }, 5.95);
+tl.to("#deckStats", { x: -880, duration: 0.55, ease: "power2.inOut" }, 5.95);
+tl.to("#deckTitle", { opacity: 0, duration: 0.2 }, 5.95);
+tl.call(() => { document.getElementById("deckTitle").textContent = "Page 3"; }, null, 6.15);
+tl.to("#deckTitle", { opacity: 1, duration: 0.25 }, 6.2);
+tl.to("#dotA", { width: 12, backgroundColor: "#343c60", duration: 0.3 }, 6.0);
+tl.to("#dotC", { width: 40, backgroundColor: "#cfd2ff", duration: 0.3 }, 6.0);
+tl.to("#fing1", { opacity: 0, duration: 0.2 }, 6.5);
+outS("#s2", 6.65);
+
+// S3 camera 7-11
+inS("#s3", 7.0);
+tl.fromTo("#c3", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, 7.25);
+tl.fromTo("#phone2", { x: -90, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease }, 7.05);
+tl.fromTo("#pcCam", { x: 90, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease }, 7.2);
+tl.call(() => { document.getElementById("camState").textContent = "Live"; }, null, 7.9);
+tl.to("#vfWorld", { opacity: 1, duration: 0.4 }, 7.9);
+tl.set("#fing2", { x: 292 - 28, y: 400 - 28 }, 0);
+tl.to("#fing2", { opacity: 1, duration: 0.2 }, 8.2);
+tl.to("#fing2", { scale: 0.8, duration: 0.1 }, 8.5);
+tl.to("#z1", { backgroundColor: "#171d33", color: "#f2f4ff", borderColor: "#262e4d", duration: 0.25 }, 8.52);
+tl.to("#z2", { backgroundColor: "#cfd2ff", color: "#0b0d1a", borderColor: "#cfd2ff", duration: 0.25 }, 8.52);
+tl.to("#fing2", { scale: 1, duration: 0.1 }, 8.6);
+tl.to("#vfWorld", { scale: 2, transformOrigin: "50% 70%", duration: 0.7, ease: "power2.inOut" }, 8.52);
+tl.call(() => { document.getElementById("zoomTxt").textContent = "2.0×"; document.getElementById("vfZoom").textContent = "2.0×"; }, null, 8.7);
+tl.to("#fing2", { x: 245 - 28, y: 308 - 28, duration: 0.35, ease: "power2.inOut" }, 9.1);
+tl.to("#fing2", { scale: 0.8, duration: 0.1 }, 9.5);
+tl.to("#chFront", { backgroundColor: "#cfd2ff", color: "#0b0d1a", borderColor: "#cfd2ff", duration: 0.25 }, 9.52);
+tl.to("#fing2", { scale: 1, opacity: 0, duration: 0.2 }, 9.6);
+tl.to("#flip", { scaleX: -1, duration: 0.5, ease: "power2.inOut" }, 9.52);
+outS("#s3", 10.65);
+
+// S4 pet 11-14.5
+inS("#s4", 11.0);
+tl.fromTo("#pcPet", { y: 60, opacity: 0, scale: 0.95 }, { y: 0, opacity: 1, scale: 1, duration: 0.7, ease }, 11.0);
+tl.fromTo("#c4", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, 11.2);
+tl.fromTo("#pet", { scale: 0.3, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(2)" }, 11.4);
+tl.to("#pet", { y: -36, duration: 0.25, ease: "power2.out", yoyo: true, repeat: 5 }, 11.95);
+tl.to(".pe", { scaleY: 0.1, duration: 0.08, yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, 12.2);
+tl.fromTo("#pc1", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease }, 11.9);
+tl.fromTo("#pc2", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease }, 12.4);
+tl.fromTo("#hat", { y: -50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "back.out(2)" }, 12.5);
+tl.fromTo("#pc3", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease }, 12.9);
+tl.fromTo("#shades", { y: -40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, ease: "back.out(2)" }, 13.0);
+tl.to("#pet", { rotation: 6, duration: 0.25, yoyo: true, repeat: 3, ease: "sine.inOut", transformOrigin: "50% 100%" }, 13.1);
+outS("#s4", 14.15);
+
+// S5 touch + voice 14.5-18
+inS("#s5", 14.5);
+tl.fromTo("#pad", { x: -60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease }, 14.5);
+tl.fromTo("#voicecard", { x: 60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease }, 14.6);
+tl.fromTo("#c5a", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease }, 15.0);
+tl.fromTo("#c5b", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease }, 15.5);
+tl.set("#tf1", { x: 300, y: 330 }, 0);
+tl.set("#tf2", { x: 420, y: 330 }, 0);
+tl.to(["#tf1", "#tf2"], { opacity: 1, duration: 0.2 }, 15.0);
+tl.to(["#tf1", "#tf2"], { y: 130, duration: 0.55, ease: "power2.inOut" }, 15.2);
+tl.to("#tf1", { x: 230, y: 260, duration: 0.55, ease: "power2.inOut" }, 16.0);
+tl.to("#tf2", { x: 490, y: 90, duration: 0.55, ease: "power2.inOut" }, 16.0);
+tl.to(["#tf1", "#tf2"], { opacity: 0, duration: 0.25 }, 16.7);
+tl.fromTo("#listen", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 16.0);
+tl.fromTo("#micRing", { scale: 1, opacity: 0.8 }, { scale: 1.5, opacity: 0, duration: 0.7, ease: "power1.out", repeat: 2 }, 16.0);
+tl.to("#mic", { scale: 1.08, duration: 0.35, yoyo: true, repeat: 3, ease: "sine.inOut" }, 16.0);
+outS("#s5", 17.65);
+
+// S6 connect 18-21
+inS("#s6", 18.0);
+tl.fromTo("#shot", { x: 70, opacity: 0, scale: 0.96 }, { x: 0, opacity: 1, scale: 1, duration: 0.7, ease }, 18.02); // beat-locked: 18.02s
+tl.fromTo("#c6a", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease }, 18.15);
+tl.fromTo("#c6b", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, 18.55);
+tl.to("#shot", { scale: 1.03, duration: 2.4, ease: "none" }, 18.75);
+outS("#s6", 20.65);
+
+// S7 outro 21-24
+inS("#s7", 21.0);
+tl.fromTo("#logo2", { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(1.8)" }, 21.01); // beat-locked: 21.01s
+tl.fromTo("#o1", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease }, 21.25);
+tl.fromTo("#o2", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, 21.6);
+tl.fromTo("#o3", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, 21.95);
+
+window.__timelines["main"] = tl;
+</script>
+</body>
+</html>

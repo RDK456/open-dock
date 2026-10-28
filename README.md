@@ -1,51 +1,93 @@
+<p align="center"><img src="site/assets/icon.png" width="96" alt="Open Dock"></p>
+
 # Open Dock
 
-Phone control deck and local PC companion.
+Turn your phone into a PC dock: media keys, hotkeys, app launchers, live PC stats, voice commands, a touchpad, a webcam and a desktop pet. Free and open source. Works over Wi-Fi, or USB on Android.
 
-## Download
+<a href="docs/media/brag.mp4"><img src="docs/media/brag.jpg" alt="Open Dock launch video (click to play)"></a>
 
-Get the latest installers from the [Releases page](https://github.com/RDK456/open-dock/releases/latest). After the first install, Open Dock updates itself.
+<p align="center">
+  <img src="site/assets/s_deck.png" width="49%" alt="Deck">
+  <img src="site/assets/s_touch.png" width="49%" alt="Touchpad">
+  <img src="site/assets/s_voice.png" width="49%" alt="Voice">
+  <img src="site/assets/s_connect.png" width="49%" alt="Connect">
+</p>
 
-- **Windows:** `Open Dock_*_x64-setup.exe`. Windows may say "Windows protected your PC" because the installer isn't signed; choose **More info → Run anyway**.
-- **macOS:** `Open Dock_*_aarch64.dmg` for Apple silicon (M1 and later) or `Open Dock_*_x64.dmg` for Intel. The app isn't notarized by Apple, so the first time, open **System Settings → Privacy & Security** and choose **Open Anyway** (on macOS 14 and earlier, right-click the app and choose **Open**).
-- **Android:** `OpenDock.apk`. Allow installs from your browser or file manager when Android asks.
+## Install
 
-## Run the PC companion (Windows or macOS)
+Download from the [latest release](https://github.com/RDK456/open-dock/releases/latest). After the first install, Open Dock updates itself.
 
-```powershell
-cd pc-companion
-npm install
-npm run tauri dev
+| Platform | File | First-run note |
+|---|---|---|
+| Windows | `Open Dock_*_x64-setup.exe` | "Windows protected your PC": choose **More info → Run anyway** (installer is unsigned). |
+| macOS | `Open Dock_*_aarch64.dmg` (Apple silicon) or `_x64.dmg` (Intel) | Not notarized: **System Settings → Privacy & Security → Open Anyway**. Also allow Open Dock under **Accessibility** so it can send media keys. |
+| Android | `OpenDock.apk` | Allow installs from your browser or file manager. |
+
+iOS runs from source with Expo Go (Wi-Fi only).
+
+## Get started
+
+1. Open **Open Dock** on your PC. It shows a pairing QR code.
+2. Put the phone on the same Wi-Fi network.
+3. On the phone, open the **Connect** tab and scan the QR code. Pairing is saved; next time it reconnects on its own.
+
+**USB (Android):** enable USB debugging, plug in the phone, pick **Android USB → Set up USB** in the PC app. Afterwards switch between Wi-Fi and USB from **Connect**.
+
+## How to use it
+
+The side bar switches between five tabs: **Deck**, **Touch**, **Voice**, **Camera**, **Connect**.
+
+### Deck
+
+| Gesture | What it does |
+|---|---|
+| Tap a key | Runs it: media key, shortcut, app launch or a sequence of shortcuts. |
+| Long-press a key | Runs its secondary action, if one is set. |
+| Swipe left / right *(full screen)* | Previous / next page. |
+| Swipe up / down *(full screen)* | Next / previous profile. |
+| Drag a slider or scrub bar | Volume, seek and similar widgets follow your finger. |
+| ✏️ Edit | Tap a key to change it, **+** to add one, long-press to pin it to the side rail. |
+| ⤢ Expand | Full-screen deck, no tab bar. |
+
+Tap the PC name (top right) to switch between paired PCs.
+
+### Touch (touchpad)
+
+| Gesture | What it does |
+|---|---|
+| One finger | Move the cursor. |
+| Tap | Left click. |
+| Two-finger tap | Right click. |
+| Two fingers, same direction | Scroll. |
+| Pinch | Zoom. |
+| ✊ button | Hold left button to drag; tap again to release. |
+| ⌨ button | Type on the PC from the phone keyboard. |
+| Speed button | Cycle pointer speed. |
+
+### Voice
+
+Tap the mic and say a command, or turn on hands-free and say your wake phrase (works while you use other apps).
+
+### Camera
+
+Use the phone as a webcam: start it on the **Camera** tab, then open the Camera section in the PC app. Switch front/back, torch, stabilise and zoom from the phone.
+
+### Pet
+
+A desktop pet widget that plays games, wears outfits and reacts to your music.
+
+## Build from source
+
+```bash
+# PC app (Windows or macOS; macOS needs Xcode Command Line Tools)
+cd pc-companion && npm install && npm run tauri dev
+
+# Phone app
+cd phone-app && npm install && npm start
 ```
 
-The Open Dock desktop app listens on port `39421` and displays a pairing QR code. Keep both devices on the same Wi-Fi network. The macOS companion supports Catalina (10.15) and later and must be built on a Mac with Xcode Command Line Tools. On macOS, allow Open Dock in **System Settings → Privacy & Security → Accessibility** so it can send media keys and shortcuts.
-
-## Run the phone app
-
-```powershell
-cd phone-app
-npm install
-npm start
-```
-
-Open the project in Expo Go on a phone on the same Wi-Fi. In the **Connect** tab, scan the Wi-Fi QR code in Open Dock for desktop. Pairing details are stored securely on the phone. Use a trusted Wi-Fi network while connected. Manual entry remains available as a fallback.
-
-The phone deck supports multiple pages, custom keyboard shortcuts, app-launch buttons, ordered shortcut sequences, selectable Lucide icons, and per-page button ordering. Paired PCs are saved on the phone and can be switched from **Connect → Paired devices**. To use Android over USB, install Android SDK Platform-Tools, enable USB debugging, connect and authorize one phone, then select **Android USB** and **Set up USB** in the PC app. Scan once when pairing initially; afterward switch between Wi-Fi and USB from the phone's **Connect** screen. Open Dock retains the PC's pairing key and restores ADB forwarding when the authorized phone reconnects.
-
-iOS uses Wi-Fi. iOS does not provide a general-purpose USB data channel from an app to a PC; Apple's External Accessory framework is for compatible MFi accessories. [Apple External Accessory docs](https://developer.apple.com/documentation/externalaccessory)
-
-Android's ADB reverse feature forwards a device port to the host and works with USB-connected physical devices. [Android ADB reverse docs](https://developer.android.com/develop/ui/views/layout/webapps/access-local-server)
-
-The app uses the React Native WebSocket API and the companion protocol documented in [the PC companion README](pc-companion/README.md).
-
-## Release
-
-Run `bash scripts/setup-release-signing.sh` once to create the signing keys and store them as GitHub Actions secrets. Back up `~/.open-dock-signing`: installed apps can't update without those keys.
-
-To ship, run `node scripts/bump-version.ts 1.2.0`, commit, then `git tag v1.2.0 && git push origin v1.2.0`. The **Release** workflow builds Windows, macOS and Android into a draft GitHub release. Publish the draft to make it the latest release.
-
-Updates download only what changed when the release has patches from the previous version. Before you publish, run `python scripts/make-delta.py release <previous version> <old setup.exe> <new setup.exe> <old OpenDock.apk> <new OpenDock.apk> latest.json`, then upload the two `.patch` files and the updated `latest.json`. This needs `pip install bsdiff4`, 7-Zip, and the updater signing key in `TAURI_SIGNING_PRIVATE_KEY`. Without patches, apps download the full installer or APK.
+The PC app listens on port `39421`. Protocol details: [pc-companion/README.md](pc-companion/README.md).
 
 ## License
 
-Open Dock is free software under the [GNU General Public License v3.0](LICENSE). `phone-app/` also contains files from Expo's app template, which are MIT licensed (`phone-app/LICENSE`). macOS release builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause). The color icons in the PC app's icon picker (`pc-companion/src/color-icons.json`) come from the [Papirus icon theme](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme) (GPL-3.0).
+[GPL-3.0](LICENSE). `phone-app/` includes MIT-licensed Expo template files; macOS builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause); picker icons come from the [Papirus theme](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme) (GPL-3.0).
