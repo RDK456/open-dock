@@ -27,14 +27,17 @@ const METRICS = [
   { id: 'diskio', name: 'Disk activity', short: 'Disk I/O', u: 'MB/s', max: 1, sample: '999MB/s', rate: true },
   { id: 'net', name: 'Download', short: 'Net ↓', u: 'MB/s', max: 0.1, sample: '999MB/s', rate: true },
   { id: 'power', name: 'GPU power', short: 'GPU pwr', u: 'W', max: 300, sample: '300W', gpu: true },
+  // Frames per second of the game in front, counted by the PC from its present calls; it has no
+  // value while no game is in front. Graphs scale to the last minute's peak, never below `max`.
+  { id: 'fps', name: 'Game FPS', short: 'FPS', u: 'fps', max: 60, sample: '999fps' },
 ];
 const M = Object.fromEntries(METRICS.map((m) => [m.id, m]));
 // The PC samples only what's on screen. These map a reading to the sample groups it uses
 // (pc_stats::Needs in the Rust backend); every GPU reading comes from "gpu".
-const USES = { cpu: ['cpu', 'clock'], cputemp: ['cputemp'], gpu: ['gpu'], gputemp: ['gpu'], vram: ['gpu'], power: ['gpu'], ram: ['ram'], disk: ['disk'], diskio: ['diskio'], net: ['net'] };
+const USES = { cpu: ['cpu', 'clock'], cputemp: ['cputemp'], gpu: ['gpu'], gputemp: ['gpu'], vram: ['gpu'], power: ['gpu'], ram: ['ram'], disk: ['disk'], diskio: ['diskio'], net: ['net'], fps: ['fps'] };
 // The readings each dashboard shows.
 const DASH = { strip: ['cpu', 'gpu', 'ram', 'cputemp', 'gputemp'], overview: ['cpu', 'gpu', 'ram', 'vram', 'cputemp', 'gputemp'], monitor: ['cpu', 'gpu', 'cputemp', 'gputemp', 'power', 'ram'], cores: ['cpu', 'cputemp'] };
-const PAIR = { cpu: 'cputemp', cputemp: 'cpu', gpu: 'gputemp', gputemp: 'gpu', ram: 'vram', vram: 'ram', disk: 'diskio', diskio: 'net', net: 'diskio', power: 'gputemp' };
+const PAIR = { cpu: 'cputemp', cputemp: 'cpu', gpu: 'gputemp', gputemp: 'gpu', ram: 'vram', vram: 'ram', disk: 'diskio', diskio: 'net', net: 'diskio', power: 'gputemp', fps: 'gpu' };
 
 // --- Readings -----------------------------------------------------------
 const has = (v) => typeof v === 'number' && isFinite(v);
@@ -71,6 +74,7 @@ const rateText = (v) => (kilo(v) ? String(Math.round(v * 1000)) : v < 10 ? v.toF
 const approx = (k) => (k === 'cputemp' ? !!last().cputempApprox : k === 'gputemp' ? !!(gpuOf(last()) || {}).tempApprox : false);
 // GPU power has no fixed top; the card's power limit is its 100%.
 const maxOf = (k) => {
+  if (k === 'fps') return Math.max(M.fps.max, Math.ceil(Math.max(0, ...series(k).filter(has)) / 30) * 30);
   if (M[k].rate) return Math.max(M[k].max, ...series(k).filter(has)) * 1.15;
   if (k !== 'power') return M[k].max;
   const g = gpuOf(last());
@@ -84,6 +88,7 @@ function reason(k) {
     if (g.state === 'no-driver') return 'No driver';
     if (g.state === 'sleeping') return 'Asleep';
   }
+  if (k === 'fps') return history.length ? 'No game' : '';
   return history.length ? 'No sensor' : '';
 }
 const num = (k, v = val(k)) => (!has(v) ? '–' : M[k].rate ? rateText(v) : M[k].dec ? v.toFixed(M[k].dec) : String(Math.round(v)));
@@ -119,6 +124,7 @@ const detail = {
   disk: () => gb(last().diskUsed, last().diskTotal),
   net: () => (has(last().netUp) ? `↑ ${rateText(last().netUp)} ${unit('net', last().netUp)}` : ''),
   diskio: () => (has(last().diskRead) && has(last().diskWrite) ? `Read ${rateText(last().diskRead)} ${unit('diskio', last().diskRead)} · Write ${rateText(last().diskWrite)} ${unit('diskio', last().diskWrite)}` : ''),
+  fps: () => (last().fpsGame ? `${last().fpsGame}${last().fpsMode ? ` · ${last().fpsMode}` : ''}` : ''),
   power: () => { const g = gpuOf(last()); return gpuNote(powerPercent(g) ? 'of power limit' : g && has(g.powerLimit) ? `of ${Math.round(g.powerLimit)} W` : ''); },
 };
 const q = (s, r) => r.querySelector(s);

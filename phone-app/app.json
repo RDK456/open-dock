@@ -3,7 +3,7 @@
     "name": "Open Dock",
     "slug": "open-dock-phone",
     "scheme": "opendock",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "backgroundColor": "#09090b",
@@ -26,7 +26,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "versionCode": 4,
+      "versionCode": 5,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES"
       ]

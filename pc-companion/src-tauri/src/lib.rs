@@ -318,7 +318,7 @@ const PC_STATS_STYLES: &[&str] = &[
     "ring", "number", "fill", "dial", "spark", "segments", "area", "pair", "graph", "gauge", "columns", "heat", "strip",
     "overview", "monitor", "cores",
 ];
-const PC_STATS_METRICS: &[&str] = &["cpu", "cputemp", "gpu", "gputemp", "ram", "vram", "disk", "diskio", "net", "power"];
+const PC_STATS_METRICS: &[&str] = &["cpu", "cputemp", "gpu", "gputemp", "ram", "vram", "disk", "diskio", "net", "power", "fps"];
 
 /// Pet ids defined in pc-companion/src/pet/pet.js (scripts/check-pet.ts keeps them in sync).
 const PET_FACES: &[&str] = &["buddy", "cyclops", "pixel", "cat"];

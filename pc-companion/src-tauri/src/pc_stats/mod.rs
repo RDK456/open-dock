@@ -10,6 +10,8 @@ mod parse;
 #[cfg(windows)]
 mod amd;
 #[cfg(windows)]
+mod fps;
+#[cfg(windows)]
 mod intel;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -182,7 +184,9 @@ impl Needs {
     pub(super) const DISK: Needs = Needs(1 << 6);
     pub(super) const DISKIO: Needs = Needs(1 << 7);
     pub(super) const NET: Needs = Needs(1 << 8);
-    const NAMES: [(&'static str, Needs); 9] = [
+    /// The game in front: frame rate, name and window mode.
+    pub(super) const FPS: Needs = Needs(1 << 9);
+    const NAMES: [(&'static str, Needs); 10] = [
         ("cpu", Needs::CPU),
         ("cores", Needs::CORES),
         ("clock", Needs::CLOCK),
@@ -192,6 +196,7 @@ impl Needs {
         ("disk", Needs::DISK),
         ("diskio", Needs::DISKIO),
         ("net", Needs::NET),
+        ("fps", Needs::FPS),
     ];
 
     /// From reading names; unknown names are ignored.
@@ -299,6 +304,13 @@ pub(super) struct PcStats {
     net: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     net_up: Option<f32>,
+    /// The game in front: frames per second, its name and "Fullscreen", "Borderless" or "Windowed".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fps: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fps_game: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fps_mode: Option<&'static str>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(super) gpus: Vec<GpuStats>,
 }
@@ -401,6 +413,9 @@ pub(super) fn spawn_pc_stats_monitor(updates: watch::Sender<PcStatsHistory>, dem
         let mut networks = Networks::new();
         let mut disks = Disks::new();
         let mut sensors: Option<Sensors> = None;
+        // The present-call trace runs only while an FPS widget is on screen.
+        #[cfg(windows)]
+        let mut frames: Option<fps::FpsMeter> = None;
         let mut dump = open_dump();
         let mut history = VecDeque::with_capacity(HISTORY);
         let mut last_sample = Instant::now();
@@ -418,6 +433,10 @@ pub(super) fn spawn_pc_stats_monitor(updates: watch::Sender<PcStatsHistory>, dem
                 }
                 // Platform sensors (PDH queries, GPU handles, vendor libraries) are released while idle.
                 sensors = None;
+                #[cfg(windows)]
+                {
+                    frames = None;
+                }
                 before = needs;
                 continue;
             }
@@ -519,6 +538,24 @@ pub(super) fn spawn_pc_stats_monitor(updates: watch::Sender<PcStatsHistory>, dem
                 });
                 stats.net = Some(rate(down, elapsed));
                 stats.net_up = Some(rate(up, elapsed));
+            }
+
+            #[cfg(windows)]
+            if needs.has(Needs::FPS) {
+                // Frames counted since the last tick; the trace starts this second and reports from the next.
+                // Refused without admin rights; it is tried again each second.
+                if frames.is_none() {
+                    frames = fps::FpsMeter::new();
+                }
+                if let (Some(meter), false) = (&mut frames, fresh.has(Needs::FPS)) {
+                    if let Some(reading) = meter.read(elapsed) {
+                        stats.fps = Some(reading.fps);
+                        stats.fps_game = Some(reading.game);
+                        stats.fps_mode = Some(reading.mode);
+                    }
+                }
+            } else {
+                frames = None;
             }
 
             if let Some(file) = &mut dump {
