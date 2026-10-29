@@ -42,9 +42,27 @@ const NOT_GAMES: &[&str] = &["explorer", "dwm", "chrome", "msedge", "firefox", "
 /// A windowed program that is not a known game shows an FPS only above this.
 const WINDOWED_MIN_FPS: f32 = 20.0;
 
+/// Presents since the last read, with the first and last event time (100 ns), so the rate does not
+/// depend on when Windows hands the buffered events over.
+#[derive(Clone, Copy, Default)]
+struct Presents {
+    n: u32,
+    first: i64,
+    last: i64,
+}
+
+impl Presents {
+    fn rate(self) -> f32 {
+        if self.n < 2 || self.last <= self.first {
+            return 0.0;
+        }
+        (self.n - 1) as f32 * 1e7 / (self.last - self.first) as f32
+    }
+}
+
 /// Presents per process since the last read: [DXGI and D3D9, kernel].
-fn counts() -> &'static Mutex<HashMap<u32, [u32; 2]>> {
-    static COUNTS: OnceLock<Mutex<HashMap<u32, [u32; 2]>>> = OnceLock::new();
+fn counts() -> &'static Mutex<HashMap<u32, [Presents; 2]>> {
+    static COUNTS: OnceLock<Mutex<HashMap<u32, [Presents; 2]>>> = OnceLock::new();
     COUNTS.get_or_init(Default::default)
 }
 
@@ -58,7 +76,13 @@ unsafe extern "system" fn on_event(record: *mut EVENT_RECORD) {
     };
     if header.EventDescriptor.Id == wanted {
         if let Ok(mut counts) = counts().lock() {
-            counts.entry(header.ProcessId).or_default()[slot] += 1;
+            let at = header.TimeStamp;
+            let presents = &mut counts.entry(header.ProcessId).or_default()[slot];
+            if presents.n == 0 {
+                presents.first = at;
+            }
+            presents.n += 1;
+            presents.last = at;
         }
     }
 }
@@ -75,7 +99,9 @@ fn properties() -> Vec<u64> {
     unsafe {
         (*properties).Wnode.BufferSize = size as u32;
         (*properties).Wnode.Flags = WNODE_FLAG_TRACED_GUID;
-        (*properties).Wnode.ClientContext = 1;
+        // Event times in system time (100 ns), and buffers handed over every second.
+        (*properties).Wnode.ClientContext = 2;
+        (*properties).FlushTimer = 1;
         (*properties).LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
         (*properties).LoggerNameOffset = std::mem::size_of::<EVENT_TRACE_PROPERTIES>() as u32;
     }
@@ -142,11 +168,11 @@ impl FpsMeter {
     }
 
     /// The game in front and its frame rate over the last `seconds`; None when nothing in front is a game.
-    pub(super) fn read(&mut self, seconds: f32) -> Option<FpsReading> {
+    pub(super) fn read(&mut self) -> Option<FpsReading> {
         let seen = std::mem::take(&mut *counts().lock().ok()?);
         let (window, pid) = foreground()?;
         let [primary, kernel] = seen.get(&pid).copied().unwrap_or_default();
-        let fps = if primary > 0 { primary } else { kernel } as f32 / seconds;
+        let fps = if primary.n > 0 { primary } else { kernel }.rate();
         let app = crate::foreground_app()?;
         let known = crate::game_name(&app);
         let stem = Path::new(&app.path).file_stem()?.to_str()?.to_lowercase();
@@ -208,11 +234,11 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_secs(4));
         let seen = counts().lock().unwrap().clone();
         let mut rows: Vec<_> = seen.into_iter().collect();
-        rows.sort_by_key(|(_, count)| std::cmp::Reverse(count[0] + count[1]));
+        rows.sort_by_key(|(_, count)| std::cmp::Reverse(count[0].n + count[1].n));
         for (pid, [primary, kernel]) in rows.iter().take(8) {
-            println!("pid {pid}: dxgi/d3d9 {primary}, kernel {kernel}");
+            println!("pid {pid}: dxgi/d3d9 {}, kernel {}", primary.n, kernel.n);
         }
-        println!("{:?}", meter.read(4.0).map(|r| (r.fps, r.game, r.mode)));
+        println!("{:?}", meter.read().map(|r| (r.fps, r.game, r.mode)));
         assert!(!rows.is_empty(), "no present events seen");
     }
 }

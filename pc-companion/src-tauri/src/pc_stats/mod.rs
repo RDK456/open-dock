@@ -548,7 +548,7 @@ pub(super) fn spawn_pc_stats_monitor(updates: watch::Sender<PcStatsHistory>, dem
                     frames = fps::FpsMeter::new();
                 }
                 if let (Some(meter), false) = (&mut frames, fresh.has(Needs::FPS)) {
-                    if let Some(reading) = meter.read(elapsed) {
+                    if let Some(reading) = meter.read() {
                         stats.fps = Some(reading.fps);
                         stats.fps_game = Some(reading.game);
                         stats.fps_mode = Some(reading.mode);
