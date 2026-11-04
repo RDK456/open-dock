@@ -105,7 +105,7 @@ impl Sensors {
             return Some(CpuTemp {
                 celsius,
                 approx: false,
-                source: "pawnio-msr",
+                source: "pawnio",
             });
         }
         let (counter, tenths) = counters.thermal?;
