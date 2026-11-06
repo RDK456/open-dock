@@ -79,6 +79,13 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 // Some phones (iPhones especially) let a connection to an address nobody answers hang for over a minute.
 const CONNECT_TIMEOUT_MS = 5000;
 const RECONNECT_MAX_DELAY_MS = 4000;
+/** Wait before try number `attempt`: 1, 2, 4 s, then 4 s for a while, 15 s after ~40 s, 60 s after ~5 min; 60 s in the background. */
+export function reconnectDelay(attempt: number, foreground: boolean) {
+  if (!foreground) return 60_000;
+  if (attempt >= 30) return 60_000;
+  if (attempt >= 10) return 15_000;
+  return Math.min(RECONNECT_MAX_DELAY_MS, 1000 * 2 ** attempt);
+}
 const USB_PROBE_MS = 10_000;
 const DECK_CACHE_KEY = 'opendock.deck-snapshot';
 const DEVICE_SELECTION_KEY = 'opendock.device-navigation';
@@ -407,7 +414,8 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         : next.transport === 'usb' ? (isLoopback(next.host) ? null : { ...next, transport: 'wifi' })
           : { ...next, transport: 'usb' };
       // Quick, steady tries (1, 2, then every 4 s): the deck should be back within seconds of the PC.
-      const delay = unauthorizedRef.current ? 10_000 : Math.min(RECONNECT_MAX_DELAY_MS, 1000 * 2 ** attempt);
+      // Then slower the longer the PC stays away (and slowest in the background): thousands of failed sockets a day ran the phone out of memory.
+      const delay = unauthorizedRef.current ? 10_000 : reconnectDelay(attempt, AppState.currentState === 'active');
       reconnectAttemptRef.current += 1;
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null;

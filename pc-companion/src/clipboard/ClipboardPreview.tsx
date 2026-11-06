@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import { useTheme } from '../theme';
 import { useElementSize } from '../useElementSize';
 import { SAMPLE_CLIPS } from '.';
 
@@ -9,12 +8,11 @@ type Props = { face?: string; scroll?: string; color?: string; width: number; he
 // It shows sample clips; the real ones come from the PC's clipboard while a phone is showing the widget.
 export function ClipboardPreview({ face = 'list', scroll = 'swipe', color, width, height }: Props) {
   const [frameRef, box] = useElementSize<HTMLDivElement>();
-  const light = useTheme() === 'light';
   const scale = box.width && box.height ? Math.min(box.width / width, box.height / height) : 0;
   const clips = face === 'focus' ? SAMPLE_CLIPS.slice(0, 1) : SAMPLE_CLIPS;
   const style = { width, height, left: (box.width - width * scale) / 2, top: (box.height - height * scale) / 2, transform: `scale(${scale})`, visibility: scale ? 'visible' : 'hidden', '--clip-accent': color ?? '#8b8bf5' } as CSSProperties;
   return <div ref={frameRef} className="clock-face-frame">
-    <div className={`clock-face-host clip-prev clip-prev-${face} ${scroll === 'auto' ? 'clip-prev-auto' : ''} ${light ? 'clip-prev-light' : ''}`} style={style}>
+    <div className={`clock-face-host clip-prev clip-prev-${face} ${scroll === 'auto' ? 'clip-prev-auto' : ''}`} style={style}>
       <div className="clip-prev-list">
         {clips.map((clip, index) => <div key={clip.text} className={`clip-prev-item ${index === 0 ? 'clip-prev-hot' : ''}`}>
           <span className="clip-prev-text">{clip.text}</span>

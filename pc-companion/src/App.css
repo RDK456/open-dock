@@ -1500,7 +1500,7 @@ html[data-motion="off"] .nav-item:hover, html[data-motion="off"] .primary-button
 .camera-detail { display: grid; gap: 12px; }
 .camera-actions, .camera-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .camera-row > span { min-width: 90px; color: var(--muted); font-size: 12px; }
-.camera-preview { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 9px; background: #000; }
+.camera-preview { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 9px; background: black; }
 .camera-preview canvas { width: 100%; height: 100%; object-fit: contain; }
 .camera-preview span { position: absolute; color: var(--muted); font-size: 12px; }
 .camera-controls { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); }
@@ -1511,8 +1511,7 @@ html[data-motion="off"] .nav-item:hover, html[data-motion="off"] .primary-button
 @media (max-width: 760px) { .camera-layout { grid-template-columns: 1fr; } }
 
 /* Clipboard widget preview (clipboard/ClipboardPreview.tsx), drawn at the phone's block size. */
-.clip-prev { --clip-ink: #f4f4f5; --clip-muted: #a1a1aa; --clip-surface: #27272a; --clip-border: #3f3f46; display: flex; flex-direction: column; overflow: hidden; color: var(--clip-ink); font: 14px/1.3 system-ui, sans-serif; background: transparent; }
-.clip-prev-light { --clip-ink: #18181b; --clip-muted: #71717a; --clip-surface: #f4f4f5; --clip-border: #d4d4d8; }
+.clip-prev { --clip-ink: var(--foreground); --clip-muted: var(--muted); --clip-surface: var(--card-raised); --clip-border: var(--border); display: flex; flex-direction: column; overflow: hidden; color: var(--clip-ink); font: 14px/1.3 system-ui, sans-serif; background: transparent; }
 .clip-prev-list { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
 .clip-prev-item { display: flex; align-items: center; gap: 10px; box-sizing: border-box; padding: 0 12px; height: 46px; border: 1px solid var(--clip-border); border-radius: 8px; background: var(--clip-surface); }
 .clip-prev-item.clip-prev-hot { border-color: var(--clip-accent); }
