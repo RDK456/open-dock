@@ -28,7 +28,7 @@ export function ClipboardSettings({ face, scroll, color, block, busy, onChange }
       <ColorField color={color ?? DEFAULT_CLOCK_COLOR} busy={busy} onPick={(value) => onChange({ color: value })} />
     </PanelSection>
     <PanelSection title="Privacy">
-      <p className="panel-note">Open Dock reads this PC’s clipboard only while a phone is showing this widget. Clips stay in memory (never saved), copies a password manager marks as private are skipped, and the list is cleared five minutes after the last phone looks away. Tap a clip on the phone to copy it back to this PC. Text only, on Windows for now.</p>
+      <p className="panel-note">Open Dock reads this PC’s clipboard only while a phone is showing this widget. Clips stay in memory (never saved), copies a password manager marks as private are skipped, and the list is cleared five minutes after the last phone looks away. Tap a clip on the phone to copy it back to this PC, or hold it to copy it to the phone. Text only, on Windows for now.</p>
     </PanelSection>
   </>;
 }

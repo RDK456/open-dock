@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { setStringAsync } from 'expo-clipboard';
 import { ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { copyClipToPc, useClipboard, useClipboardDemand, type Clip } from './clipboard-feed';
 import { Pressable } from './motion';
@@ -76,6 +77,13 @@ export function ClipboardWidget({ connected, focused, face, scroll, color, immer
     later(() => setTapped(null), 4000);
   };
 
+  // Long-press keeps the clip on this phone's own clipboard instead of sending it to the PC.
+  const copyHere = (clip: Clip) => {
+    haptic.select();
+    setStringAsync(clip.text).then(() => setNotice('Copied on this phone'), () => setNotice('Could not copy'));
+    later(() => setNotice(''), 1800);
+  };
+
   // Scrolling.
   const scroller = useRef<ScrollView>(null);
   const offset = useRef(0);
@@ -124,7 +132,7 @@ export function ClipboardWidget({ connected, focused, face, scroll, color, immer
   const empty = !connected ? 'Connect to a PC to see its clipboard.' : !supported ? "Clipboard history isn't available on this PC yet." : items.length === 0 ? 'Copy something on your PC and it shows up here.' : null;
 
   const clipButton = (clip: Clip, children: ReactNode, style: object) => (
-    <Pressable key={clip.id} onPress={() => copy(clip)} style={[style, tapped === clip.id && { borderColor: accent ?? styles.accent.color, backgroundColor: styles.tapped.backgroundColor }]} accessibilityRole="button" accessibilityLabel={`Copy to PC: ${squeeze(clip.text).slice(0, 80)}`}>
+    <Pressable key={clip.id} onPress={() => copy(clip)} onLongPress={() => copyHere(clip)} style={[style, tapped === clip.id && { borderColor: accent ?? styles.accent.color, backgroundColor: styles.tapped.backgroundColor }]} accessibilityRole="button" accessibilityLabel={`Copy to PC: ${squeeze(clip.text).slice(0, 80)}`}>
       {children}
     </Pressable>
   );
@@ -138,7 +146,7 @@ export function ClipboardWidget({ connected, focused, face, scroll, color, immer
             <View key={clip.id} style={{ width: pageWidth }}>
               {clipButton(clip, <>
                 <Text numberOfLines={immersive ? 9 : 6} style={[styles.focusText, immersive && styles.focusTextBig]}>{clip.text}</Text>
-                <Text style={styles.meta}>{ago(clip.atMs, now)} · {index + 1} of {items.length} · tap to copy</Text>
+                <Text style={styles.meta}>{ago(clip.atMs, now)} · {index + 1} of {items.length} · tap: PC · hold: phone</Text>
               </>, styles.focusPage)}
             </View>
           ))}
