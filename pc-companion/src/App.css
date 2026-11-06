@@ -1509,3 +1509,26 @@ html[data-motion="off"] .nav-item:hover, html[data-motion="off"] .primary-button
 .camera-slider b { text-align: right; font-weight: 600; }
 .camera-slider.off { opacity: 0.4; }
 @media (max-width: 760px) { .camera-layout { grid-template-columns: 1fr; } }
+
+/* Clipboard widget preview (clipboard/ClipboardPreview.tsx), drawn at the phone's block size. */
+.clip-prev { --clip-ink: #f4f4f5; --clip-muted: #a1a1aa; --clip-surface: #27272a; --clip-border: #3f3f46; display: flex; flex-direction: column; overflow: hidden; color: var(--clip-ink); font: 14px/1.3 system-ui, sans-serif; background: transparent; }
+.clip-prev-light { --clip-ink: #18181b; --clip-muted: #71717a; --clip-surface: #f4f4f5; --clip-border: #d4d4d8; }
+.clip-prev-list { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+.clip-prev-item { display: flex; align-items: center; gap: 10px; box-sizing: border-box; padding: 0 12px; height: 46px; border: 1px solid var(--clip-border); border-radius: 8px; background: var(--clip-surface); }
+.clip-prev-item.clip-prev-hot { border-color: var(--clip-accent); }
+.clip-prev-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.clip-prev-item small { color: var(--clip-muted); font-size: 11px; }
+.clip-prev-cards .clip-prev-item { height: 88px; flex-direction: column; align-items: stretch; justify-content: space-between; padding: 10px; border-radius: 12px; }
+.clip-prev-cards .clip-prev-text { flex: none; white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-size: 13px; line-height: 17px; }
+.clip-prev-chips .clip-prev-list { flex-direction: row; flex-wrap: wrap; align-content: flex-start; }
+.clip-prev-chips .clip-prev-item { height: 36px; max-width: 100%; padding: 0 14px; border-radius: 999px; }
+.clip-prev-chips .clip-prev-item small { display: none; }
+.clip-prev-focus .clip-prev-list { flex: 1; padding: 14px; }
+.clip-prev-focus .clip-prev-item { flex: 1; flex-direction: column; align-items: stretch; justify-content: space-between; height: auto; padding: 0; border: 0; background: transparent; }
+.clip-prev-focus .clip-prev-text { flex: none; white-space: normal; font-size: 18px; line-height: 24px; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; }
+.clip-prev-dots { display: flex; justify-content: center; gap: 6px; padding-bottom: 10px; }
+.clip-prev-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--clip-border); }
+.clip-prev-dots i.on { background: var(--clip-accent); }
+.clip-prev-auto:not(.clip-prev-focus) .clip-prev-list { animation: clip-prev-drift 9s ease-in-out infinite alternate; }
+@keyframes clip-prev-drift { from { transform: translateY(0); } to { transform: translateY(-30%); } }
+@media (prefers-reduced-motion: reduce) { .clip-prev-auto .clip-prev-list { animation: none; } }

@@ -2,14 +2,15 @@ import { useCallback, useContext, useEffect, useRef, useState, type ComponentPro
 import { useIsFocused, useRouter } from 'expo-router';
 import { Animated, BackHandler, Easing, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
+import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { NavigationBar } from 'expo-navigation-bar';
 import { SvgXml } from 'react-native-svg';
-import { DeckButton, DeckMediaCommand, DeckPlacement, DeckWidget, PlaybackState, SystemMediaState, livePositionMs, useMediaState, usePcConnection } from '../../connection';
+import { DeckButton, DeckMediaCommand, DeckPlacement, DeckWidget, PlaybackState, SystemMediaState, livePositionMs, useMediaState, usePcConnection, useSystemMuted } from '../../connection';
 import { nowPlayingLayout, NowPlayingRow } from '../../now-playing-layout';
+import { ClipboardWidget } from '../../clipboard-widget';
 import { LyricsWidget } from '../../lyrics-widget';
 import { sendWidgetTouch, WebWidgetLayer, type WebWidget, type WidgetTouch } from '../../web-widgets';
 import { countRender, PerfOverlay } from '../../perf-overlay';
@@ -27,7 +28,7 @@ import { MediaToastView, PlayerSheet, SourceChip, useMediaSource } from '../../m
 import { playerColor, type PlayersState } from '../../media-players';
 // A clock, PC stats or pet widget can have a see-through background: the tile under it fades by the same amount.
 function widgetOpacityStyle(widget: { type: string; opacity?: number }, panel: string) {
-  const opacity = (widget.type === 'clock' || widget.type === 'pc_stats' || widget.type === 'pet') ? widget.opacity : undefined;
+  const opacity = (widget.type === 'clock' || widget.type === 'pc_stats' || widget.type === 'pet' || widget.type === 'clipboard') ? widget.opacity : undefined;
   if (opacity === undefined || opacity >= 100) return null;
   return { backgroundColor: fade(panel, opacity / 100), borderColor: 'transparent', boxShadow: 'none' } as const;
 }
@@ -96,7 +97,7 @@ function SpringKey({ style, launch, order = 0, onPress, children, ...props }: Om
   </AnimatedPressable>;
 }
 
-function controlIcon(button: DeckButton, playback: PlaybackState) {
+function controlIcon(button: DeckButton, playback: PlaybackState, muted?: boolean) {
   const { action } = button;
   if (button.icon !== 'auto' && !button.appIconData) return shortcutIcons[button.icon] ?? Command;
   if (action.type === 'media') {
@@ -106,7 +107,8 @@ function controlIcon(button: DeckButton, playback: PlaybackState) {
       next_track: SkipForward,
       volume_down: Volume1,
       volume_up: Volume2,
-      mute: VolumeX,
+      // Shows the sound's state when the PC reports it; a speaker with no waves while it is on.
+      mute: muted === false ? Volume : VolumeX,
     };
     return media[action.command];
   }
@@ -533,6 +535,7 @@ export default function DeckScreen() {
   });
   const connected = status === 'connected';
   const isPlaying = playbackState === 'playing';
+  const muted = useSystemMuted();
   const columns = surface?.columns ?? 3;
   const rows = surface?.rows ?? 2;
   const occupied = surface ? surfaceOccupancy(surface) : new Map<number, SurfaceItem>();
@@ -651,7 +654,7 @@ export default function DeckScreen() {
       if (item.type === 'widget') {
         const placement = item.widget.placement;
         if (placement.row !== row || placement.column !== column) return null;
-        return <View key={item.widget.id} {...(item.widget.type === 'pet' ? petTouches(item.widget.id) : {})} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement), widgetOpacityStyle(item.widget, colors.panel)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' || item.widget.type === 'pet' ? null : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
+        return <View key={item.widget.id} {...(item.widget.type === 'pet' ? petTouches(item.widget.id) : {})} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement), widgetOpacityStyle(item.widget, colors.panel)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' || item.widget.type === 'pet' ? null : item.widget.type === 'clipboard' ? <ClipboardWidget connected={connected} focused={isFocused} face={item.widget.face} scroll={item.widget.scroll} color={item.widget.color} immersive={big} /> : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
       }
       const button = item.button;
       const placement = buttonPlacement(columns, button, surface?.buttons.indexOf(button) ?? 0);
@@ -660,11 +663,12 @@ export default function DeckScreen() {
       const isMediaKey = button.action.type === 'media' && ['play_pause', 'next_track', 'previous_track'].includes(button.action.command);
       const dynamicPlay = button.icon === 'auto' && button.action.type === 'media' && button.action.command === 'play_pause';
       const label = dynamicPlay ? (isPlaying ? 'Pause' : 'Play') : button.label;
-      const Icon = controlIcon(button, playbackState);
+      const Icon = controlIcon(button, playbackState, muted);
+      const mutedKey = muted === true && button.action.type === 'media' && button.action.command === 'mute';
       const order = placement.row * columns + placement.column;
       const surfaceLook = keySurface(order, !!design.iconOnly, big);
       const plateLabel = big && immersiveCellHeight >= 84;
-      return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, design.iconOnly && styles.iconOnlyKey, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : button.longPress && connected ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); press(button, label, true); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityLabel={isFolder ? `${label}, folder` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
+      return <SpringKey key={button.id} order={order} launch={!editing && ['launch_app', 'launch_file', 'launch_folder', 'open_url', 'open_folder'].includes(button.action.type)} style={[big ? styles.immersiveKey : styles.key, surfaceLook.style, mutedKey && { borderColor: colors.accent, borderWidth: 2 }, design.iconOnly && styles.iconOnlyKey, frame(placement), editing && !big && styles.editingKey, !connected && !isFolder && styles.keyDisabled]} onPress={() => editing && !big && activePage ? setEditTarget({ pageId: activePage.id, folderId: folder?.id, button, placement }) : press(button, label)} onLongPress={editing && !big && !isFolder ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); togglePin(button.id); } : button.longPress && connected ? () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); press(button, label, true); } : isMediaKey && connected && mediaSource.canSwitch ? mediaSource.openSheet : undefined} delayLongPress={450} disabled={!connected && !isFolder} accessibilityRole="button" accessibilityState={mutedKey ? { selected: true } : undefined} accessibilityLabel={isFolder ? `${label}, folder` : mutedKey ? `${label}, on` : label} accessibilityHint={isMediaKey && mediaSource.multiple ? 'Long press to choose a media player' : undefined}>
         {isMediaKey && mediaSource.multiple ? <View pointerEvents="none" style={styles.mediaKeyDot} /> : null}
         {editing && !big && pins.includes(button.id) ? <View pointerEvents="none" style={styles.pinDot} /> : null}
         {button.appIconData && button.icon === 'image' ? <Image source={{ uri: button.appIconData }} style={[StyleSheet.absoluteFill, { borderRadius: design.radius }]} resizeMode="cover" /> : button.appIconData ? <Image source={{ uri: button.appIconData }} style={big || design.iconOnly ? { width: iconSize, height: iconSize, borderRadius: iconSize * 0.22 } : styles.appIcon} resizeMode="contain" /> : button.iconSvg && button.icon !== 'auto' ? <SvgXml xml={svgInk(button.iconSvg, surfaceLook.ink)} width={iconSize} height={iconSize} /> : <Icon size={iconSize} color={surfaceLook.ink} strokeWidth={design.iconStroke} />}
@@ -756,7 +760,7 @@ export default function DeckScreen() {
         </View>
         <View style={[styles.railRow, wide && styles.railSide]}>
           <PuckRail vertical={wide} pinned={pinnedButtons} playing={isPlaying} connected={connected} sendMedia={(command) => { sendMediaCommand(command); }} onPress={(button) => press(button, button.label)}
-            renderIcon={(button, size) => { const Icon = controlIcon(button, playbackState); return button.appIconData ? <Image source={{ uri: button.appIconData }} style={{ width: size, height: size }} resizeMode="contain" /> : <Icon size={size} color={colors.text} strokeWidth={1.8} />; }} />
+            renderIcon={(button, size) => { const Icon = controlIcon(button, playbackState, muted); return button.appIconData ? <Image source={{ uri: button.appIconData }} style={{ width: size, height: size }} resizeMode="contain" /> : <Icon size={size} color={colors.text} strokeWidth={1.8} />; }} />
         </View>
         </View>
         {wide ? null : <View style={[styles.feedbackRow, styles.feedbackCompact]}>

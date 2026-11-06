@@ -6,6 +6,7 @@ import { expire, parsePlayers, settle, type PlayersState } from './media-players
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState, Platform } from 'react-native';
 import type { WidgetSurface } from './now-playing-layout';
+import { clearClipboard, receiveClipboard, receiveClipboardResult, setClipboardSender } from './clipboard-feed';
 import { clearPcStats, receivePcStats, setPcStatsSender } from './pc-stats-feed';
 import { countMessage } from './perf-overlay';
 import { setPetWorld } from './pet-world';
@@ -21,14 +22,14 @@ export type PointerEvent = { kind: 'move' | 'scroll'; dx: number; dy: number } |
 export type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
 export type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction; longPress?: DeckAction };
 export type PetOptions = { outfit?: string; mood?: boolean; sound?: boolean; camera?: boolean; sleepy?: number; hyper?: number; shy?: number; grumpy?: number; quietFrom?: number; quietTo?: number };
-export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
+export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'clipboard'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; scroll?: string } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
 export type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
 export type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string };
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type PlaybackState = 'playing' | 'paused' | 'stopped' | 'unavailable';
-export type SystemMediaState = { sourceAppId?: string; sourceName?: string; title?: string; artist?: string; album?: string; playbackState: PlaybackState; positionMs?: number; durationMs?: number; artworkDataUrl?: string; volumePercent?: number; canSeek?: boolean; playbackRate?: number;
+export type SystemMediaState = { sourceAppId?: string; sourceName?: string; title?: string; artist?: string; album?: string; playbackState: PlaybackState; positionMs?: number; durationMs?: number; artworkDataUrl?: string; volumePercent?: number; muted?: boolean; canSeek?: boolean; playbackRate?: number;
   /** When positionMs was reported (Date.now()); while playing, the position has moved on since. */
   receivedAt?: number };
 export type ActionError = 'accessibility_permission_required' | 'app_launch_failed' | 'stale_revision' | 'unknown_button' | 'control_failed';
@@ -164,7 +165,7 @@ function validDeckWidget(value: unknown): value is DeckWidget {
   const placement = widget.placement;
   if (typeof widget.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(widget.id) || !placement || typeof placement !== 'object' ||
       ![placement.row, placement.column, placement.rowSpan, placement.columnSpan].every(Number.isInteger)) return false;
-  if ((widget.type === 'clock' || widget.type === 'pet' || widget.type === 'pc_stats') && (widget as { opacity?: unknown }).opacity !== undefined) {
+  if ((widget.type === 'clock' || widget.type === 'pet' || widget.type === 'pc_stats' || widget.type === 'clipboard') && (widget as { opacity?: unknown }).opacity !== undefined) {
     const opacity = (widget as { opacity?: unknown }).opacity;
     if (typeof opacity !== 'number' || !Number.isInteger(opacity) || opacity < 0 || opacity > 100) return false;
   }
@@ -191,6 +192,11 @@ function validDeckWidget(value: unknown): value is DeckWidget {
     return [stats.face, stats.metric].every((id) => id === undefined || (typeof id === 'string' && /^[a-z]{1,24}$/.test(id))) &&
       (stats.color === undefined || (typeof stats.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(stats.color))) &&
       (stats.gpu === undefined || (typeof stats.gpu === 'string' && /^[a-z0-9-]{1,48}$/.test(stats.gpu)));
+  }
+  if (widget.type === 'clipboard') {
+    const clipboard = widget as Extract<DeckWidget, { type: 'clipboard' }>;
+    return [clipboard.face, clipboard.scroll].every((id) => id === undefined || (typeof id === 'string' && /^[a-z]{1,24}$/.test(id))) &&
+      (clipboard.color === undefined || (typeof clipboard.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(clipboard.color)));
   }
   if (widget.type === 'now_playing' || widget.type === 'lyrics') return true;
   if (widget.type !== 'plugin' || !('pluginId' in widget) || !('widgetId' in widget) || !('renderType' in widget) || !('values' in widget)) return false;
@@ -263,6 +269,10 @@ const subscribeMedia = (listener: () => void) => { mediaListeners.add(listener);
 /** The PC's media session (title, artwork, position...). Re-renders only the component that calls it. */
 export function useMediaState(): SystemMediaState {
   return useSyncExternalStore(subscribeMedia, () => mediaSnapshot);
+}
+/** Whether the PC's sound is muted (undefined when it can't tell). A primitive, so only a change re-renders the caller. */
+export function useSystemMuted(): boolean | undefined {
+  return useSyncExternalStore(subscribeMedia, () => mediaSnapshot.muted);
 }
 
 export function ConnectionProvider({ children }: PropsWithChildren) {
@@ -368,6 +378,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       setMediaState(EMPTY_MEDIA_STATE);
       setActionError(null);
       clearPcStats();
+      clearClipboard();
     }
 
     const retry = () => {
@@ -413,6 +424,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         socketRef.current = null;
         try { socket.close(); } catch { /* it never opened */ }
         setPcStatsSender(null);
+        setClipboardSender(null);
         pendingRequestsRef.current.clear();
         if (shouldReconnectRef.current) retry();
         else if (!terminalErrorRef.current) setStatus('disconnected');
@@ -466,6 +478,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
             // In the background the PC sends nothing (see the AppState effect in this provider).
             if (AppState.currentState !== 'active') socket.send(JSON.stringify({ type: 'set_streaming', active: false }));
             // The PC samples only the readings the stats widgets on screen show.
+            setClipboardSender((message) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); });
             setPcStatsSender((needs) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'pc_stats_subscribe', needs })); });
           }
           if (message.type === 'playback_state' && typeof message.state === 'string' && ['playing', 'paused', 'stopped', 'unavailable'].includes(message.state)) {
@@ -503,6 +516,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
                 positionMs: number('positionMs'),
                 durationMs: number('durationMs'),
                 volumePercent: typeof value.volumePercent === 'number' && Number.isFinite(value.volumePercent) && value.volumePercent >= 0 && value.volumePercent <= 100 ? Math.round(value.volumePercent) : undefined,
+                muted: typeof value.muted === 'boolean' ? value.muted : undefined,
                 canSeek: value.canSeek === true,
                 playbackRate: playbackRate(value.playbackRate),
                 receivedAt: Date.now(),
@@ -512,8 +526,10 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           }
           if (message.type === 'pet_context') setPetWorld({ game: typeof message.game === 'string' && message.game.length <= 64 ? message.game : null });
           if (message.type === 'pc_stats') receivePcStats(message as { history?: unknown; stats?: unknown });
+          if (message.type === 'clipboard') receiveClipboard(message as { supported?: unknown; items?: unknown });
+          if (message.type === 'clipboard_result') receiveClipboardResult(message as { id?: unknown; ok?: unknown; error?: unknown });
           if (message.type === 'media_progress') {
-            const progress = message as { playbackState?: unknown; positionMs?: unknown; durationMs?: unknown; volumePercent?: unknown; playbackRate?: unknown };
+            const progress = message as { playbackState?: unknown; positionMs?: unknown; durationMs?: unknown; volumePercent?: unknown; muted?: unknown; playbackRate?: unknown };
             const finiteTime = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 86_400_000 ? value : undefined;
             setMediaState((current) => ({
               ...current,
@@ -522,6 +538,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
               durationMs: finiteTime(progress.durationMs),
               playbackRate: playbackRate(progress.playbackRate),
               receivedAt: Date.now(),
+              muted: typeof progress.muted === 'boolean' ? progress.muted : current.muted,
               volumePercent: typeof progress.volumePercent === 'number' && Number.isFinite(progress.volumePercent) && progress.volumePercent >= 0 && progress.volumePercent <= 100 ? Math.round(progress.volumePercent) : current.volumePercent,
             }));
           }
@@ -597,6 +614,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         if (socketRef.current !== socket) return;
         socketRef.current = null;
         setPcStatsSender(null);
+        setClipboardSender(null);
         pendingRequestsRef.current.clear();
         if (shouldReconnectRef.current) retry();
         else if (!terminalErrorRef.current) setStatus('disconnected');

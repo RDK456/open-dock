@@ -21,6 +21,8 @@ pub(super) struct SystemMediaState {
     pub(super) duration_ms: Option<u64>,
     pub(super) artwork_data_url: Option<String>,
     pub(super) volume_percent: Option<u8>,
+    /// Whether the PC's output is muted; missing where the PC can't tell.
+    pub(super) muted: Option<bool>,
     /// Whether the current player accepts seek requests.
     pub(super) can_seek: bool,
     /// Playback speed while playing; 0 while a browser buffers. Missing means normal speed.
@@ -40,6 +42,7 @@ impl SystemMediaState {
             duration_ms: None,
             artwork_data_url: None,
             volume_percent: read_system_volume(),
+            muted: read_system_muted(),
             can_seek: false,
             playback_rate: None,
         }
@@ -65,6 +68,7 @@ pub(super) struct ProgressSent {
     position_ms: Option<u64>,
     duration_ms: Option<u64>,
     volume_percent: Option<u8>,
+    muted: Option<bool>,
     playback_rate: Option<f64>,
 }
 
@@ -76,6 +80,7 @@ impl ProgressSent {
             position_ms: media.position_ms,
             duration_ms: media.duration_ms,
             volume_percent: media.volume_percent,
+            muted: media.muted,
             playback_rate: media.playback_rate,
         }
     }
@@ -93,6 +98,7 @@ pub(super) fn progress_worth_sending(last: Option<&ProgressSent>, media: &System
     if last.state != media.playback_state
         || last.duration_ms != media.duration_ms
         || last.volume_percent != media.volume_percent
+        || last.muted != media.muted
         || last.playback_rate != media.playback_rate
         || now.duration_since(last.at) >= PROGRESS_CORRECTION
     {
@@ -167,6 +173,7 @@ pub(super) fn spawn_system_media_monitor(
                             "positionMs": snapshot.position_ms,
                             "durationMs": snapshot.duration_ms,
                             "volumePercent": snapshot.volume_percent,
+                            "muted": snapshot.muted,
                             "playbackRate": snapshot.playback_rate,
                         }),
                     );
@@ -459,6 +466,7 @@ async fn read_system_media_state(
         duration_ms,
         artwork_data_url: artwork_cache.clone(),
         volume_percent: read_system_volume(),
+        muted: read_system_muted(),
         can_seek,
         playback_rate: (playback_state == PlaybackState::Playing).then_some(playback_rate).flatten(),
     }
@@ -550,6 +558,40 @@ pub(super) fn read_system_volume() -> Option<u8> {
 
 #[cfg(not(any(windows, target_os = "macos")))]
 pub(super) fn read_system_volume() -> Option<u8> {
+    None
+}
+
+/// Whether the default output device is muted, so a Mute key can show it. Windows only for now.
+#[cfg(windows)]
+pub(super) fn read_system_muted() -> Option<bool> {
+    use windows::Win32::{
+        Media::Audio::{
+            eConsole, eRender, Endpoints::IAudioEndpointVolume, IMMDeviceEnumerator,
+            MMDeviceEnumerator,
+        },
+        System::Com::{
+            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
+        },
+    };
+
+    unsafe {
+        let initialized_here = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
+        let result = (|| {
+            let devices: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+            let endpoint = devices.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+            let volume: IAudioEndpointVolume = endpoint.Activate(CLSCTX_ALL, None).ok()?;
+            Some(volume.GetMute().ok()?.as_bool())
+        })();
+        if initialized_here {
+            CoUninitialize();
+        }
+        result
+    }
+}
+
+#[cfg(not(windows))]
+pub(super) fn read_system_muted() -> Option<bool> {
     None
 }
 
@@ -876,6 +918,7 @@ fn adapter_media_state(
         duration_ms,
         artwork_data_url: now_playing.artwork_data_url.clone(),
         volume_percent,
+        muted: None,
         can_seek: duration_ms.is_some(),
         playback_rate: if now_playing.playing { now_playing.playback_rate } else { None },
     }

@@ -31,6 +31,7 @@ use tokio::sync::broadcast;
 
 mod adb;
 mod camera;
+mod clipboard;
 mod delta;
 mod icon_png;
 mod island;
@@ -77,6 +78,8 @@ struct AppState {
     pc_stats: tokio::sync::watch::Sender<pc_stats::PcStatsHistory>,
     /// Which readings each phone connection and the desktop editor want sampled.
     pc_stats_demand: Arc<pc_stats::Demand>,
+    /// The clipboard history shown by clipboard widgets on phones.
+    clipboard: Arc<clipboard::ClipboardHistory>,
     /// Ids for phone connections in `pc_stats_demand`.
     next_connection: AtomicU64,
     independent_navigation: AtomicBool,
@@ -272,6 +275,9 @@ struct DeckWidget {
     /// How solid the widget's own background is, 0 to 100 (missing means 100). Clock, PC stats and pet widgets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     opacity: Option<u8>,
+    /// How a clipboard widget scrolls; one of CLIPBOARD_SCROLL. Missing means free swiping.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    scroll: Option<String>,
     /// Pet extras: outfit, mood ring, sounds, personality and quiet hours.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pet: Option<PetOptions>,
@@ -322,6 +328,9 @@ const PC_STATS_METRICS: &[&str] = &["cpu", "cputemp", "gpu", "gputemp", "ram", "
 
 /// Pet ids defined in pc-companion/src/pet/pet.js (scripts/check-pet.ts keeps them in sync).
 const PET_FACES: &[&str] = &["buddy", "cyclops", "pixel", "cat"];
+/// Clipboard widget looks, and how its list scrolls.
+const CLIPBOARD_FACES: &[&str] = &["list", "cards", "chips", "focus"];
+const CLIPBOARD_SCROLL: &[&str] = &["swipe", "snap", "auto"];
 
 fn valid_hex_color(value: &str) -> bool {
     value.len() == 7 && value.starts_with('#') && value[1..].chars().all(|c| c.is_ascii_hexdigit())
@@ -335,6 +344,7 @@ enum DeckWidgetType {
     Lyrics,
     PcStats,
     Pet,
+    Clipboard,
     Plugin,
 }
 
@@ -835,8 +845,9 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         DeckWidgetType::Clock => CLOCK_FACES,
         DeckWidgetType::PcStats => PC_STATS_STYLES,
         DeckWidgetType::Pet => PET_FACES,
+        DeckWidgetType::Clipboard => CLIPBOARD_FACES,
         _ if widget.face.is_some() || widget.color.is_some() => {
-            return Err("Only clock, PC stats and pet widgets have a style or colour".into());
+            return Err("Only clock, PC stats, pet and clipboard widgets have a style or colour".into());
         }
         _ => &[],
     };
@@ -847,9 +858,13 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         return Err("Widget colours must be #rrggbb".into());
     }
     if widget.opacity.is_some_and(|opacity| {
-        opacity > 100 || !matches!(widget.kind, DeckWidgetType::Clock | DeckWidgetType::PcStats | DeckWidgetType::Pet)
+        opacity > 100
+            || !matches!(widget.kind, DeckWidgetType::Clock | DeckWidgetType::PcStats | DeckWidgetType::Pet | DeckWidgetType::Clipboard)
     }) {
-        return Err("Widget opacity must be 0 to 100, on a clock, PC stats or pet widget".into());
+        return Err("Widget opacity must be 0 to 100, on a clock, PC stats, pet or clipboard widget".into());
+    }
+    if widget.scroll.as_deref().is_some_and(|scroll| widget.kind != DeckWidgetType::Clipboard || !CLIPBOARD_SCROLL.contains(&scroll)) {
+        return Err("Unknown clipboard scroll style".into());
     }
     if let Some(pet) = &widget.pet {
         let hour = |value: Option<u8>| value.is_none_or(|hour| hour <= 23);
@@ -883,6 +898,7 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         | DeckWidgetType::Lyrics
         | DeckWidgetType::PcStats
         | DeckWidgetType::Pet
+        | DeckWidgetType::Clipboard
             if widget.plugin_id.is_none()
                 && widget.widget_id.is_none()
                 && widget.render_type.is_none()
@@ -921,7 +937,8 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         | DeckWidgetType::NowPlaying
         | DeckWidgetType::Lyrics
         | DeckWidgetType::PcStats
-        | DeckWidgetType::Pet => Err("Built-in widgets cannot contain plugin metadata".into()),
+        | DeckWidgetType::Pet
+        | DeckWidgetType::Clipboard => Err("Built-in widgets cannot contain plugin metadata".into()),
     }
 }
 
@@ -2358,6 +2375,14 @@ enum ClientMessage {
     PcStatsSubscribe {
         needs: Vec<String>,
     },
+    /// The phone started (true) or stopped (false) showing a clipboard widget.
+    ClipboardSubscribe {
+        on: bool,
+    },
+    /// Put a clip from the history back on this PC's clipboard.
+    ClipboardCopy {
+        id: u64,
+    },
     /// The phone app went to the background (false) or came back (true).
     SetStreaming {
         active: bool,
@@ -3621,6 +3646,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
     let connection_id = state.next_connection.fetch_add(1, Ordering::Relaxed);
     let mut pc_stats_needs = pc_stats::Needs::default();
     let mut pc_stats_history_sent = false;
+    let mut clipboard_updates = state.clipboard.subscribe();
+    // Whether this phone is showing a clipboard widget (it sends clipboard_subscribe).
+    let mut clipboard_on = false;
     loop {
         let incoming = tokio::select! {
             message = socket.recv() => message,
@@ -3742,6 +3770,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                 }
                 continue;
             }
+            changed = clipboard_updates.changed(), if authenticated && clipboard_on => {
+                if changed.is_err() { break; }
+                let items = clipboard_updates.borrow_and_update().clone();
+                let message = serde_json::json!({ "type": "clipboard", "supported": clipboard::ClipboardHistory::SUPPORTED, "items": items });
+                if socket.send(Message::Text(message.to_string().into())).await.is_err() {
+                    break;
+                }
+                continue;
+            }
             changed = pc_stats_updates.changed(), if authenticated => {
                 if changed.is_err() { break; }
                 let history = pc_stats_updates.borrow_and_update().clone();
@@ -3782,7 +3819,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     last_media_content = Some(media.clone());
                     serde_json::json!({ "type": "media_state", "state": media })
                 } else if system_media::progress_worth_sending(progress_sent.as_ref(), &media, now) {
-                    serde_json::json!({ "type": "media_progress", "playbackState": media.playback_state, "positionMs": media.position_ms, "durationMs": media.duration_ms, "volumePercent": media.volume_percent, "playbackRate": media.playback_rate })
+                    serde_json::json!({ "type": "media_progress", "playbackState": media.playback_state, "positionMs": media.position_ms, "durationMs": media.duration_ms, "volumePercent": media.volume_percent, "muted": media.muted, "playbackRate": media.playback_rate })
                 } else {
                     continue;
                 };
@@ -4384,6 +4421,27 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
             }
+            ClientMessage::ClipboardSubscribe { on } if authenticated => {
+                if on != clipboard_on {
+                    state.clipboard.watch(on);
+                    clipboard_on = on;
+                }
+                if on {
+                    let message = serde_json::json!({ "type": "clipboard", "supported": clipboard::ClipboardHistory::SUPPORTED, "items": state.clipboard.snapshot() });
+                    if socket.send(Message::Text(message.to_string().into())).await.is_err() {
+                        break;
+                    }
+                }
+            }
+            ClientMessage::ClipboardCopy { id } if authenticated && clipboard_on => {
+                let reply = match state.clipboard.copy_to_pc(id) {
+                    Ok(()) => serde_json::json!({ "type": "clipboard_result", "id": id, "ok": true }),
+                    Err(error) => serde_json::json!({ "type": "clipboard_result", "id": id, "ok": false, "error": error }),
+                };
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
             ClientMessage::PcStatsSubscribe { needs } if authenticated => {
                 pc_stats_needs = pc_stats::Needs::from_names(&needs[..needs.len().min(16)]);
                 state.pc_stats_demand.set(connection_id, pc_stats_needs, None);
@@ -4458,6 +4516,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
     }
     // This phone no longer needs any readings.
     state.pc_stats_demand.remove(connection_id);
+    if clipboard_on {
+        state.clipboard.watch(false);
+    }
     if let Some(source_id) = legacy_source_id {
         if let Ok(mut offers) = state.legacy_offers.write() {
             if let Some(offer) = offers.get_mut(&source_id) {
@@ -5635,6 +5696,7 @@ pub fn run() {
         media_refresh: Arc::new(tokio::sync::Notify::new()),
         pc_stats,
         pc_stats_demand: Arc::new(pc_stats::Demand::default()),
+        clipboard: Arc::new(clipboard::ClipboardHistory::new()),
         next_connection: AtomicU64::new(1),
         independent_navigation: AtomicBool::new(false),
         navigation_updates,
@@ -5799,6 +5861,7 @@ pub fn run() {
             );
 
             pc_stats::spawn_pc_stats_monitor(state.pc_stats.clone(), state.pc_stats_demand.clone());
+            clipboard::spawn_monitor(state.clipboard.clone());
 
             if let Some(window) = app.get_webview_window("main") {
                 let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
