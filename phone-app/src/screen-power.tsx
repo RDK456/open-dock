@@ -4,6 +4,7 @@ import { Pressable } from './motion';
 import Storage from 'expo-sqlite/kv-store';
 import * as Brightness from 'expo-brightness';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { setAppLock, useAppLockEnabled } from './app-lock';
 import { setPrefs, usePrefs } from './prefs';
 import { LOOKS, setLook, setThemeMode, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
 import { clearWallpaperImage, pickWallpaperImage, setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
@@ -158,6 +159,19 @@ export function FeelSection() {
     <Text style={styles.label}>Motion</Text>
     <Choice options={[[false, 'Off'], [true, 'On']]} value={motion} onChange={(value) => setPrefs({ motion: value })} />
     <Text style={styles.hint}>Off keeps screens, pages and keys still. This switch is Open Dock&apos;s own; it does not follow the phone&apos;s animation setting.</Text>
+  </View>;
+}
+
+/** The Privacy section of the settings tab: an optional lock using the phone's own fingerprint, face or PIN. */
+export function PrivacySection() {
+  const styles = useStyles(makeStyles);
+  const locked = useAppLockEnabled();
+  const [note, setNote] = useState('');
+  return <View style={styles.card}>
+    <Text style={styles.title}>Privacy</Text>
+    <Text style={styles.label}>Lock Open Dock</Text>
+    <Choice options={[[false, 'Off'], [true, 'On']]} value={locked} onChange={(value) => { void setAppLock(value).then((problem) => setNote(problem ?? '')); }} />
+    <Text style={styles.hint}>{note || "Asks for your fingerprint, face or phone PIN when you open the app, or come back after 15 seconds away. Pairing and your deck stay as they are."}</Text>
   </View>;
 }
 

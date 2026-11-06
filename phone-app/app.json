@@ -41,6 +41,7 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      ["expo-local-authentication", { "faceIDPermission": "Allow Open Dock to unlock the app with Face ID." }],
       [
         "expo-camera",
         {

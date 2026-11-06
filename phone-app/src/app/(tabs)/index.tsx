@@ -716,8 +716,8 @@ export default function DeckScreen() {
         <View style={styles.header}>
           <View style={styles.brand}><Image source={appIcon} style={styles.brandIcon} accessibilityIgnoresInvertColors /><Text style={styles.brandName}>Open Dock</Text></View>
           <View style={styles.headerActions}>
-          {connected && activePage ? <Pressable style={[styles.immersiveToggle, editing && styles.editToggleOn]} onPress={() => setEditing((on) => !on)} accessibilityRole="button" accessibilityLabel={editing ? 'Done editing' : 'Edit deck'}>{editing ? <Check size={17} color={colors.onAccent} /> : <Pencil size={16} color={colors.muted} />}</Pressable> : null}
-          <Pressable style={styles.immersiveToggle} onPress={enterImmersive} accessibilityRole="button" accessibilityLabel="Enter full-screen deck"><Maximize2 size={17} color={colors.muted} /></Pressable>
+          {connected && activePage ? <Pressable style={[styles.immersiveToggle, editing && styles.editToggleOn]} hitSlop={5} onPress={() => setEditing((on) => !on)} accessibilityRole="button" accessibilityLabel={editing ? 'Done editing' : 'Edit deck'}>{editing ? <Check size={17} color={colors.onAccent} /> : <Pencil size={16} color={colors.muted} />}</Pressable> : null}
+          <Pressable style={styles.immersiveToggle} hitSlop={5} onPress={enterImmersive} accessibilityRole="button" accessibilityLabel="Enter full-screen deck"><Maximize2 size={17} color={colors.muted} /></Pressable>
           <Pressable style={styles.connectionPill} onPress={() => router.push('/connect')} accessibilityRole="button" accessibilityLabel={`PC ${connected ? 'connected' : 'disconnected'}. Open connection settings`}>
             <View style={[styles.dot, connected ? styles.dotOnline : styles.dotOffline]} />
             <Text style={styles.connectionText} numberOfLines={1}>{connected ? (connection?.deviceName ?? 'Connected') : 'Connect PC'}</Text>

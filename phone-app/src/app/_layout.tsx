@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { Platform } from 'react-native';
+import { AppLockGate } from '../app-lock';
 import { ConnectionProvider } from '../connection';
 import { HandsFreeProvider } from '../hands-free';
 import { setLyricsUserAgent } from '../lyrics';
@@ -26,9 +27,11 @@ export default function RootLayout() {
       <ConnectionProvider>
         <HandsFreeProvider>
           <StatusBar style="auto" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-            <Stack.Screen name="(tabs)" />
-          </Stack>
+          <AppLockGate>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </AppLockGate>
         </HandsFreeProvider>
       </ConnectionProvider>
     </ThemeProvider>
