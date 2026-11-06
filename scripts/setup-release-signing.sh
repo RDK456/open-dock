@@ -183,12 +183,12 @@ finish() {
 # STAGES: one-time creation of Open Dock's release signing keys.
 # ──────────────────────────────────────────────────────────────────────────
 # Run from the repo root: bash scripts/setup-release-signing.sh
-# Keys live outside the repo in ~/.open-dock-signing. Re-running never replaces an
+# Keys live in .open-dock-signing inside the project folder (git-ignored, never committed). Re-running never replaces an
 # existing key (a new key would break updates for every installed copy); it
 # only re-uploads the secrets.
 
 TOTAL_STAGES=5
-KEYS=$(cygpath -m "$HOME/.open-dock-signing" 2>/dev/null || echo "$HOME/.open-dock-signing") # C:/… form works for bash and native tools
+KEYS=$(cygpath -m "$PWD/.open-dock-signing" 2>/dev/null || echo "$PWD/.open-dock-signing") # C:/… form works for bash and native tools
 ENV_FILE="$KEYS/passwords.env"
 P12_OPTS=(-keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1) # readable by macOS `security import` and Java
 

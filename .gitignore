@@ -15,7 +15,8 @@ node_modules/
 Thumbs.db
 *.tsbuildinfo
 
-# Release signing keys live in ~/.open-dock-signing, never here
+# Release signing keys live in .open-dock-signing in this folder, never committed
+.open-dock-signing/
 *.jks
 *.keystore
 *.p12
