@@ -108,10 +108,13 @@ pub(super) fn spawn_monitor(history: Arc<ClipboardHistory>) {
                 if now != last_seen {
                     match platform::read_text() {
                         Read::Busy => {}
+                        // Too long is left out, not cut: tapping a cut clip would put less than was copied back on the PC.
                         Read::Skip => last_seen = now,
                         Read::Text(text) => {
                             last_seen = now;
-                            history.push(text.chars().take(MAX_CHARS).collect());
+                            if text.chars().count() <= MAX_CHARS {
+                                history.push(text);
+                            }
                         }
                     }
                 }

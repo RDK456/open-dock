@@ -13,7 +13,7 @@ const set = (next: State) => { state = next; listeners.forEach((listener) => lis
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 const validClip = (value: unknown): value is Clip => {
   const clip = value as Partial<Clip> | null;
-  return !!clip && typeof clip === 'object' && Number.isSafeInteger(clip.id) && typeof clip.text === 'string' && clip.text.length <= 2000 && typeof clip.atMs === 'number' && Number.isFinite(clip.atMs);
+  return !!clip && typeof clip === 'object' && Number.isSafeInteger(clip.id) && typeof clip.text === 'string' && clip.text.length <= 4000 && typeof clip.atMs === 'number' && Number.isFinite(clip.atMs);
 };
 
 /** Called by the connection for each clipboard message from the PC. */

@@ -102,7 +102,7 @@ export function WebWidgetLayer({ widgets, focused = true }: { widgets: WebWidget
 
   // Touches on this layer's widgets go to the page once it can take them.
   const touchable = useRef(new Set<string>());
-  touchable.current = new Set(widgets.map((widget) => widget.id));
+  useEffect(() => { touchable.current = new Set(widgets.map((widget) => widget.id)); });
   const ready = view.mounted && view.ready;
   useEffect(() => {
     if (!ready) return;
