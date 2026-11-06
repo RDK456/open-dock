@@ -977,7 +977,7 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .deck-rail-add { height: 28px; margin-left: 18px; padding: 0 8px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--subtle); font-size: 12px; cursor: pointer; }
 .deck-rail-add:hover:not(:disabled) { background: var(--z900); color: var(--muted); }
 .deck-rail-add:disabled { opacity: .5; cursor: default; }
-.deck-rail-foot { padding: 10px; border-top: 1px solid var(--border); }
+.deck-rail-foot { display: grid; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
 .deck-rail-foot .secondary-button { width: 100%; }
 .deck-rail-rename { min-width: 0; flex: 1; height: 28px; margin: 2px 4px; padding: 0 8px; border: 1px solid var(--z500); border-radius: 5px; background: var(--input, var(--z950)); color: var(--foreground); font: inherit; font-size: 13px; }
 

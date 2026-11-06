@@ -58,7 +58,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { NowPlayingPreview, REFERENCE_WIDGET_SURFACE } from "./NowPlayingPreview";
 import { LyricsPreview } from "./LyricsPreview";
@@ -122,6 +122,7 @@ type DeckFolder = { id: string; name: string; rows: number; columns: number; but
 type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string; defaultPageId: string; autoSwitchApps: string[]; autoSwitchEnabled: boolean };
 type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; fallbackProfileId: string; migrationNotes?: string[] };
+const PROFILE_FILE_FORMAT = 'open-dock-profile';
 type LegacyImportSummary = { sourceId: string; pages: number; buttons: number; requested: boolean; ready: boolean };
 
 function buttonsOf(profile: DeckProfile): DeckButton[] {
@@ -769,6 +770,7 @@ function DesktopDeckEditor({ config: savedConfig, deviceId, onSaved, playbackSta
   const finishAddRef = useRef<((spec: { label: string; action: DeckAction }, at: { row: number; column: number } | undefined, folderId: string | null, icon?: { kind: 'app' | 'file'; target: string; prefetched?: string | null }) => void) | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [draggingButtonId, setDraggingButtonId] = useState('');
   const [dragOverButtonId, setDragOverButtonId] = useState('');
   const [dragOverCellKey, setDragOverCellKey] = useState('');
@@ -1727,6 +1729,72 @@ function DesktopDeckEditor({ config: savedConfig, deviceId, onSaved, playbackSta
     void save(next);
   }
 
+  // --- Sharing a profile as a file. Auto-switch apps stay behind (they name apps on this PC), and imports can't run scripts until you allow it.
+  async function exportProfile(source: DeckProfile) {
+    setMenu(null);
+    try {
+      const path = await saveFileDialog({ defaultPath: `${source.name.replace(/[\/:*?"<>|]/g, '_')}.json`, filters: [{ name: 'Open Dock profile', extensions: ['json'] }] });
+      if (!path) return;
+      const data = { format: PROFILE_FILE_FORMAT, version: 1, profile: { ...source, autoSwitchApps: [], autoSwitchEnabled: false } };
+      await invoke('write_text_file', { path, contents: JSON.stringify(data, null, 2) });
+    } catch (cause) {
+      setError(String(cause));
+    }
+  }
+
+  async function importProfile(file: File) {
+    if (file.size > 5_000_000) return setError('That file is too large to be an Open Dock profile.');
+    if (deck.profiles.length >= 32) return setError('You can create up to 32 profiles.');
+    try {
+      const data = JSON.parse(await file.text());
+      const raw = data?.format === PROFILE_FILE_FORMAT && data.version === 1 ? data.profile : null;
+      const wellFormed = raw && typeof raw.name === 'string' && Array.isArray(raw.pages) && raw.pages.length > 0 && raw.pages.length <= 32
+        && raw.pages.every((item: DeckPage) => item && typeof item.name === 'string' && Array.isArray(item.buttons) && Array.isArray(item.widgets) && Array.isArray(item.folders));
+      if (!wellFormed) return setError('This is not an Open Dock profile file.');
+      const source = raw as DeckProfile;
+      const pages = source.pages.map((item) => clonePage(item, item.name));
+      const pageIds = new Map(source.pages.map((item, index) => [item.id, pages[index].id]));
+      const indexOf = (id: string) => Math.max(0, source.pages.findIndex((item) => item.id === id));
+      let switchedOff = 0;
+      let dropped = 0;
+      // Returns null when the action can't mean anything on this PC (it points at a profile or page that isn't here).
+      const adapt = (action: DeckAction): DeckAction | null => {
+        if (action.type === 'select_profile') return null;
+        if (action.type === 'select_page') return pageIds.has(action.pageId) ? { ...action, pageId: pageIds.get(action.pageId)! } : null;
+        if ((action.type === 'run_script' || action.type === 'plugin_action') && action.allowOnPc) { switchedOff++; return { ...action, allowOnPc: false }; }
+        return action;
+      };
+      const taken = deck.profiles.map((item) => item.name);
+      const base = fitBytes(source.name, 32) || 'Imported profile';
+      const imported: DeckProfile = {
+        id: freshId('profile'),
+        name: taken.some((name) => name.toLowerCase() === base.toLowerCase()) ? copyName(base, taken, 32) : base,
+        pages,
+        activePageId: pages[indexOf(source.defaultPageId || source.activePageId)].id,
+        defaultPageId: pages[indexOf(source.defaultPageId || source.pages[0].id)].id,
+        autoSwitchApps: [],
+        autoSwitchEnabled: false,
+      };
+      const [rewritten] = rewriteButtons([imported], (button) => {
+        const action = adapt(button.action);
+        if (!action) { dropped++; return null; }
+        const { longPress, ...rest } = button;
+        const press = longPress ? adapt(longPress) : null;
+        return { ...rest, action, ...(press ? { longPress: press } : {}) };
+      });
+      const next = { ...deck, activeProfileId: rewritten.id, profiles: [...deck.profiles, rewritten] };
+      setWorkingConfig(next);
+      setProfileId(rewritten.id);
+      setPageId(rewritten.activePageId);
+      setButtonId('');
+      setWidgetId('');
+      await save(next);
+      if (switchedOff || dropped) setError(`Imported “${rewritten.name}”.${switchedOff ? ` ${switchedOff} script or plugin key${switchedOff === 1 ? ' is' : 's are'} switched off until you allow ${switchedOff === 1 ? 'it' : 'them'}.` : ''}${dropped ? ` ${dropped} key${dropped === 1 ? '' : 's'} that switched to profiles or pages not in this file ${dropped === 1 ? 'was' : 'were'} removed.` : ''}`);
+    } catch (cause) {
+      setError(cause instanceof SyntaxError ? 'That file is not valid JSON.' : String(cause));
+    }
+  }
+
   // --- Reordering and moving pages and profiles.
   function railDropAt(drag: NonNullable<typeof railDragRef.current>, x: number, y: number): { drop: RailDrop; hoverProfile: string } {
     const row = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-rail-row]');
@@ -1951,7 +2019,7 @@ function DesktopDeckEditor({ config: savedConfig, deviceId, onSaved, playbackSta
           </div>;
         })}
       </div>
-      <div className="deck-rail-foot"><button type="button" className="secondary-button" onClick={addProfile} disabled={busy || deck.profiles.length >= 32}><Plus size={14} /> New profile</button></div>
+      <div className="deck-rail-foot"><button type="button" className="secondary-button" onClick={addProfile} disabled={busy || deck.profiles.length >= 32}><Plus size={14} /> New profile</button><button type="button" className="secondary-button" onClick={() => importInputRef.current?.click()} disabled={busy || deck.profiles.length >= 32}>Import…</button><input ref={importInputRef} type="file" accept=".json,application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importProfile(file); }} /></div>
     </aside>
     <div className="deck-main">
       <div className="deck-main-head">
@@ -2068,6 +2136,7 @@ function DesktopDeckEditor({ config: savedConfig, deviceId, onSaved, playbackSta
         </> : <>
           <button type="button" role="menuitem" onClick={() => startRename('profile', menuProfile.id, menuProfile.id, menuProfile.name)}>Rename</button>
           <button type="button" role="menuitem" disabled={deck.profiles.length >= 32} onClick={() => duplicateProfile(menuProfile)}>Duplicate</button>
+          <button type="button" role="menuitem" onClick={() => void exportProfile(menuProfile)}>Export to file…</button>
           <button type="button" role="menuitem" disabled={profileDefault === menuProfile.id} onClick={() => setDefaultProfile(menuProfile.id)}>Set as default profile</button>
           <button type="button" role="menuitem" onClick={() => openSettings(menuProfile.id)}>Profile settings…</button>
           <hr />

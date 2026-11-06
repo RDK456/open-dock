@@ -22,6 +22,8 @@ const TAB_PATHS = TABS.map((tab) => tab.href as string);
 /** Which tab a path is on (the Deck tab is '/'). */
 const tabIndexOf = (path: string) => Math.max(0, TAB_PATHS.findIndex((href) => (href === '/' ? path === '/' || path === '/index' : path.startsWith(href))));
 
+/** Below this width the five tabs no longer fit side by side, so each look tightens its dock. */
+const NARROW = 440;
 const RAIL = 64;
 const GAP = 12;
 /** The tallest dock (Funk's) plus the gap under it. */
@@ -59,7 +61,9 @@ type ItemProps = TabTriggerSlotProps & { tab: (typeof TABS)[number]; look: Look;
 // TabTrigger hands its press handlers and focus to this through `asChild`.
 const Item = forwardRef<ViewType, ItemProps>(function Item({ tab, look, badge, rail, isFocused, ...press }, ref) {
   const { colors, key } = useTheme();
-  const s = itemStyles(look, colors, !!isFocused, rail);
+  const { width } = useWindowDimensions();
+  const compact = !rail && width < NARROW;
+  const s = itemStyles(look, colors, !!isFocused, rail, compact);
   const ink = s.ink;
   // A tab springs when pressed and pops when it becomes the current one.
   const [scale] = useState(() => new Animated.Value(1));
@@ -84,7 +88,8 @@ const Item = forwardRef<ViewType, ItemProps>(function Item({ tab, look, badge, r
       body = <Text style={[styles.signalLabel, { color: ink }]}>{tab.label.toUpperCase()}</Text>;
       break;
     default:
-      body = <><Icon name={tab.name} color={ink} stroke={key.iconStroke} size={20} /><Text style={[look === 'funk' ? styles.funkLabel : styles.dockLabel, { color: ink }]}>{tab.label}</Text></>;
+      // When narrow only the current tab keeps its name (every tab still has its accessibility label).
+      body = <><Icon name={tab.name} color={ink} stroke={key.iconStroke} size={20} />{compact && !isFocused ? null : <Text style={[look === 'funk' ? styles.funkLabel : styles.dockLabel, { color: ink }]}>{tab.label}</Text>}</>;
   }
   return (
     <Pressable ref={ref} {...(press as PressableProps)} onPressIn={(event) => { squash(0.88); (press as PressableProps).onPressIn?.(event); }} onPressOut={(event) => { squash(1); (press as PressableProps).onPressOut?.(event); }} style={s.item} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected: !!isFocused }}>
@@ -94,7 +99,7 @@ const Item = forwardRef<ViewType, ItemProps>(function Item({ tab, look, badge, r
   );
 });
 
-function itemStyles(look: Look, colors: Colors, on: boolean, rail: boolean) {
+function itemStyles(look: Look, colors: Colors, on: boolean, rail: boolean, compact: boolean) {
   // On a rail every look shows icons only, in its own square: Studio's tinted tile, Atelier's bronze side rule,
   // Signal's white disc, Funk's inked block, Glass's and Classic's soft disc.
   if (rail) {
@@ -115,11 +120,11 @@ function itemStyles(look: Look, colors: Colors, on: boolean, rail: boolean) {
     case 'atelier':
       return { ink: on ? colors.text : colors.faint, item: [styles.atelierItem, { borderBottomColor: on ? colors.accent : 'transparent' }] };
     case 'signal':
-      return { ink: on ? colors.onAccent : colors.muted, item: [styles.signalItem, on && { backgroundColor: colors.accent }] };
+      return { ink: on ? colors.onAccent : colors.muted, item: [styles.signalItem, compact && styles.signalItemNarrow, on && { backgroundColor: colors.accent }] };
     case 'funk':
-      return { ink: on ? colors.onAccent : colors.text, item: [styles.funkItem, { borderColor: colors.glassBorder, backgroundColor: on ? colors.accent : colors.panelRaised }] };
+      return { ink: on ? colors.onAccent : colors.text, item: [styles.funkItem, compact && !on && styles.itemIconOnly, { borderColor: colors.glassBorder, backgroundColor: on ? colors.accent : colors.panelRaised }] };
     default:
-      return { ink: on ? colors.text : colors.muted, item: [styles.dockItem, on && { backgroundColor: look === 'glass' ? colors.glass : colors.pressed, borderColor: colors.glassBorder }] };
+      return { ink: on ? colors.text : colors.muted, item: [styles.dockItem, compact && !on && styles.itemIconOnly, on && { backgroundColor: look === 'glass' ? colors.glass : colors.pressed, borderColor: colors.glassBorder }] };
   }
 }
 
@@ -128,6 +133,7 @@ export function LookTabs({ hidden, badge }: { hidden: boolean; badge: boolean })
   const { colors, look } = useTheme();
   const insets = useSafeAreaInsets();
   const rail = useRail(look);
+  const narrow = useWindowDimensions().width < NARROW;
   const pathname = usePathname();
   const router = useRouter();
   const index = tabIndexOf(pathname);
@@ -174,9 +180,9 @@ export function LookTabs({ hidden, badge }: { hidden: boolean; badge: boolean })
     }
     switch (look) {
       case 'atelier':
-        return [styles.dock, styles.atelierDock, { backgroundColor: colors.panel, borderColor: colors.borderStrong, bottom: insets.bottom + GAP }];
+        return [styles.dock, styles.atelierDock, narrow && styles.atelierDockNarrow, { backgroundColor: colors.panel, borderColor: colors.borderStrong, bottom: insets.bottom + GAP }];
       case 'signal':
-        return [styles.dock, styles.signalDock, { backgroundColor: colors.panel, borderColor: colors.borderStrong, bottom: insets.bottom + GAP }];
+        return [styles.dock, styles.signalDock, narrow && styles.signalDockNarrow, { backgroundColor: colors.panel, borderColor: colors.borderStrong, bottom: insets.bottom + GAP }];
       case 'funk':
         return [styles.dock, styles.funkDock, { backgroundColor: colors.panel, borderColor: colors.glassBorder, bottom: insets.bottom + GAP }];
       default:
@@ -226,9 +232,13 @@ const styles = StyleSheet.create({
 
   dock: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', borderWidth: 1 },
   atelierDock: { height: 48, alignItems: 'stretch', gap: 26, paddingHorizontal: 24, borderRadius: 3, borderWidth: StyleSheet.hairlineWidth },
+  atelierDockNarrow: { gap: 12, paddingHorizontal: 14 },
   atelierItem: { justifyContent: 'center', borderBottomWidth: 2 },
   atelierLabel: { fontFamily: 'serif', fontSize: 16, letterSpacing: 0.2 },
   signalDock: { borderRadius: 999, padding: 5, gap: 4 },
+  signalDockNarrow: { gap: 0 },
+  signalItemNarrow: { paddingHorizontal: 10 },
+  itemIconOnly: { paddingHorizontal: 12 },
   signalItem: { borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 },
   signalLabel: { fontFamily: 'monospace', fontSize: 11, fontWeight: '500', letterSpacing: 1.6 },
   softDock: { borderRadius: 28, padding: 6, gap: 4, shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 12 },

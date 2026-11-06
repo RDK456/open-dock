@@ -2867,6 +2867,17 @@ fn validate_legacy_deck(deck: &LegacyPhonePageSet) -> Result<(), String> {
     Ok(())
 }
 
+/// Writes an exported profile the user picked in the save dialog. Only `.json` files, so a bug in the UI can't overwrite other kinds of file.
+#[tauri::command]
+fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    let is_json = path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
+    if !is_json || contents.len() > 5_000_000 {
+        return Err("Open Dock can only save profiles as .json files".into());
+    }
+    fs::write(&path, contents).map_err(|error| format!("Could not save the file: {error}"))
+}
+
 #[tauri::command]
 fn save_deck_config(
     mut config: DeckConfig,
@@ -5651,6 +5662,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
+            write_text_file,
             delta::download_delta_update,
             delta::install_delta_update,
             camera::camera_sources,
