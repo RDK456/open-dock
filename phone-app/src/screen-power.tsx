@@ -8,6 +8,8 @@ import { setAppLock, useAppLockEnabled } from './app-lock';
 import { setPrefs, usePrefs } from './prefs';
 import { ACCENTS, CORNERS, LOOKS, setAccent, setCorners, setLook, setThemeMode, useAccent, useCorners, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
 import { clearWallpaperImage, pickWallpaperImage, setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
+import { sendWallpaperMatch, useDesktopWallpapers } from './desktop-wallpaper-feed';
+import { usePcConnection } from './connection';
 
 const LOOK_HINTS: Record<Look, string> = {
   classic: 'Plain keys in light or dark, with a wallpaper of your choice.',
@@ -151,6 +153,21 @@ export function AppearanceSection() {
     <Choice options={[[0, 'Off'], [0.35, 'Low'], [0.65, 'Medium'], [1, 'High']]} value={gradient} onChange={(value) => setWallpaperSettings({ gradient: value })} />
     </> : null}
     </> : null}
+  </View>;
+}
+
+/** The Match PC wallpaper section: the accent follows the PC wallpaper's colour, and the background its picture. */
+export function MatchPcSection() {
+  const styles = useStyles(makeStyles);
+  const { match, color, items, current } = useDesktopWallpapers();
+  const { status } = usePcConnection();
+  const connected = status === 'connected';
+  const title = items.find((item) => item.id === current)?.title;
+  return <View style={styles.card}>
+    <Text style={styles.title}>Match PC wallpaper</Text>
+    <Text style={styles.label}>Colours and background</Text>
+    <Choice options={[[false, 'Off'], [true, 'On']]} value={match} onChange={(value) => { if (connected) sendWallpaperMatch(value); }} />
+    <Text style={styles.hint}>{!connected ? 'Connect to your PC to change this. ' : ''}{match && color ? `Using ${color}${title ? ` from “${title}”` : ''}. ` : ''}The accent colour and background follow the wallpaper on your PC&apos;s main display. Same switch as the PC&apos;s Settings › Appearance.</Text>
   </View>;
 }
 

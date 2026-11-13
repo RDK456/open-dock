@@ -11,7 +11,7 @@ import { backdrops, wallpaperGlows } from './theme-colors';
 // Soft light behind the Deck and Touch screens, under glass panels. Kept on this phone only, like the theme.
 export type WallpaperId = 'none' | 'aurora' | 'ember' | 'ocean' | 'forest';
 // image: a picture of your own (file uri) shown under the gradient; imageOpacity and gradient are 0–1.
-export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean; image: string | null; imageOpacity: number; gradient: number; keyOpacity: number };
+export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean; image: string | null; imageOpacity: number; gradient: number; keyOpacity: number; ownImage: string | null };
 
 /** A #rrggbb color at the given opacity; anything else (rgba, transparent) is returned as it is. */
 export const fade = (color: string, opacity: number) => opacity >= 1 || !/^#[0-9a-f]{6}$/i.test(color) ? color : `${color}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
@@ -19,7 +19,7 @@ export const fade = (color: string, opacity: number) => opacity >= 1 || !/^#[0-9
 export const WALLPAPERS: [WallpaperId, string][] = [['none', 'None'], ['aurora', 'Aurora'], ['ember', 'Ember'], ['ocean', 'Ocean'], ['forest', 'Forest']];
 
 const KEY = 'opendock.wallpaper';
-const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true, image: null, imageOpacity: 1, gradient: 0.5, keyOpacity: 0.55 };
+const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true, image: null, imageOpacity: 1, gradient: 0.5, keyOpacity: 0.55, ownImage: null };
 const unit = (value: unknown, fallback: number) => typeof value === 'number' && value >= 0 && value <= 1 ? value : fallback;
 
 /** Lets the user pick a picture and keeps a copy in the app's own storage, so it outlives the picker's cache. */
@@ -40,6 +40,20 @@ export function clearWallpaperImage() {
   try { if (old && old.startsWith(Paths.document.uri)) new File(old).delete(); } catch { /* already gone */ }
 }
 
+const PC_FILE = 'pc-wallpaper-';
+const fromPc = (uri: string | null) => !!uri && uri.includes(PC_FILE);
+/** Shows the PC's wallpaper (a JPEG data URL) as the background, or with null puts your own picture back. */
+export function setPcBackdrop(data: string | null) {
+  const old = settings.image;
+  if (data) {
+    const file = new File(Paths.document, `${PC_FILE}${Date.now()}.jpg`);
+    try { file.write(data.slice(data.indexOf(',') + 1), { encoding: 'base64' }); } catch { return; }
+    setWallpaperSettings({ image: file.uri, ownImage: fromPc(old) ? settings.ownImage : old });
+  } else if (fromPc(old)) setWallpaperSettings({ image: settings.ownImage, ownImage: null });
+  else return;
+  try { if (fromPc(old) && old!.startsWith(Paths.document.uri)) new File(old!).delete(); } catch { /* already gone */ }
+}
+
 function read(): WallpaperSettings {
   try {
     const saved = JSON.parse(Storage.getItemSync(KEY) ?? '{}') as Partial<WallpaperSettings>;
@@ -50,6 +64,7 @@ function read(): WallpaperSettings {
       imageOpacity: unit(saved.imageOpacity, DEFAULTS.imageOpacity),
       gradient: unit(saved.gradient, DEFAULTS.gradient),
       keyOpacity: unit(saved.keyOpacity, DEFAULTS.keyOpacity),
+      ownImage: typeof saved.ownImage === 'string' ? saved.ownImage : null,
     };
   } catch {
     return DEFAULTS;
@@ -144,11 +159,11 @@ export function DockBackdrop() {
           <Stop offset="1" stopColor={glow} stopOpacity={0} />
         </RadialGradient>
         <RadialGradient id="dockGlow2" cx="95%" cy="100%" r="65%">
-          <Stop offset="0" stopColor="#8b7cf6" stopOpacity={scheme === 'light' ? 0.28 : 0.4} />
-          <Stop offset="1" stopColor="#8b7cf6" stopOpacity={0} />
+          <Stop offset="0" stopColor={backdrops.dockGlow2} stopOpacity={scheme === 'light' ? 0.28 : 0.4} />
+          <Stop offset="1" stopColor={backdrops.dockGlow2} stopOpacity={0} />
         </RadialGradient>
         <Pattern id="dockGrid" width="28" height="28" patternUnits="userSpaceOnUse">
-          <Circle cx="14" cy="14" r="0.9" fill={scheme === 'light' ? '#000000' : '#ffffff'} opacity={0.1} />
+          <Circle cx="14" cy="14" r="0.9" fill={backdrops.signalDot[scheme]} opacity={0.1} />
         </Pattern>
       </Defs>
       <Rect width="100%" height="100%" fill="url(#dockBase)" />

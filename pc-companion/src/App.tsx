@@ -90,6 +90,7 @@ import { phoneGridShape, widgetBlockSize, type WidgetSurface } from "./now-playi
 import { version } from "../package.json";
 import { UpdatesSetting, useUpdater } from "./updates";
 import { AppearanceSetting, inkIcon, motionOn, useTheme } from "./theme";
+import { useWallpaperMatch, WallpaperMatchSetting } from "./wallpaper/match";
 
 type DeviceInfo = { id: string; name: string; phoneName: string; online: boolean; ownDeck: boolean };
 
@@ -128,7 +129,7 @@ type LucideRegistry = Record<string, typeof Command>;
 type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string; defaultPageId: string; autoSwitchApps: string[]; autoSwitchEnabled: boolean };
-type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; fallbackProfileId: string; migrationNotes?: string[] };
+type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; fallbackProfileId: string; migrationNotes?: string[]; matchPcWallpaper?: boolean };
 const PROFILE_FILE_FORMAT = 'open-dock-profile';
 type LegacyImportSummary = { sourceId: string; pages: number; buttons: number; requested: boolean; ready: boolean };
 
@@ -211,6 +212,7 @@ function App() {
     start.call(document, () => flushSync(() => setScreen(next)));
   };
   const updater = useUpdater();
+  const wallpaperMatch = useWallpaperMatch();
   const { checkNow } = updater;
   useEffect(() => {
     // The tray's "Check for Updates…" item.
@@ -545,6 +547,7 @@ function App() {
           <div className="page-heading"><div><h1>Settings</h1><p>Appearance, this PC, connected phones, voice and plugins.</p></div></div>
           <h2 className="settings-group">Appearance</h2>
           <AppearanceSetting />
+          <WallpaperMatchSetting {...wallpaperMatch} />
           <h2 className="settings-group">General</h2>
           <section className="device-navigation-setting pc-name-setting">
             <div className="device-navigation-copy"><h2>This PC's name</h2><p>Phones show this name instead of the IP address.</p></div>

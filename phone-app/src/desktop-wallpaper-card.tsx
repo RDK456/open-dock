@@ -177,7 +177,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   menuItem: { minHeight: 32, paddingHorizontal: 8, justifyContent: 'center' },
   layouts: { flexDirection: 'row', gap: 2, flexShrink: 0 },
   layoutButton: { width: 30, height: 30, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
-  count: { position: 'absolute', right: 8, top: 6, color: '#fff', fontSize: 10, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 5, borderRadius: 4, overflow: 'hidden' },
+  count: { position: 'absolute', right: 8, top: 6, color: colors.text, fontSize: 10, backgroundColor: colors.panelRaised, paddingHorizontal: 5, borderRadius: 4, overflow: 'hidden' },
   widgetCenter: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
   widgetScroll: { flex: 1, width: '100%' },
   widgetContent: { paddingBottom: 6 },

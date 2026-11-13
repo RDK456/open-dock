@@ -195,6 +195,9 @@ struct DeckConfig {
     /// it once; saving a config with it cleared dismisses it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     migration_notes: Vec<String>,
+    /// The phone's background follows the wallpaper on this PC's main display.
+    #[serde(default)]
+    match_pc_wallpaper: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -727,6 +730,7 @@ fn default_deck_config() -> DeckConfig {
         legacy_auto_switch_enabled: false,
         fallback_profile_id: "default".to_owned(),
         migration_notes: Vec::new(),
+        match_pc_wallpaper: false,
     }
 }
 
@@ -2461,6 +2465,14 @@ enum ClientMessage {
     /// One wallpaper's preview picture.
     WallpaperThumb {
         id: String,
+    },
+    /// A wallpaper's picture at phone-background size.
+    WallpaperBackdrop {
+        id: String,
+    },
+    /// Turn "match PC wallpaper" on or off, on every deck.
+    WallpaperMatch {
+        on: bool,
     },
     /// Show this wallpaper on the desktop.
     WallpaperApply {
@@ -4542,6 +4554,17 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
             }
+            ClientMessage::WallpaperBackdrop { id } if authenticated && id.len() <= 80 => {
+                let reply_id = id.clone();
+                let data = tokio::task::spawn_blocking(move || wallpaper::backdrop(&id)).await.ok().flatten();
+                let reply = serde_json::json!({ "type": "wallpaper_backdrop", "id": reply_id, "data": data });
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
+            ClientMessage::WallpaperMatch { on } if authenticated => {
+                let _ = set_match_everywhere(&state, on);
+            }
             ClientMessage::WallpaperApply { id, monitor } if authenticated && id.len() <= 80 => {
                 let reply_id = id.clone();
                 let result = tokio::task::spawn_blocking(move || wallpaper::apply(&id, monitor)).await.unwrap_or_else(|_| Err("Could not change the wallpaper".into()));
@@ -4672,6 +4695,29 @@ fn update_selection(
         }
         Ok(())
     })
+}
+
+/// "Match PC wallpaper" is one setting: it is written to the shared deck and every phone's own deck.
+fn set_match_everywhere(state: &AppState, on: bool) -> Result<(), String> {
+    let keys: Vec<String> = state.device_decks.read().map_err(|_| "Deck config is unavailable".to_owned())?.keys().cloned().collect();
+    for key in std::iter::once(String::new()).chain(keys) {
+        mutate_deck(state, &key, |config| { config.match_pc_wallpaper = on; Ok(()) })?;
+    }
+    Ok(())
+}
+
+/// The main display's wallpaper and its colour, for the PC's own "match wallpaper" tint.
+#[tauri::command]
+async fn current_wallpaper(state: tauri::State<'_, Arc<AppState>>) -> Result<serde_json::Value, String> {
+    let on = get_deck_config(&state).is_some_and(|config| config.match_pc_wallpaper);
+    let mut message = tokio::task::spawn_blocking(wallpaper::current_message).await.unwrap_or(serde_json::Value::Null);
+    message["match"] = on.into();
+    Ok(message)
+}
+
+#[tauri::command]
+fn set_match_pc_wallpaper(on: bool, state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+    set_match_everywhere(&state, on)
 }
 
 /// Edits the shared deck (`key` ""), or one phone's own deck, saves it and tells the phones that use it.
@@ -5836,6 +5882,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             write_text_file,
+            set_match_pc_wallpaper,
+            current_wallpaper,
             delta::download_delta_update,
             delta::install_delta_update,
             camera::camera_sources,

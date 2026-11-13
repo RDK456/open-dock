@@ -8,7 +8,7 @@ import { Camera, Check, ChevronDown, ChevronRight, Monitor, QrCode, Radar, Refre
 import { connectionId, getPhoneName, PcConnection, setPhoneName, usePcConnection } from '../../connection';
 import { findPcs, pairWithPin, type FoundPc } from '../../discovery';
 import { useStyles, useTheme, type Colors } from '../../theme';
-import { AppearanceSection, FeelSection, PrivacySection, ScreenSettingsSection } from '../../screen-power';
+import { AppearanceSection, FeelSection, MatchPcSection, PrivacySection, ScreenSettingsSection } from '../../screen-power';
 import { Entrance } from '../../prefs';
 import { AppUpdatesSection } from '../../app-updates';
 
@@ -269,6 +269,7 @@ export default function ConnectScreen() {
             <Text style={styles.portHint}>The PC lists this phone by this name.</Text>
           </View></Entrance>
           <Entrance index={8}><AppearanceSection /></Entrance>
+          <Entrance index={8}><MatchPcSection /></Entrance>
           <Entrance index={8}><FeelSection /></Entrance>
           <Entrance index={9}><PrivacySection /></Entrance>
           <Entrance index={8}><ScreenSettingsSection /></Entrance>

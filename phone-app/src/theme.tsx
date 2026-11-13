@@ -66,7 +66,21 @@ export function setCorners(next: Corners) {
   try { Storage.setItemSync(CORNERS_KEY, next); } catch { /* lasts until the app closes */ }
   listeners.forEach((listener) => listener());
 }
-export const useAccent = (): string => useSyncExternalStore(subscribe, () => accent);
+// Set while "Match PC wallpaper" is on: the wallpaper's colour, over the accent chosen here.
+let pcAccent = '';
+export function setPcAccent(next: string) {
+  if (next === pcAccent) return;
+  pcAccent = next;
+  listeners.forEach((listener) => listener());
+}
+export const useAccent = (): string => useSyncExternalStore(subscribe, () => pcAccent || accent);
+const usePcAccent = (): string => useSyncExternalStore(subscribe, () => pcAccent);
+/** `a` moved `amount` (0–1) of the way to `b`; both #rrggbb, anything else is returned as it is. */
+const mix = (a: string, b: string, amount: number) => {
+  if (!/^#[0-9a-f]{6}$/i.test(a) || !/^#[0-9a-f]{6}$/i.test(b)) return a;
+  const [x, y] = [parseInt(a.slice(1), 16), parseInt(b.slice(1), 16)];
+  return `#${[16, 8, 0].map((shift) => Math.round(((x >> shift) & 255) * (1 - amount) + ((y >> shift) & 255) * amount).toString(16).padStart(2, '0')).join('')}`;
+};
 export const useCorners = (): Corners => useSyncExternalStore(subscribe, () => corners);
 
 /** Dark ink on a light accent, light ink on a dark one. */
@@ -85,18 +99,21 @@ export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; l
   const current = useLook();
   const system = useColorScheme();
   const tint = useAccent();
+  const fromPc = usePcAccent();
   const shape = useCorners();
   return useMemo(() => {
     const scheme: Scheme = chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen;
     const base = current === 'classic' ? (scheme === 'light' ? lightColors : darkColors) : LOOK_THEMES[current][scheme];
-    const colors = tint ? { ...base, accent: tint, onAccent: inkOn(tint), borderFocus: tint } : base;
+    const tinted = tint ? { ...base, accent: tint, onAccent: inkOn(tint), borderFocus: tint } : base;
+    // Matching the PC's wallpaper washes the surfaces with its colour too, lightly so text keeps its contrast.
+    const colors = fromPc ? { ...tinted, bg: mix(tinted.bg, fromPc, 0.1), panel: mix(tinted.panel, fromPc, 0.08), panelRaised: mix(tinted.panelRaised, fromPc, 0.08) } : tinted;
     const k = SCALE[shape];
     const key0 = keyLook(current, colors, scheme);
     const surf = surfaceLook(current);
     const key = k === 1 ? key0 : { ...key0, radius: round(key0.radius, k) };
     const surface = k === 1 ? surf : { ...surf, radius: round(surf.radius, k), chipRadius: round(surf.chipRadius, k), railRadius: round(surf.railRadius, k), puck: Math.min(0.5, surf.puck * k) };
     return { colors, scheme, mode: chosen, look: current, key, heading: headingLook(current), surface };
-  }, [chosen, current, system, tint, shape]);
+  }, [chosen, current, system, tint, fromPc, shape]);
 }
 
 /** Styles built from the current colors: `const styles = useStyles(makeStyles)`, with `makeStyles = (colors) => StyleSheet.create({...})`. */

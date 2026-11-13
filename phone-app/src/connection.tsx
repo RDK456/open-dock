@@ -8,7 +8,7 @@ import { AppState, Platform } from 'react-native';
 import type { WidgetSurface } from './now-playing-layout';
 import { clearClipboard, receiveClipboard, receiveClipboardResult, setClipboardSender } from './clipboard-feed';
 import type { InfoOptions } from './info-widgets';
-import { clearWallpapers, receiveWallpaperResult, receiveWallpapers, receiveWallpaperThumb, setWallpaperSender } from './desktop-wallpaper-feed';
+import { clearWallpapers, receiveWallpaperBackdrop, receiveWallpaperResult, receiveWallpapers, receiveWallpaperThumb, setWallpaperMatch, setWallpaperSender } from './desktop-wallpaper-feed';
 import { clearPcStats, receivePcStats, setPcStatsSender } from './pc-stats-feed';
 import { countMessage } from './perf-overlay';
 import { setPetWorld } from './pet-world';
@@ -28,7 +28,7 @@ export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; 
 export type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
-export type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string };
+export type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; matchPcWallpaper?: boolean };
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type PlaybackState = 'playing' | 'paused' | 'stopped' | 'unavailable';
 export type SystemMediaState = { sourceAppId?: string; sourceName?: string; title?: string; artist?: string; album?: string; playbackState: PlaybackState; positionMs?: number; durationMs?: number; artworkDataUrl?: string; volumePercent?: number; muted?: boolean; canSeek?: boolean; playbackRate?: number;
@@ -336,6 +336,8 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mediaPlayers, setMediaPlayers] = useState<PlayersState | null>(null);
   const [deckConfig, setDeckConfig] = useState<DeckConfig | null>(null);
+  // "Match PC wallpaper" comes with each deck; no deck (disconnected) keeps the last setting.
+  useEffect(() => { if (deckConfig) setWallpaperMatch(deckConfig.matchPcWallpaper === true); }, [deckConfig]);
   const [independentNavigation, setIndependentNavigation] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
@@ -554,9 +556,10 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           if (message.type === 'pet_context') setPetWorld({ game: typeof message.game === 'string' && message.game.length <= 64 ? message.game : null });
           if (message.type === 'pc_stats') receivePcStats(message as { history?: unknown; stats?: unknown });
           if (message.type === 'clipboard') receiveClipboard(message as { supported?: unknown; items?: unknown });
-          if (message.type === 'wallpaper') receiveWallpapers(message as { supported?: unknown; installed?: unknown; items?: unknown; displays?: unknown });
+          if (message.type === 'wallpaper') receiveWallpapers(message as { supported?: unknown; installed?: unknown; items?: unknown; displays?: unknown; current?: unknown; color?: unknown });
           if (message.type === 'wallpaper_thumb') receiveWallpaperThumb(message as { id?: unknown; data?: unknown });
           if (message.type === 'wallpaper_result') receiveWallpaperResult(message as { id?: unknown; ok?: unknown; error?: unknown });
+          if (message.type === 'wallpaper_backdrop') receiveWallpaperBackdrop(message as { id?: unknown; data?: unknown });
           if (message.type === 'clipboard_result') receiveClipboardResult(message as { id?: unknown; ok?: unknown; error?: unknown });
           if (message.type === 'media_progress') {
             const progress = message as { playbackState?: unknown; positionMs?: unknown; durationMs?: unknown; volumePercent?: unknown; muted?: unknown; playbackRate?: unknown };

@@ -16,6 +16,8 @@ const MAX_ITEMS: usize = 500;
 const MAX_PREVIEW_BYTES: u64 = 300_000;
 /// Shrunk previews are at most this wide.
 const THUMB_WIDTH: u32 = 400;
+/// A phone background is at most this wide: sharp on a phone, still small to send.
+const BACKDROP_WIDTH: u32 = 1600;
 const CACHE_FOR: Duration = Duration::from_secs(60);
 
 struct Entry {
@@ -147,7 +149,74 @@ pub(super) fn list_message(force: bool) -> serde_json::Value {
         .iter()
         .map(|entry| serde_json::json!({ "id": entry.id, "title": entry.title, "kind": entry.kind, "preview": entry.preview.is_some() }))
         .collect();
-    serde_json::json!({ "type": "wallpaper", "supported": SUPPORTED, "installed": found.exe.is_some(), "items": items, "displays": displays() })
+    serde_json::json!({ "type": "wallpaper", "supported": SUPPORTED, "installed": found.exe.is_some(), "items": items, "displays": displays(), "current": current(&found), "color": current(&found).and_then(|id| color(&found, &id)) })
+}
+
+/// `{ id, color }` of the main display's wallpaper; nulls when unknown.
+pub(super) fn current_message() -> serde_json::Value {
+    let found = library(false);
+    let id = current(&found);
+    let color = id.as_ref().and_then(|id| color(&found, id));
+    serde_json::json!({ "id": id, "color": color })
+}
+
+/// A wallpaper's main colour as #rrggbb, made bright and strong enough to be an accent.
+fn color(found: &Library, id: &str) -> Option<String> {
+    let path = found.entries.iter().find(|entry| entry.id == id)?.preview.as_ref()?;
+    let [r, g, b] = accent_of(&tiny_pixels(path)?)?;
+    Some(format!("#{r:02x}{g:02x}{b:02x}"))
+}
+
+/// The colour that stands out in BGR pixels: an average weighted to vivid pixels, so a red wallpaper with a dark
+/// figure gives red, then set to a mid lightness and at least half saturation so it reads on light and dark.
+fn accent_of(bgr: &[u8]) -> Option<[u8; 3]> {
+    let (mut sum, mut total) = ([0f64; 3], 0f64);
+    for pixel in bgr.chunks_exact(3) {
+        let [b, g, r] = [pixel[0], pixel[1], pixel[2]].map(f64::from);
+        let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+        let weight = (max - min) / 255.0 * (max / 255.0) + 0.01;
+        sum = [sum[0] + r * weight, sum[1] + g * weight, sum[2] + b * weight];
+        total += weight;
+    }
+    if total == 0.0 {
+        return None;
+    }
+    let [r, g, b] = sum.map(|value| value / total / 255.0);
+    let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+    let hue = if max == min { 0.0 } else if max == r { ((g - b) / (max - min)).rem_euclid(6.0) } else if max == g { (b - r) / (max - min) + 2.0 } else { (r - g) / (max - min) + 4.0 } * 60.0;
+    let light = (max + min) / 2.0;
+    let saturation = if max == min { 0.0 } else { (max - min) / (1.0 - (2.0 * light - 1.0).abs()) };
+    // Grey wallpapers stay grey; colourful ones get a usable accent.
+    let (saturation, light) = if saturation < 0.12 { (saturation, 0.55) } else { (saturation.max(0.55), light.clamp(0.48, 0.6)) };
+    let chroma = (1.0 - (2.0 * light - 1.0).abs()) * saturation;
+    let x = chroma * (1.0 - ((hue / 60.0).rem_euclid(2.0) - 1.0).abs());
+    let (r, g, b) = match (hue / 60.0) as u32 { 0 => (chroma, x, 0.0), 1 => (x, chroma, 0.0), 2 => (0.0, chroma, x), 3 => (0.0, x, chroma), 4 => (x, 0.0, chroma), _ => (chroma, 0.0, x) };
+    let m = light - chroma / 2.0;
+    Some([r, g, b].map(|value| ((value + m) * 255.0).round().clamp(0.0, 255.0) as u8))
+}
+
+/// The wallpaper on the main display, from Wallpaper Engine's own config.json (one block per Windows user).
+fn current(found: &Library) -> Option<String> {
+    let config = found.exe.as_ref()?.parent()?.join("config.json");
+    let json: serde_json::Value = serde_json::from_str(std::fs::read_to_string(config).ok()?.trim_start_matches('\u{feff}')).ok()?;
+    let user = std::env::var("USERNAME").ok()?;
+    let block = json.get(&user).or_else(|| json.as_object()?.iter().find(|(name, _)| name.eq_ignore_ascii_case(&user)).map(|(_, value)| value))?;
+    let file = block["general"]["wallpaperconfig"]["selectedwallpapers"]["Monitor0"]["file"].as_str()?;
+    current_id(found, file)
+}
+
+/// Which wallpaper a file belongs to: the one whose project folder holds it.
+fn current_id(found: &Library, file: &str) -> Option<String> {
+    let same = |path: &Path| path.to_string_lossy().replace('\\', "/").to_lowercase();
+    let folder = same(Path::new(file).parent()?);
+    found.entries.iter().find(|entry| entry.project.parent().is_some_and(|parent| same(parent) == folder)).map(|entry| entry.id.clone())
+}
+
+/// One wallpaper's preview as a larger JPEG data URL, for the phone's background.
+pub(super) fn backdrop(id: &str) -> Option<String> {
+    let found = library(false);
+    let path = found.entries.iter().find(|entry| entry.id == id)?.preview.as_ref()?;
+    small_jpeg(path, BACKDROP_WIDTH).map(|jpeg| format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(jpeg)))
 }
 
 /// One wallpaper's preview as a data URL: shrunk to a small JPEG (a full-size GIF can run the phone out of memory),
@@ -155,7 +224,7 @@ pub(super) fn list_message(force: bool) -> serde_json::Value {
 pub(super) fn thumb(id: &str) -> Option<String> {
     let found = library(false);
     let path = found.entries.iter().find(|entry| entry.id == id)?.preview.as_ref()?;
-    if let Some(jpeg) = small_jpeg(path) {
+    if let Some(jpeg) = small_jpeg(path, THUMB_WIDTH) {
         return Some(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(jpeg)));
     }
     if std::fs::metadata(path).ok()?.len() > MAX_PREVIEW_BYTES {
@@ -229,6 +298,28 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn current_wallpaper_is_found_by_its_folder() {
+        let entry = Entry { id: "ws-42".into(), title: "A".into(), kind: "scene".into(), project: PathBuf::from(r"F:\Steam\steamapps\workshop\content\431960\42\project.json"), preview: None };
+        let found = Library { exe: None, entries: vec![entry] };
+        assert_eq!(current_id(&found, "F:/steam/steamapps/workshop/content/431960/42/scene.pkg").as_deref(), Some("ws-42"));
+        assert_eq!(current_id(&found, "F:/steam/steamapps/workshop/content/431960/7/scene.pkg"), None);
+    }
+
+    #[test]
+    fn accent_follows_the_vivid_colour() {
+        // Mostly black with a red-orange area: the accent is red-orange, not a muddy dark.
+        let mut bgr = Vec::new();
+        for index in 0..100 {
+            bgr.extend_from_slice(if index < 40 { &[20, 60, 240] } else { &[10, 10, 10] });
+        }
+        let [r, g, b] = accent_of(&bgr).unwrap();
+        assert!(r > 200 && g < 120 && b < 60, "{r} {g} {b}");
+        // A grey picture stays grey.
+        let [r, g, b] = accent_of(&[128u8; 300]).unwrap();
+        assert!(r.abs_diff(g) < 4 && g.abs_diff(b) < 4);
+    }
+
+    #[test]
     fn previews_are_shrunk_to_small_jpegs() {
         // Uses this PC's own wallpapers; nothing to check on a PC without any.
         let found = library(false);
@@ -286,9 +377,46 @@ fn displays() -> Vec<serde_json::Value> {
     Vec::new()
 }
 
-/// The picture's first frame, scaled to THUMB_WIDTH and saved as JPEG, using Windows' own image codecs.
+/// The picture's first frame shrunk to 24×24, as BGR bytes.
 #[cfg(windows)]
-fn small_jpeg(path: &Path) -> Option<Vec<u8>> {
+fn tiny_pixels(path: &Path) -> Option<Vec<u8>> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::GENERIC_READ;
+    use windows::Win32::Graphics::Imaging::*;
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
+
+    const SIDE: u32 = 24;
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    unsafe {
+        let initialized_here = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
+        let result = (|| -> windows::core::Result<Vec<u8>> {
+            let factory: IWICImagingFactory = CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
+            let decoder = factory.CreateDecoderFromFilename(PCWSTR(wide.as_ptr()), None, GENERIC_READ, WICDecodeMetadataCacheOnDemand)?;
+            let frame = decoder.GetFrame(0)?;
+            let scaler = factory.CreateBitmapScaler()?;
+            scaler.Initialize(&frame, SIDE, SIDE, WICBitmapInterpolationModeFant)?;
+            let converter = factory.CreateFormatConverter()?;
+            converter.Initialize(&scaler, &GUID_WICPixelFormat24bppBGR, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom)?;
+            let mut bytes = vec![0u8; (SIDE * SIDE * 3) as usize];
+            converter.CopyPixels(std::ptr::null(), SIDE * 3, &mut bytes)?;
+            Ok(bytes)
+        })();
+        if initialized_here {
+            CoUninitialize();
+        }
+        result.ok()
+    }
+}
+
+#[cfg(not(windows))]
+fn tiny_pixels(_: &Path) -> Option<Vec<u8>> {
+    None
+}
+
+/// The picture's first frame, scaled down to `max_width` and saved as JPEG, using Windows' own image codecs.
+#[cfg(windows)]
+fn small_jpeg(path: &Path, max_width: u32) -> Option<Vec<u8>> {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::GENERIC_READ;
@@ -305,7 +433,7 @@ fn small_jpeg(path: &Path) -> Option<Vec<u8>> {
             let frame = decoder.GetFrame(0)?;
             let (mut width, mut height) = (0u32, 0u32);
             frame.GetSize(&mut width, &mut height)?;
-            let scale = (f64::from(THUMB_WIDTH) / f64::from(width.max(1))).min(1.0);
+            let scale = (f64::from(max_width) / f64::from(width.max(1))).min(1.0);
             let (to_width, to_height) = (((f64::from(width) * scale) as u32).max(1), ((f64::from(height) * scale) as u32).max(1));
             let scaler = factory.CreateBitmapScaler()?;
             scaler.Initialize(&frame, to_width, to_height, WICBitmapInterpolationModeFant)?;
@@ -342,6 +470,6 @@ fn small_jpeg(path: &Path) -> Option<Vec<u8>> {
 }
 
 #[cfg(not(windows))]
-fn small_jpeg(_: &Path) -> Option<Vec<u8>> {
+fn small_jpeg(_: &Path, _: u32) -> Option<Vec<u8>> {
     None
 }

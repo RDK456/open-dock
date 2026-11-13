@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { Pressable } from './motion';
 import { haptic } from './prefs';
 import { useStyles, useTheme, type Colors } from './theme';
+import { fade } from './wallpaper';
 
 // Glanceable deck tiles. Each reads its own data: weather, news, stocks and scores come straight from free,
 // key-less public sources, so the PC does not need to be connected. What you type (city, symbols, ...) stays on this phone.
@@ -209,7 +210,6 @@ async function loadQuotes(symbols: string[]): Promise<Quote[]> {
     return { symbol, price: meta.regularMarketPrice, change: previous ? ((meta.regularMarketPrice - previous) / previous) * 100 : 0, currency: meta.currency ?? '' };
   }));
 }
-const UP = '#1f9d57';
 const price = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: value < 10 ? 4 : 2 });
 const percent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 
@@ -224,7 +224,8 @@ function Stocks({ on }: { on: boolean }) {
   const symbols = (options.symbols ?? config.symbols).split(/[,\s]+/).map((symbol) => symbol.toUpperCase()).filter((symbol) => /^[A-Z0-9.=^-]{1,12}$/.test(symbol)).slice(0, 8);
   const { data, error, retry } = useRemote(() => loadQuotes(symbols), symbols.join(), 60_000, on && symbols.length > 0);
   const [page, next] = usePage(data?.length ?? 0);
-  const tone = (quote: Quote) => (quote.change >= 0 ? UP : colors.red);
+  const tone = (quote: Quote) => (quote.change >= 0 ? colors.mint : colors.red);
+  const toneBg = (quote: Quote) => fade(tone(quote), 0.16);
   let body;
   if (editing && !options.symbols) body = <View style={styles.center}><Text style={styles.muted}>Symbols, comma separated (AAPL, BTC-USD, ^GSPC)</Text><Field label="Symbols" value={config.symbols} placeholder="AAPL, MSFT, BTC-USD" onSave={(value) => { save({ symbols: value }); }} /></View>;
   else if (!data) body = <Status error={error} retry={retry} />;
@@ -237,7 +238,7 @@ function Stocks({ on }: { on: boolean }) {
       <Text style={styles.faint}>{page + 1} / {data.length}</Text>
     </Pressable> : null;
   } else if (style === 'tiles') body = <ScrollView style={styles.fill} contentContainerStyle={styles.tiles} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-    {data.map((quote) => <View key={quote.symbol} style={[styles.tile, { backgroundColor: quote.change >= 0 ? 'rgba(31,157,87,0.16)' : 'rgba(214,69,69,0.16)' }]}>
+    {data.map((quote) => <View key={quote.symbol} style={[styles.tile, { backgroundColor: toneBg(quote) }]}>
       <Text style={styles.symbol} numberOfLines={1}>{quote.symbol}</Text>
       <Text style={[styles.small, { fontSize: Math.round(15 * scale) }]} numberOfLines={1}>{Number.isFinite(quote.price) ? price(quote.price) : 'Unknown'}</Text>
       <Text style={[styles.change, { color: tone(quote) }]}>{percent(quote.change)}</Text>
@@ -245,7 +246,7 @@ function Stocks({ on }: { on: boolean }) {
   </ScrollView>;
   else body = <ScrollView style={styles.fill} showsVerticalScrollIndicator={false} nestedScrollEnabled>{data.map((quote) => <View key={quote.symbol} style={styles.quoteRow}>
     <Text style={styles.symbol}>{quote.symbol}</Text>
-    {Number.isFinite(quote.price) ? <><Text style={[styles.small, styles.grow, { textAlign: 'right' }]}>{price(quote.price)}</Text><Text style={[styles.change, styles.pill, { color: tone(quote), backgroundColor: quote.change >= 0 ? 'rgba(31,157,87,0.16)' : 'rgba(214,69,69,0.16)' }]}>{percent(quote.change)}</Text></> : <Text style={styles.faint}>Unknown symbol</Text>}
+    {Number.isFinite(quote.price) ? <><Text style={[styles.small, styles.grow, { textAlign: 'right' }]}>{price(quote.price)}</Text><Text style={[styles.change, styles.pill, { color: tone(quote), backgroundColor: toneBg(quote) }]}>{percent(quote.change)}</Text></> : <Text style={styles.faint}>Unknown symbol</Text>}
   </View>)}</ScrollView>;
   return <Shell title="Markets" onEdit={options.symbols ? undefined : () => setEditing(!editing)} editing={editing}>{body}</Shell>;
 }

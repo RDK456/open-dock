@@ -362,8 +362,10 @@ export function inkIcon(svg: string, scheme: Scheme): string {
 export const inkIconAs = (svg: string, ink: string) => svg.replace(/stroke="#f4f4f5"/gi, `stroke="${ink}"`);
 
 /** Signal's dot grid (see wallpaper.tsx). */
-export const backdrops: { signalDot: Record<Scheme, string>; dock: Record<Scheme, [string, string, string]> } = {
+export const backdrops: { signalDot: Record<Scheme, string>; dock: Record<Scheme, [string, string, string]>; dockGlow2: string } = {
   signalDot: { dark: '#ffffff', light: '#000000' },
+  // The dock's second, violet glow in the far corner.
+  dockGlow2: '#8b7cf6',
   // The dock's gradient: from, to and the corner glow.
   dock: { dark: ['#06101a', '#13233a', '#3f9c78'], light: ['#f2f5fa', '#d9e3f2', '#7fcfa8'] },
 };
