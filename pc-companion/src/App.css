@@ -623,7 +623,7 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .open-dock-plugin-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .open-dock-plugin-heading h2 { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--foreground); font-size: 14px; font-weight: 600; }
 .open-dock-plugin-heading p, .open-dock-plugin-warning, .open-dock-plugin-empty { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 17px; }
-.open-dock-plugin-warning { margin-top: 14px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--z900); }
+.open-dock-plugin-warning { margin-top: 14px; padding: 2px 0 2px 11px; border-left: 2px solid var(--warn-border); }
 .open-dock-plugin-errors { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--warn-border); border-radius: 6px; background: var(--warn-bg); color: var(--warn-text); font-size: 12px; }
 .open-dock-plugin-errors p { margin: 0; line-height: 18px; }
 .open-dock-plugin-list { margin-top: 11px; display: grid; gap: 7px; }
@@ -825,7 +825,7 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 /* Lyrics preview: mirrors phone-app/src/lyrics-widget.tsx (spring wave approximated with a CSS overshoot curve). */
 .lyrics-preview { background: transparent; }
 .lyrics-preview-lines { position: absolute; inset: 0; overflow: hidden; }
-.lyrics-preview-lines p { margin: 0; color: var(--foreground); font-weight: 700; line-height: 1.25; text-align: left; transform-origin: left center; transition: transform 600ms cubic-bezier(.25, 1.15, .4, 1), opacity 450ms cubic-bezier(.33, 1, .68, 1); }
+.lyrics-preview-lines p { margin: 0; color: var(--foreground); font-weight: 700; line-height: 1.25; text-align: left; transform-origin: left center; transition: transform 600ms cubic-bezier(.22, 1, .36, 1), opacity 450ms cubic-bezier(.33, 1, .68, 1); }
 .lyrics-preview-center { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px; box-sizing: border-box; color: var(--muted); font-weight: 600; text-align: center; }
 .lyrics-preview-plain { height: 100%; box-sizing: border-box; overflow: hidden; color: var(--foreground); opacity: .85; font-weight: 600; line-height: 1.48; white-space: pre-line; }
 .lyrics-preview-dots { display: inline-flex; align-items: center; gap: .7em; height: 2.6em; }
@@ -1293,8 +1293,8 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 .deck-canvas.enter-page { animation: deck-deal 280ms cubic-bezier(.2, .8, .2, 1); }
 .deck-canvas.enter-folder { animation: deck-open 260ms cubic-bezier(.2, .8, .2, 1); transform-origin: 50% 30%; }
 
-/* Motion pass: springy easing, cards and keys dealt in one after another, a living nav indicator. */
-:root { --spring: cubic-bezier(.34, 1.56, .64, 1); --glide: cubic-bezier(.2, .8, .2, 1); }
+/* Motion pass: quick ease-out (no overshoot), cards and keys dealt in one after another, a living nav indicator. */
+:root { --spring: cubic-bezier(.22, 1, .36, 1); --glide: cubic-bezier(.2, .8, .2, 1); }
 @keyframes rise-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }
 @keyframes key-in { from { opacity: 0; transform: translateY(10px) scale(.9); } }
 .content > * { animation: rise-in 420ms var(--glide) backwards; }
@@ -1489,18 +1489,18 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 .device-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--z600); }
 .device-dot.online { background: var(--green); }
 
-/* Hover bounce: a spring overshoot on lift, a quick squash on press. !important so every look keeps it. */
-.nav-item, .primary-button, .secondary-button, .icon-button, .panel-icon-button, .deck-library-item, .update-pill, .clock-browser-tile, .app-browse-button, .transport-tab { transition: transform 280ms cubic-bezier(.34, 1.56, .64, 1), background 140ms ease, border-color 140ms ease, color 140ms ease !important; }
-.nav-item:hover, .primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled), .icon-button:hover, .panel-icon-button:hover:not(:disabled), .deck-library-item:hover:not(:disabled), .update-pill:hover, .clock-browser-tile:hover, .app-browse-button:hover:not(:disabled), .transport-tab:hover { transform: translateY(-2px) scale(1.04) !important; }
-.nav-item:hover svg { animation: icon-bounce 520ms cubic-bezier(.28, .84, .42, 1) 1 !important; }
+/* Hover lift: a small rise on hover, a quick squash on press. !important so every look keeps it. */
+.nav-item, .primary-button, .secondary-button, .icon-button, .panel-icon-button, .deck-library-item, .update-pill, .clock-browser-tile, .app-browse-button, .transport-tab { transition: transform 200ms var(--spring), background 140ms ease, border-color 140ms ease, color 140ms ease !important; }
+.nav-item:hover, .primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled), .icon-button:hover, .panel-icon-button:hover:not(:disabled), .deck-library-item:hover:not(:disabled), .update-pill:hover, .clock-browser-tile:hover, .app-browse-button:hover:not(:disabled), .transport-tab:hover { transform: translateY(-1px) !important; }
+.nav-item:hover svg { animation: icon-lift 360ms var(--spring) 1 !important; }
 .nav-item:active, .primary-button:active:not(:disabled), .secondary-button:active:not(:disabled), .icon-button:active, .panel-icon-button:active:not(:disabled), .deck-library-item:active:not(:disabled), .transport-tab:active { transform: scale(.96) !important; transition-duration: 90ms !important; }
-@keyframes icon-bounce { 0% { transform: translateY(0); } 30% { transform: translateY(-4px); } 55% { transform: translateY(0); } 75% { transform: translateY(-2px); } 100% { transform: translateY(0); } }
+@keyframes icon-lift { 40% { transform: translateY(-2px); } }
 
 /* Screen changes zoom in; menus, pickers and dialogs pop open. Kept on even when the OS turns animations off. */
-@keyframes screen-zoom { from { opacity: 0; transform: scale(.94); } }
-@keyframes pop-zoom { from { opacity: 0; transform: scale(.9); } }
+@keyframes screen-zoom { from { opacity: 0; transform: scale(.98); } }
+@keyframes pop-zoom { from { opacity: 0; transform: scale(.96); } }
 .content { animation: screen-zoom 320ms var(--glide) both !important; }
-[role="dialog"], [role="menu"], [role="listbox"], .deck-menu, .select-menu, .app-picker, .icon-picker-menu { animation: pop-zoom 220ms cubic-bezier(.34, 1.4, .64, 1) both; }
+[role="dialog"], [role="menu"], [role="listbox"], .deck-menu, .select-menu, .app-picker, .icon-picker-menu { animation: pop-zoom 200ms var(--spring) both; }
 
 /* The Motion switch in Settings: with it off everything holds still (the specificity beats the !important rules above). */
 html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation: none !important; transition: none !important; }
