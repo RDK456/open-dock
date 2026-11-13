@@ -2,7 +2,13 @@
 
 # Open Dock
 
-Turn your phone into a PC dock: media keys, hotkeys, app launchers, live PC stats, voice commands, a touchpad, a webcam and a desktop pet. Free and open source. Works over Wi-Fi, or USB on Android.
+<p align="center">
+  <a href="https://github.com/RDK456/open-dock/releases/latest"><img src="https://img.shields.io/github/v/release/RDK456/open-dock?label=download" alt="Latest release"></a>
+  <a href="https://github.com/RDK456/open-dock/releases"><img src="https://img.shields.io/github/downloads/RDK456/open-dock/total" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/RDK456/open-dock" alt="License"></a>
+</p>
+
+**Turn the phone in your drawer into a Stream Deck–style control panel for your PC.** Media keys, hotkeys, app launchers, live widgets, voice commands, a touchpad and a webcam. Free, open source, no account, nothing leaves your network. Works over Wi-Fi, or USB on Android.
 
 <a href="docs/media/brag.mp4"><img src="docs/media/brag.jpg" alt="Open Dock launch video (click to play)"></a>
 
@@ -12,6 +18,18 @@ Turn your phone into a PC dock: media keys, hotkeys, app launchers, live PC stat
   <img src="site/assets/s_voice.png" width="49%" alt="Voice">
   <img src="site/assets/s_connect.png" width="49%" alt="Connect">
 </p>
+
+## Why Open Dock
+
+- **Free Stream Deck.** Unlimited keys, pages and profiles on a phone you already own.
+- **Live widgets.** Clock faces, PC stats, now playing with synced lyrics, weather, news, stocks, sports scores, countdowns, timers, reminders, a daily quote, clipboard history, a desktop pet and your Wallpaper Engine library.
+- **Matches your PC.** Turn on *Match PC wallpaper* and both apps take the colour of your desktop wallpaper, with the wallpaper itself as the phone's background.
+- **Seven looks.** Classic, Studio, Atelier, Signal, Glass, Funk and Dock, each in light and dark. Change the phone's look from the PC too.
+- **More than buttons.** Touchpad with gestures, voice commands with a wake phrase, and the phone as a webcam.
+- **Private by design.** Runs on your local network. No cloud, no sign-up, no tracking.
+- **Updates itself** on Windows, macOS and Android.
+
+<p align="center"><img src="docs/media/pc-appearance.png" width="80%" alt="PC app: appearance settings with Match PC wallpaper"></p>
 
 ## Install
 
@@ -58,6 +76,18 @@ Tap the PC name (top right) to switch between paired PCs.
 3. Swipe left/right for pages, up/down for profiles.
 4. Tap the background or an empty slot to show the controls (profile name, page buttons) for about 3 seconds. Tap a page button to jump to it.
 5. Press the Android **Back** button to leave full screen.
+
+#### Add a widget
+
+1. On the PC, open **Deck** and pick a profile and page.
+2. Drag a widget from the shelf onto the grid, or tap **✏️ Edit → +** on the phone.
+3. Select it to choose its design, size and options (city for weather, tickers for stocks, teams for sports and so on).
+
+### Make it yours
+
+1. **Phone:** open **Connect → Appearance** and choose a look, light or dark, accent colour, corners and wallpaper.
+2. **PC:** open **Settings → Phone appearance** to change the same options from your desk.
+3. **Match PC wallpaper:** turn it on in either app. The accent follows your main display's wallpaper (Wallpaper Engine), and the phone uses that wallpaper as its background in full quality.
 
 ### Touch (touchpad)
 
