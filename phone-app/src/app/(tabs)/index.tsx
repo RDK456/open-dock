@@ -28,6 +28,8 @@ import { MediaToastView, PlayerSheet, SourceChip, useMediaSource } from '../../m
 import { playerColor, type PlayersState } from '../../media-players';
 // Breathing room around every widget's content, so it stays centred in a tile that is a little off-size.
 const WIDGET_PAD = 8;
+// Widget keys inset their content by a 1 px border plus that padding.
+const widgetKeyInset = 1 + WIDGET_PAD;
 
 // A clock, PC stats or pet widget can have a see-through background: the tile under it fades by the same amount.
 function widgetOpacityStyle(widget: { type: string; opacity?: number }, panel: string) {
@@ -564,8 +566,6 @@ export default function DeckScreen() {
   const immersiveCellWidth = Math.max(0, (immersiveSize.width - 24 - immersiveGap * (columns - 1)) / columns);
   const immersiveCellHeight = Math.max(1, (immersiveAvailableHeight - 24 - immersiveGap * (rows - 1)) / rows);
   const immersiveIconSize = Math.min(64, Math.max(26, Math.min(immersiveCellHeight, immersiveCellWidth) * (immersiveCellHeight >= 84 ? 0.4 : 0.5)));
-  // Widget keys inset their content by a 1 px border plus clockWidgetKey's padding (WIDGET_PAD).
-  const widgetKeyInset = 1 + WIDGET_PAD;
   const immersiveSurfaceWidth = immersiveSize.width - 24;
   const immersiveSurfaceHeight = immersiveAvailableHeight - 24;
   // Reported for every page, widgets or not: the desktop draws its preview in the same shape and orientation.
