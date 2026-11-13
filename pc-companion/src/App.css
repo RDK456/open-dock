@@ -1120,7 +1120,7 @@ textarea.panel-input { padding: 8px 10px; resize: vertical; line-height: 1.4; }
 .panel-input:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
 .panel-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .panel-input:disabled { opacity: 0.55; cursor: not-allowed; }
-.panel-input::placeholder { color: var(--muted-foreground, #888); }
+.panel-input::placeholder { color: var(--muted); }
 .deck-widget-shelf .deck-library-item { transition: border-color 120ms ease, transform 120ms ease; }
 .deck-widget-shelf .deck-library-item:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
 .deck-widget-shelf .deck-library-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
