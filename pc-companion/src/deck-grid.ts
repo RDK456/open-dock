@@ -55,6 +55,7 @@ export function defaultSpan(kind: string): { rows: number; columns: number } {
   if (kind === 'lyrics') return { rows: 2, columns: 3 };
   if (kind === 'pet') return { rows: 2, columns: 2 };
   if (kind === 'clipboard') return { rows: 2, columns: 2 };
+  if (kind === 'wallpaper' || kind === 'info') return { rows: 2, columns: 2 };
   return { rows: 1, columns: 1 };
 }
 

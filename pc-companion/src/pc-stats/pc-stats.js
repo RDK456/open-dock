@@ -512,9 +512,10 @@ const STYLES = [
         const s = Math.max(0, Math.min(cw - 8, ch - (cap ? cap * LINE + 4 : 0) - 4)), [bw, bh] = ringHole(s);
         const sizes = sharedSizes(el, slots.map((slot) => ({ k: slot.k, label: slot.label })), bw, bh);
         cells = slots.map((slot, i) => {
-          const x = p + (i % cols) * cw, y = p + Math.floor(i / cols) * ch;
-          const draw = ringAt(el, slot.k, x + (cw - s) / 2, y + 2, s, slot.label || true, sizes);
-          const sub = cap ? el.appendChild(ce('span', 'det', `${at(x + 2, y + 2 + s + 4, cw - 4, cap * LINE)}font-size:${cap}px;text-align:center`)) : null;
+          // Ring and caption sit as one block, centred in the cell, so a tile taller than the rings needs doesn't leave them at the top.
+          const x = p + (i % cols) * cw, y = p + Math.floor(i / cols) * ch + Math.max(2, (ch - s - (cap ? cap * LINE + 4 : 0)) / 2);
+          const draw = ringAt(el, slot.k, x + (cw - s) / 2, y, s, slot.label || true, sizes);
+          const sub = cap ? el.appendChild(ce('span', 'det', `${at(x + 2, y + s + 4, cw - 4, cap * LINE)}font-size:${cap}px;text-align:center`)) : null;
           return { slot, draw, sub };
         });
       }

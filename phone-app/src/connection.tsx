@@ -7,6 +7,8 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 import { AppState, Platform } from 'react-native';
 import type { WidgetSurface } from './now-playing-layout';
 import { clearClipboard, receiveClipboard, receiveClipboardResult, setClipboardSender } from './clipboard-feed';
+import type { InfoOptions } from './info-widgets';
+import { clearWallpapers, receiveWallpaperResult, receiveWallpapers, receiveWallpaperThumb, setWallpaperSender } from './desktop-wallpaper-feed';
 import { clearPcStats, receivePcStats, setPcStatsSender } from './pc-stats-feed';
 import { countMessage } from './perf-overlay';
 import { setPetWorld } from './pet-world';
@@ -22,7 +24,7 @@ export type PointerEvent = { kind: 'move' | 'scroll'; dx: number; dy: number } |
 export type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
 export type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction; longPress?: DeckAction };
 export type PetOptions = { outfit?: string; mood?: boolean; sound?: boolean; camera?: boolean; sleepy?: number; hyper?: number; shy?: number; grumpy?: number; quietFrom?: number; quietTo?: number };
-export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'clipboard'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; scroll?: string } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
+export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'wallpaper'; placement: DeckPlacement; face?: string; opacity?: number } | { id: string; type: 'info'; placement: DeckPlacement; face?: string; opacity?: number; info?: InfoOptions } | { id: string; type: 'clipboard'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; scroll?: string } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
 export type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
@@ -172,7 +174,7 @@ function validDeckWidget(value: unknown): value is DeckWidget {
   const placement = widget.placement;
   if (typeof widget.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(widget.id) || !placement || typeof placement !== 'object' ||
       ![placement.row, placement.column, placement.rowSpan, placement.columnSpan].every(Number.isInteger)) return false;
-  if ((widget.type === 'clock' || widget.type === 'pet' || widget.type === 'pc_stats' || widget.type === 'clipboard') && (widget as { opacity?: unknown }).opacity !== undefined) {
+  if ((widget.type === 'clock' || widget.type === 'pet' || widget.type === 'pc_stats' || widget.type === 'clipboard' || widget.type === 'wallpaper' || widget.type === 'info') && (widget as { opacity?: unknown }).opacity !== undefined) {
     const opacity = (widget as { opacity?: unknown }).opacity;
     if (typeof opacity !== 'number' || !Number.isInteger(opacity) || opacity < 0 || opacity > 100) return false;
   }
@@ -204,6 +206,20 @@ function validDeckWidget(value: unknown): value is DeckWidget {
     const clipboard = widget as Extract<DeckWidget, { type: 'clipboard' }>;
     return [clipboard.face, clipboard.scroll].every((id) => id === undefined || (typeof id === 'string' && /^[a-z]{1,24}$/.test(id))) &&
       (clipboard.color === undefined || (typeof clipboard.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(clipboard.color)));
+  }
+  if (widget.type === 'info') {
+    const { face, info } = widget as { face?: unknown; info?: unknown };
+    if (!(face === undefined || (typeof face === 'string' && /^[a-z]{1,24}$/.test(face)))) return false;
+    if (info === undefined) return true;
+    if (!info || typeof info !== 'object' || Array.isArray(info)) return false;
+    const options = info as Record<string, unknown>;
+    const text = (value: unknown, max: number) => value === undefined || (typeof value === 'string' && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value));
+    return text(options.style, 24) && text(options.league, 24) && text(options.done, 24) && text(options.city, 60) && text(options.symbols, 120) &&
+      (options.items === undefined || (Array.isArray(options.items) && options.items.length <= 20 && options.items.every((item) => typeof item === 'string' && text(item, 80))));
+  }
+  if (widget.type === 'wallpaper') {
+    const face = (widget as { face?: unknown }).face;
+    return face === undefined || (typeof face === 'string' && /^[a-z]{1,24}$/.test(face));
   }
   if (widget.type === 'now_playing' || widget.type === 'lyrics') return true;
   if (widget.type !== 'plugin' || !('pluginId' in widget) || !('widgetId' in widget) || !('renderType' in widget) || !('values' in widget)) return false;
@@ -386,6 +402,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       setActionError(null);
       clearPcStats();
       clearClipboard();
+      clearWallpapers();
     }
 
     const retry = () => {
@@ -433,6 +450,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         try { socket.close(); } catch { /* it never opened */ }
         setPcStatsSender(null);
         setClipboardSender(null);
+        setWallpaperSender(null);
         pendingRequestsRef.current.clear();
         if (shouldReconnectRef.current) retry();
         else if (!terminalErrorRef.current) setStatus('disconnected');
@@ -486,6 +504,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
             // In the background the PC sends nothing (see the AppState effect in this provider).
             if (AppState.currentState !== 'active') socket.send(JSON.stringify({ type: 'set_streaming', active: false }));
             // The PC samples only the readings the stats widgets on screen show.
+            setWallpaperSender((message) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); });
             setClipboardSender((message) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); });
             setPcStatsSender((needs) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'pc_stats_subscribe', needs })); });
           }
@@ -535,6 +554,9 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           if (message.type === 'pet_context') setPetWorld({ game: typeof message.game === 'string' && message.game.length <= 64 ? message.game : null });
           if (message.type === 'pc_stats') receivePcStats(message as { history?: unknown; stats?: unknown });
           if (message.type === 'clipboard') receiveClipboard(message as { supported?: unknown; items?: unknown });
+          if (message.type === 'wallpaper') receiveWallpapers(message as { supported?: unknown; installed?: unknown; items?: unknown; displays?: unknown });
+          if (message.type === 'wallpaper_thumb') receiveWallpaperThumb(message as { id?: unknown; data?: unknown });
+          if (message.type === 'wallpaper_result') receiveWallpaperResult(message as { id?: unknown; ok?: unknown; error?: unknown });
           if (message.type === 'clipboard_result') receiveClipboardResult(message as { id?: unknown; ok?: unknown; error?: unknown });
           if (message.type === 'media_progress') {
             const progress = message as { playbackState?: unknown; positionMs?: unknown; durationMs?: unknown; volumePercent?: unknown; muted?: unknown; playbackRate?: unknown };
@@ -623,6 +645,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         socketRef.current = null;
         setPcStatsSender(null);
         setClipboardSender(null);
+        setWallpaperSender(null);
         pendingRequestsRef.current.clear();
         if (shouldReconnectRef.current) retry();
         else if (!terminalErrorRef.current) setStatus('disconnected');

@@ -48,3 +48,21 @@ export function surfaceOccupancy(surface: DeckSurface): Map<number, SurfaceItem>
   surface.widgets.forEach((widget) => cover(widget.placement, { type: 'widget', widget }));
   return occupied;
 }
+
+/**
+ * How far, in cells, to shift a page so the area its items cover sits in the middle of the grid. Empty rows or
+ * columns along one edge then no longer leave everything pushed to a corner.
+ */
+export function centeringShift(surface: DeckSurface): { rows: number; columns: number } {
+  let minRow = Infinity, maxRow = -1, minColumn = Infinity, maxColumn = -1;
+  const take = (placement: DeckPlacement) => {
+    minRow = Math.min(minRow, placement.row);
+    maxRow = Math.max(maxRow, placement.row + placement.rowSpan - 1);
+    minColumn = Math.min(minColumn, placement.column);
+    maxColumn = Math.max(maxColumn, placement.column + placement.columnSpan - 1);
+  };
+  surface.buttons.forEach((button, index) => take(buttonPlacement(surface.columns, button, index)));
+  surface.widgets.forEach((widget) => take(widget.placement));
+  if (maxRow < 0) return { rows: 0, columns: 0 };
+  return { rows: (surface.rows - 1 - maxRow - minRow) / 2, columns: (surface.columns - 1 - maxColumn - minColumn) / 2 };
+}

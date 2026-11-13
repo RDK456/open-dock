@@ -12,6 +12,8 @@ import { DeckButton, DeckMediaCommand, DeckPlacement, DeckWidget, PlaybackState,
 import { nowPlayingLayout, NowPlayingRow } from '../../now-playing-layout';
 import { ClipboardWidget } from '../../clipboard-widget';
 import { LyricsWidget } from '../../lyrics-widget';
+import { WallpaperWidget } from '../../desktop-wallpaper-card';
+import { InfoWidget } from '../../info-widgets';
 import { sendWidgetTouch, WebWidgetLayer, type WebWidget, type WidgetTouch } from '../../web-widgets';
 import { countRender, PerfOverlay } from '../../perf-overlay';
 import { useDeckScreenPower } from '../../screen-power';
@@ -19,7 +21,7 @@ import { DockBackdrop, fade, useWallpaperSettings, Wallpaper } from '../../wallp
 import { ButtonEditor, type EditTarget } from '../../button-editor';
 import { DeckStack } from '../../deck-stack';
 import { PuckRail, usePins } from '../../puck-rail';
-import { buttonPlacement, surfaceOccupancy, type SurfaceItem } from '../../deck-layout';
+import { buttonPlacement, centeringShift, surfaceOccupancy, type SurfaceItem } from '../../deck-layout';
 import { useStyles, useTheme, type Colors } from '../../theme';
 import { inkIcon, inkIconAs } from '../../theme-colors';
 import { TabBarHiddenContext } from '../../navigation/tab-bar-context';
@@ -33,7 +35,7 @@ const widgetKeyInset = 1 + WIDGET_PAD;
 
 // A clock, PC stats or pet widget can have a see-through background: the tile under it fades by the same amount.
 function widgetOpacityStyle(widget: { type: string; opacity?: number }, panel: string) {
-  const opacity = (widget.type === 'clock' || widget.type === 'pc_stats' || widget.type === 'pet' || widget.type === 'clipboard') ? widget.opacity : undefined;
+  const opacity = (widget.type === 'clock' || widget.type === 'pc_stats' || widget.type === 'pet' || widget.type === 'clipboard' || widget.type === 'wallpaper' || widget.type === 'info') ? widget.opacity : undefined;
   if (opacity === undefined || opacity >= 100) return null;
   return { backgroundColor: fade(panel, opacity / 100), borderColor: 'transparent', boxShadow: 'none' } as const;
 }
@@ -614,10 +616,12 @@ export default function DeckScreen() {
     return { onTouchStart: send('down'), onTouchMove: send('move'), onTouchEnd: send('up'), onTouchCancel: send('cancel') };
   };
 
+  // Items stay in the middle of the grid when a whole edge row or column is empty; editing keeps the real grid.
+  const shift = surface && !editing ? centeringShift(surface) : { rows: 0, columns: 0 };
   const cellFrame = (row: number, column: number, rowSpan = 1, columnSpan = 1, cellWidth = regularCellWidth, cellHeight = regularCellHeight, gap = regularGap, inset = 0, offsetY = 0) => ({
     position: 'absolute' as const,
-    left: inset + column * (cellWidth + gap),
-    top: offsetY + inset + row * (cellHeight + gap),
+    left: inset + (column + shift.columns) * (cellWidth + gap),
+    top: offsetY + inset + (row + shift.rows) * (cellHeight + gap),
     width: cellWidth * columnSpan + gap * (columnSpan - 1),
     height: cellHeight * rowSpan + gap * (rowSpan - 1),
   });
@@ -657,7 +661,7 @@ export default function DeckScreen() {
       if (item.type === 'widget') {
         const placement = item.widget.placement;
         if (placement.row !== row || placement.column !== column) return null;
-        return <View key={item.widget.id} {...(item.widget.type === 'pet' ? petTouches(item.widget.id) : {})} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement), widgetOpacityStyle(item.widget, colors.panel)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' || item.widget.type === 'pet' ? null : item.widget.type === 'clipboard' ? <ClipboardWidget connected={connected} focused={isFocused} face={item.widget.face} scroll={item.widget.scroll} color={item.widget.color} immersive={big} /> : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
+        return <View key={item.widget.id} {...(item.widget.type === 'pet' ? petTouches(item.widget.id) : {})} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement), widgetOpacityStyle(item.widget, colors.panel)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' || item.widget.type === 'pet' ? null : item.widget.type === 'clipboard' ? <ClipboardWidget connected={connected} focused={isFocused} face={item.widget.face} scroll={item.widget.scroll} color={item.widget.color} immersive={big} /> : item.widget.type === 'wallpaper' ? <WallpaperWidget connected={connected} focused={isFocused} face={item.widget.face} /> : item.widget.type === 'info' ? <InfoWidget face={item.widget.face} info={item.widget.info} focused={isFocused} /> : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
       }
       const button = item.button;
       const placement = buttonPlacement(columns, button, surface?.buttons.indexOf(button) ?? 0);

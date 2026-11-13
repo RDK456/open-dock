@@ -1,7 +1,19 @@
 import { useState } from 'react';
-import { AppWindow, Bot, Clock, ClipboardList, File, FolderClosed, FolderOpen, Gauge, Globe, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, Terminal, TextCursorInput } from 'lucide-react';
+import { AppWindow, Bot, Clock, ClipboardList, File, FolderClosed, FolderOpen, Gauge, Globe, Image as ImageIcon, Info, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, Terminal, TextCursorInput } from 'lucide-react';
 
-export type WidgetChoice = { kind: 'clock' } | { kind: 'now_playing' } | { kind: 'lyrics' } | { kind: 'clipboard' } | { kind: 'pc_stats' } | { kind: 'pet' } | { kind: 'plugin'; pluginId: string; widgetId: string };
+/** Info widgets the phone fills in on its own: face, name, what it shows. */
+export const INFO_ENTRIES: [string, string, string][] = [
+  ['weather', 'Weather', 'Now and the next days for your city'],
+  ['news', 'News', 'Top headlines, tap to read'],
+  ['stocks', 'Stocks & crypto', 'Prices and daily change'],
+  ['sports', 'Sports scores', 'Live and recent scores'],
+  ['countdown', 'Countdown', 'Days to a date you pick'],
+  ['timer', 'Timer', 'Countdown timer and stopwatch'],
+  ['reminders', 'Reminders', 'A tick-off list on your phone'],
+  ['quote', 'Quote', 'A new quote each day'],
+];
+
+export type WidgetChoice = { kind: 'clock' } | { kind: 'now_playing' } | { kind: 'lyrics' } | { kind: 'clipboard' } | { kind: 'wallpaper' } | { kind: 'info'; face: string } | { kind: 'pc_stats' } | { kind: 'pet' } | { kind: 'plugin'; pluginId: string; widgetId: string };
 export type ButtonPreset = 'hotkey' | 'media' | 'launch_app' | 'launch_file' | 'launch_folder' | 'type_text' | 'open_url' | 'run_script' | 'sequence' | 'select_page' | 'select_profile';
 export type LibraryChoice = WidgetChoice | { kind: 'button'; preset: ButtonPreset } | { kind: 'plugin_action'; pluginId: string; actionId: string } | { kind: 'folder' };
 
@@ -45,6 +57,8 @@ export function DeckLibrary({ shelf = false, pluginActions, pluginWidgets, targe
     { key: 'pc_stats', icon: <Gauge size={16} />, title: 'PC stats', detail: 'CPU, GPU, RAM and temperatures', choice: { kind: 'pc_stats' } },
     { key: 'pet', icon: <Bot size={16} />, title: 'Pet', detail: 'A little companion that plays and reacts to touch', choice: { kind: 'pet' } },
     { key: 'clipboard', icon: <ClipboardList size={16} />, title: 'Clipboard', detail: 'What you copy on this PC, tap to copy again', choice: { kind: 'clipboard' } },
+    { key: 'wallpaper', icon: <ImageIcon size={16} />, title: 'Wallpapers', detail: 'Pick the PC desktop wallpaper (Wallpaper Engine)', choice: { kind: 'wallpaper' } },
+    ...INFO_ENTRIES.map(([face, title, detail]): Entry => ({ key: `info-${face}`, icon: <Info size={16} />, title, detail, choice: { kind: 'info', face } })),
     { key: 'lyrics', icon: <MicVocal size={16} />, title: 'Lyrics', detail: 'Synced lyrics for what this PC is playing', choice: { kind: 'lyrics' } },
     ...pluginWidgets.map((item) => ({ key: `${item.pluginId}::${item.widgetId}`, icon: <Package size={16} />, title: item.label, detail: 'Plugin widget', choice: { kind: 'plugin', pluginId: item.pluginId, widgetId: item.widgetId } as LibraryChoice })),
   ];
@@ -55,7 +69,7 @@ export function DeckLibrary({ shelf = false, pluginActions, pluginWidgets, targe
     if (!shown.length) return null;
     return <div className="deck-library-group" key={title}>
       <h3>{title}</h3>
-      {shown.map((entry) => <button key={entry.key} type="button" className="deck-library-item" disabled={busy || Boolean(entry.disabled)} title={entry.disabled} onPointerDown={(event) => drag.start(event, entry.choice, entry.title)} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel} onClick={(event) => { if (event.detail === 0) onKeyPick(entry.choice); }}>
+      {shown.map((entry) => <button key={entry.key} type="button" className="deck-library-item" disabled={busy || Boolean(entry.disabled)} title={entry.disabled ?? entry.detail} onPointerDown={(event) => drag.start(event, entry.choice, entry.title)} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel} onClick={(event) => { if (event.detail === 0) onKeyPick(entry.choice); }}>
         <span className="deck-library-icon">{entry.icon}</span>
         <span><strong>{entry.title}</strong><small>{entry.disabled ?? entry.detail}</small></span>
       </button>)}

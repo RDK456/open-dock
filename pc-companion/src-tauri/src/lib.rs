@@ -43,6 +43,7 @@ mod remote;
 mod system_media;
 mod usb_pair;
 mod voice;
+mod wallpaper;
 #[cfg(windows)]
 mod win_apps;
 #[cfg(windows)]
@@ -281,6 +282,32 @@ struct DeckWidget {
     /// Pet extras: outfit, mood ring, sounds, personality and quiet hours.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pet: Option<PetOptions>,
+    /// Info widget extras: its design, and what a weather, stocks, sports or reminders tile shows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    info: Option<InfoOptions>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InfoOptions {
+    /// One of info_styles(face); missing means the first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    style: Option<String>,
+    /// Weather: the city, looked up by name on the phone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    city: Option<String>,
+    /// Stocks: ticker symbols, comma separated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    symbols: Option<String>,
+    /// Sports: one of INFO_LEAGUES.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    league: Option<String>,
+    /// Reminders set on the PC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    items: Option<Vec<String>>,
+    /// Reminders: what happens to ticked ones; one of INFO_DONE.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    done: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -331,6 +358,25 @@ const PET_FACES: &[&str] = &["buddy", "cyclops", "pixel", "cat"];
 /// Clipboard widget looks, and how its list scrolls.
 const CLIPBOARD_FACES: &[&str] = &["list", "cards", "chips", "focus"];
 const CLIPBOARD_SCROLL: &[&str] = &["swipe", "snap", "auto"];
+/// Wallpaper widget layouts: a grid, big cards in a column, or a sideways carousel.
+const WALLPAPER_FACES: &[&str] = &["grid", "cards", "carousel"];
+/// Info widgets (read on the phone itself): which one this tile is.
+const INFO_FACES: &[&str] = &["weather", "news", "stocks", "sports", "countdown", "timer", "reminders", "quote"];
+const INFO_LEAGUES: &[&str] = &["nba", "nfl", "epl", "laliga", "ucl", "mlb", "nhl"];
+const INFO_DONE: &[&str] = &["show", "bottom", "hide"];
+/// Each info face's designs (pc-companion/src/DeckLibrary.tsx and phone-app/src/info-widgets.tsx list the same).
+fn info_styles(face: &str) -> &'static [&'static str] {
+    match face {
+        "weather" => &["classic", "hero", "minimal"],
+        "news" => &["list", "headline", "compact"],
+        "stocks" => &["list", "tiles", "ticker"],
+        "sports" => &["list", "cards", "compact"],
+        "countdown" => &["number", "units", "minimal"],
+        "timer" => &["classic", "ring", "minimal"],
+        "reminders" => &["list", "cards", "compact"],
+        _ => &["classic", "bold", "minimal"],
+    }
+}
 
 fn valid_hex_color(value: &str) -> bool {
     value.len() == 7 && value.starts_with('#') && value[1..].chars().all(|c| c.is_ascii_hexdigit())
@@ -345,6 +391,10 @@ enum DeckWidgetType {
     PcStats,
     Pet,
     Clipboard,
+    /// Wallpaper Engine's wallpapers, picked from the phone.
+    Wallpaper,
+    /// Weather, news, stocks and other glanceable tiles the phone fills in on its own.
+    Info,
     Plugin,
 }
 
@@ -846,8 +896,10 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         DeckWidgetType::PcStats => PC_STATS_STYLES,
         DeckWidgetType::Pet => PET_FACES,
         DeckWidgetType::Clipboard => CLIPBOARD_FACES,
+        DeckWidgetType::Wallpaper => WALLPAPER_FACES,
+        DeckWidgetType::Info => INFO_FACES,
         _ if widget.face.is_some() || widget.color.is_some() => {
-            return Err("Only clock, PC stats, pet and clipboard widgets have a style or colour".into());
+            return Err("Only clock, PC stats, pet, clipboard and wallpaper widgets have a style or colour".into());
         }
         _ => &[],
     };
@@ -859,9 +911,9 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
     }
     if widget.opacity.is_some_and(|opacity| {
         opacity > 100
-            || !matches!(widget.kind, DeckWidgetType::Clock | DeckWidgetType::PcStats | DeckWidgetType::Pet | DeckWidgetType::Clipboard)
+            || !matches!(widget.kind, DeckWidgetType::Clock | DeckWidgetType::PcStats | DeckWidgetType::Pet | DeckWidgetType::Clipboard | DeckWidgetType::Wallpaper | DeckWidgetType::Info)
     }) {
-        return Err("Widget opacity must be 0 to 100, on a clock, PC stats, pet or clipboard widget".into());
+        return Err("Widget opacity must be 0 to 100, on a clock, PC stats, pet, clipboard or wallpaper widget".into());
     }
     if widget.scroll.as_deref().is_some_and(|scroll| widget.kind != DeckWidgetType::Clipboard || !CLIPBOARD_SCROLL.contains(&scroll)) {
         return Err("Unknown clipboard scroll style".into());
@@ -877,6 +929,20 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
             || pet.quiet_from.is_some() != pet.quiet_to.is_some()
         {
             return Err("Invalid pet options".into());
+        }
+    }
+    if let Some(info) = &widget.info {
+        let face = widget.face.as_deref().unwrap_or("quote");
+        let text_ok = |text: &str, max: usize| text.len() <= max && !text.chars().any(char::is_control);
+        if widget.kind != DeckWidgetType::Info
+            || info.style.as_deref().is_some_and(|style| !info_styles(face).contains(&style))
+            || info.city.as_deref().is_some_and(|city| face != "weather" || city.trim().is_empty() || !text_ok(city, 60))
+            || info.symbols.as_deref().is_some_and(|symbols| face != "stocks" || symbols.len() > 120 || !symbols.chars().all(|c| c.is_ascii_alphanumeric() || ".^=-, ".contains(c)))
+            || info.league.as_deref().is_some_and(|league| face != "sports" || !INFO_LEAGUES.contains(&league))
+            || info.items.as_ref().is_some_and(|items| face != "reminders" || items.len() > 20 || !items.iter().all(|item| !item.trim().is_empty() && text_ok(item, 80)))
+            || info.done.as_deref().is_some_and(|done| face != "reminders" || !INFO_DONE.contains(&done))
+        {
+            return Err("Invalid info widget options".into());
         }
     }
     if widget.metric.as_deref().is_some_and(|metric| {
@@ -899,6 +965,8 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         | DeckWidgetType::PcStats
         | DeckWidgetType::Pet
         | DeckWidgetType::Clipboard
+        | DeckWidgetType::Wallpaper
+        | DeckWidgetType::Info
             if widget.plugin_id.is_none()
                 && widget.widget_id.is_none()
                 && widget.render_type.is_none()
@@ -938,7 +1006,9 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         | DeckWidgetType::Lyrics
         | DeckWidgetType::PcStats
         | DeckWidgetType::Pet
-        | DeckWidgetType::Clipboard => Err("Built-in widgets cannot contain plugin metadata".into()),
+        | DeckWidgetType::Clipboard
+        | DeckWidgetType::Wallpaper
+        | DeckWidgetType::Info => Err("Built-in widgets cannot contain plugin metadata".into()),
     }
 }
 
@@ -2382,6 +2452,22 @@ enum ClientMessage {
     /// Put a clip from the history back on this PC's clipboard.
     ClipboardCopy {
         id: u64,
+    },
+    /// The Wallpaper Engine wallpapers on this PC; `refresh` rescans instead of using the last minute's list.
+    WallpaperList {
+        #[serde(default)]
+        refresh: bool,
+    },
+    /// One wallpaper's preview picture.
+    WallpaperThumb {
+        id: String,
+    },
+    /// Show this wallpaper on the desktop.
+    WallpaperApply {
+        id: String,
+        /// Which display, counting from 0 as in the `displays` list; missing means Wallpaper Engine's own default.
+        #[serde(default)]
+        monitor: Option<u8>,
     },
     /// The phone app went to the background (false) or came back (true).
     SetStreaming {
@@ -4442,6 +4528,31 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
             }
+            ClientMessage::WallpaperList { refresh } if authenticated => {
+                let message = tokio::task::spawn_blocking(move || wallpaper::list_message(refresh)).await.unwrap_or_else(|_| serde_json::json!({ "type": "wallpaper", "supported": wallpaper::SUPPORTED, "installed": false, "items": [] }));
+                if socket.send(Message::Text(message.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
+            ClientMessage::WallpaperThumb { id } if authenticated && id.len() <= 80 => {
+                let reply_id = id.clone();
+                let data = tokio::task::spawn_blocking(move || wallpaper::thumb(&id)).await.ok().flatten();
+                let reply = serde_json::json!({ "type": "wallpaper_thumb", "id": reply_id, "data": data });
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
+            ClientMessage::WallpaperApply { id, monitor } if authenticated && id.len() <= 80 => {
+                let reply_id = id.clone();
+                let result = tokio::task::spawn_blocking(move || wallpaper::apply(&id, monitor)).await.unwrap_or_else(|_| Err("Could not change the wallpaper".into()));
+                let reply = match result {
+                    Ok(()) => serde_json::json!({ "type": "wallpaper_result", "id": reply_id, "ok": true }),
+                    Err(error) => serde_json::json!({ "type": "wallpaper_result", "id": reply_id, "ok": false, "error": error }),
+                };
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
             ClientMessage::PcStatsSubscribe { needs } if authenticated => {
                 pc_stats_needs = pc_stats::Needs::from_names(&needs[..needs.len().min(16)]);
                 state.pc_stats_demand.set(connection_id, pc_stats_needs, None);
@@ -5955,6 +6066,28 @@ mod playback_timing {
                 println!("{label}: {:.1} ms per call", started.elapsed().as_secs_f64() * 1000.0 / runs as f64);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod info_option_tests {
+    use super::*;
+
+    fn widget(face: &str, info: serde_json::Value) -> DeckWidget {
+        serde_json::from_value(serde_json::json!({ "id": "w", "type": "info", "face": face, "placement": { "row": 0, "column": 0, "rowSpan": 1, "columnSpan": 1 }, "info": info })).unwrap()
+    }
+
+    #[test]
+    fn info_options_are_checked_per_face() {
+        assert!(validate_deck_widget(&widget("stocks", serde_json::json!({ "style": "tiles", "symbols": "AAPL, BTC-USD, ^GSPC" }))).is_ok());
+        assert!(validate_deck_widget(&widget("weather", serde_json::json!({ "style": "hero", "city": "São Paulo" }))).is_ok());
+        assert!(validate_deck_widget(&widget("reminders", serde_json::json!({ "items": ["Buy milk"], "done": "bottom" }))).is_ok());
+        assert!(validate_deck_widget(&widget("sports", serde_json::json!({ "league": "epl" }))).is_ok());
+        assert!(validate_deck_widget(&widget("news", serde_json::json!({ "style": "tiles" }))).is_err());
+        assert!(validate_deck_widget(&widget("news", serde_json::json!({ "symbols": "AAPL" }))).is_err());
+        assert!(validate_deck_widget(&widget("stocks", serde_json::json!({ "symbols": "AAPL<script>" }))).is_err());
+        assert!(validate_deck_widget(&widget("sports", serde_json::json!({ "league": "curling" }))).is_err());
+        assert!(validate_deck_widget(&widget("reminders", serde_json::json!({ "items": ["  "] }))).is_err());
     }
 }
 

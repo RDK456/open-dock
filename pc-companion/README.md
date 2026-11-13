@@ -47,4 +47,14 @@ After authentication, the PC reports changes to the system playback state as `{"
 
 Supported media commands: `play_pause`, `next_track`, `previous_track`, `volume_up`, `volume_down`, and `mute`. On macOS, play/pause and track skipping go to the now playing app through the same adapter and need no permission; volume commands, and play/pause when the adapter isn't available, are sent as system media-key events. macOS asks for Accessibility permission before Open Dock can send those; allow Open Dock in **System Settings → Privacy & Security → Accessibility**.
 
+Windows only: control Steam's Wallpaper Engine. The PC reads its wallpapers from the Steam Workshop folder (app 431960) and `projects/myprojects`, and starts Wallpaper Engine's own command line with an argument list, never a shell. The phone only ever sends an id from that list.
+
+```json
+{"type":"wallpaper_list","refresh":false}
+{"type":"wallpaper_thumb","id":"ws-123456"}
+{"type":"wallpaper_apply","id":"ws-123456"}
+```
+
+Replies: `{"type":"wallpaper","supported":true,"installed":true,"items":[{"id":"ws-123456","title":"…","kind":"scene","preview":true}]}`, `{"type":"wallpaper_thumb","id":"…","data":"data:image/jpeg;base64,…"}` (`data` is `null` when the preview is missing or over 300 KB), and `{"type":"wallpaper_result","id":"…","ok":true}` (`error` on failure). The list is cached for a minute; `refresh` rescans.
+
 The macOS companion targets Catalina (10.15) and later. Build and package it on a Mac with Xcode Command Line Tools installed.
