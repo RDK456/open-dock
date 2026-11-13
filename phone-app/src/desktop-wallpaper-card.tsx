@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChevronDown, GalleryHorizontal, LayoutGrid, Monitor, RectangleVertical } from 'lucide-react-native';
 import Storage from 'expo-sqlite/kv-store';
 import { Pressable } from './motion';
@@ -111,7 +111,7 @@ export function WallpaperWidget({ connected, focused, face }: { connected: boole
   };
   // A gallery: as many columns as fit ~150 px previews; cards are one wide column.
   const columns = layout === 'grid' ? Math.max(2, Math.round(size.width / 150)) : 1;
-  const shown = useMemo(() => items.slice(0, SHOWN), [items]);
+  const shown = items;
   const rows = useMemo(() => Array.from({ length: Math.ceil(shown.length / columns) }, (_, row) => shown.slice(row * columns, row * columns + columns)), [shown, columns]);
   const chosenId = result?.ok ? result.id : undefined;
   const pick = (item: PcWallpaper) => { haptic.select(); if (applyPcWallpaper(item.id, display)) setWaitingAfter(seq); };
@@ -140,17 +140,15 @@ export function WallpaperWidget({ connected, focused, face }: { connected: boole
       </Pressable>)}
     </ScrollView> : null}
     {layout === 'carousel' ? <View style={styles.widgetScroll} onLayout={(event) => setPager(event.nativeEvent.layout)}>
-      {pager.width > 0 ? <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} nestedScrollEnabled>
-        {shown.map((item, index) => <View key={item.id} style={{ width: pager.width, height: pager.height, paddingHorizontal: 2 }}>
+      {/* Lists, not plain scroll views: only the previews on screen are loaded and kept, so hundreds fit in memory. */}
+      {pager.width > 0 ? <FlatList horizontal pagingEnabled showsHorizontalScrollIndicator={false} nestedScrollEnabled data={shown} keyExtractor={(item) => item.id} windowSize={3} initialNumToRender={2} maxToRenderPerBatch={2}
+        getItemLayout={(_, index) => ({ length: pager.width, offset: pager.width * index, index })}
+        renderItem={({ item, index }) => <View style={{ width: pager.width, height: pager.height, paddingHorizontal: 2 }}>
           <View style={styles.widgetScroll}>{tile(item, true)}</View>
           <Text style={styles.count}>{index + 1} / {shown.length}</Text>
-        </View>)}
-      </ScrollView> : null}
-    </View> : <ScrollView style={styles.widgetScroll} contentContainerStyle={[styles.widgetContent, { gap: 8 }]} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-      {rows.map((row, index) => <View key={index} style={styles.rowTight}>
-        {row.map((item) => tile(item))}
-        </View>)}
-    </ScrollView>}
+        </View>} /> : null}
+    </View> : <FlatList style={styles.widgetScroll} contentContainerStyle={[styles.widgetContent, { gap: 8 }]} showsVerticalScrollIndicator={false} nestedScrollEnabled data={rows} keyExtractor={(row) => row[0].id} windowSize={5} initialNumToRender={4}
+      renderItem={({ item: row }) => <View style={styles.rowTight}>{row.map((item) => tile(item))}</View>} />}
     {result && !pending && !result.ok ? <Text style={[styles.hint, { color: colors.red }]} accessibilityLiveRegion="polite">{result.error ?? 'Could not change the wallpaper.'}</Text> : null}
   </View>;
 }
