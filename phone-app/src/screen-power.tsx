@@ -6,7 +6,7 @@ import * as Brightness from 'expo-brightness';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setAppLock, useAppLockEnabled } from './app-lock';
 import { setPrefs, usePrefs } from './prefs';
-import { LOOKS, setLook, setThemeMode, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
+import { ACCENTS, CORNERS, LOOKS, setAccent, setCorners, setLook, setThemeMode, useAccent, useCorners, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
 import { clearWallpaperImage, pickWallpaperImage, setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
 
 const LOOK_HINTS: Record<Look, string> = {
@@ -113,6 +113,8 @@ export function AppearanceSection() {
   const styles = useStyles(makeStyles);
   const mode = useThemeMode();
   const look = useLook();
+  const accent = useAccent();
+  const corners = useCorners();
   const { wallpaper, motion, image, imageOpacity, gradient, keyOpacity } = useWallpaperSettings();
   const options: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
   return <View style={styles.card}>
@@ -120,6 +122,10 @@ export function AppearanceSection() {
     <Text style={styles.label}>Look</Text>
     <Choice options={LOOKS} value={look} onChange={setLook} />
     <Text style={styles.hint}>{LOOK_HINTS[look]}</Text>
+    <Text style={styles.label}>Accent colour</Text>
+    <Choice options={ACCENTS} value={accent} onChange={setAccent} />
+    <Text style={styles.label}>Corners</Text>
+    <Choice options={CORNERS} value={corners} onChange={setCorners} />
     <Text style={styles.label}>Light or dark</Text>
     <Choice options={options} value={mode} onChange={setThemeMode} />
     <Text style={styles.hint}>{"System follows this phone's setting. Your PC has its own."}</Text>

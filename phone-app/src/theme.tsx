@@ -40,6 +40,42 @@ export function setLook(next: Look) {
   listeners.forEach((listener) => listener());
 }
 
+// Two tweaks on top of any look: an accent colour ('' keeps the look's own) and how round its corners are.
+export type Corners = 'sharp' | 'default' | 'round';
+export const CORNERS: [Corners, string][] = [['sharp', 'Sharp'], ['default', 'Default'], ['round', 'Round']];
+export const ACCENTS: [string, string][] = [['', 'Look'], ['#7c84f5', 'Violet'], ['#38bdf8', 'Sky'], ['#34d399', 'Mint'], ['#fb923c', 'Orange'], ['#f472b6', 'Pink']];
+const SCALE: Record<Corners, number> = { sharp: 0.4, default: 1, round: 1.5 };
+const ACCENT_KEY = 'opendock.accent';
+const CORNERS_KEY = 'opendock.corners';
+let accent = '';
+let corners: Corners = 'default';
+try {
+  const a = Storage.getItemSync(ACCENT_KEY);
+  accent = ACCENTS.some(([hex]) => hex === a) ? a ?? '' : '';
+  const c = Storage.getItemSync(CORNERS_KEY);
+  corners = c === 'sharp' || c === 'round' ? c : 'default';
+} catch { /* defaults */ }
+
+export function setAccent(next: string) {
+  accent = next;
+  try { Storage.setItemSync(ACCENT_KEY, next); } catch { /* lasts until the app closes */ }
+  listeners.forEach((listener) => listener());
+}
+export function setCorners(next: Corners) {
+  corners = next;
+  try { Storage.setItemSync(CORNERS_KEY, next); } catch { /* lasts until the app closes */ }
+  listeners.forEach((listener) => listener());
+}
+export const useAccent = (): string => useSyncExternalStore(subscribe, () => accent);
+export const useCorners = (): Corners => useSyncExternalStore(subscribe, () => corners);
+
+/** Dark ink on a light accent, light ink on a dark one. */
+const inkOn = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150 ? '#09090b' : '#fafafa';
+};
+const round = (radius: number, k: number) => (radius >= 100 ? radius : Math.round(radius * k));
+
 export const useThemeMode = (): ThemeMode => useSyncExternalStore(subscribe, () => mode);
 export const useLook = (): Look => useSyncExternalStore(subscribe, () => look);
 
@@ -48,11 +84,19 @@ export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; l
   const chosen = useThemeMode();
   const current = useLook();
   const system = useColorScheme();
+  const tint = useAccent();
+  const shape = useCorners();
   return useMemo(() => {
     const scheme: Scheme = chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen;
-    const colors = current === 'classic' ? (scheme === 'light' ? lightColors : darkColors) : LOOK_THEMES[current][scheme];
-    return { colors, scheme, mode: chosen, look: current, key: keyLook(current, colors, scheme), heading: headingLook(current), surface: surfaceLook(current) };
-  }, [chosen, current, system]);
+    const base = current === 'classic' ? (scheme === 'light' ? lightColors : darkColors) : LOOK_THEMES[current][scheme];
+    const colors = tint ? { ...base, accent: tint, onAccent: inkOn(tint), borderFocus: tint } : base;
+    const k = SCALE[shape];
+    const key0 = keyLook(current, colors, scheme);
+    const surf = surfaceLook(current);
+    const key = k === 1 ? key0 : { ...key0, radius: round(key0.radius, k) };
+    const surface = k === 1 ? surf : { ...surf, radius: round(surf.radius, k), chipRadius: round(surf.chipRadius, k), railRadius: round(surf.railRadius, k), puck: Math.min(0.5, surf.puck * k) };
+    return { colors, scheme, mode: chosen, look: current, key, heading: headingLook(current), surface };
+  }, [chosen, current, system, tint, shape]);
 }
 
 /** Styles built from the current colors: `const styles = useStyles(makeStyles)`, with `makeStyles = (colors) => StyleSheet.create({...})`. */
