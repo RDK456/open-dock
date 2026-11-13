@@ -71,11 +71,11 @@ export function WallpaperWidget({ connected, focused, face }: { connected: boole
   const options: { index: number | undefined; label: string }[] = [{ index: undefined, label: 'All displays' }, ...displays];
   return <View style={styles.widgetScroll} onLayout={(event) => setSize(event.nativeEvent.layout)}>
     <View style={styles.bar}>
-      <Pressable style={styles.menuButton} onPress={() => { haptic.select(); setMenu(!menu); }} accessibilityRole="button" accessibilityState={{ expanded: menu }} accessibilityLabel={`Display: ${displayLabel}. Choose a display`}>
+      <Pressable style={styles.menuButton} hitSlop={7} onPress={() => { haptic.select(); setMenu(!menu); }} accessibilityRole="button" accessibilityState={{ expanded: menu }} accessibilityLabel={`Display: ${displayLabel}. Choose a display`}>
         <Monitor size={13} color={colors.muted} /><Text style={styles.menuText} numberOfLines={1}>{displayLabel}</Text><ChevronDown size={13} color={colors.muted} />
       </Pressable>
       <View style={styles.layouts}>
-        {LAYOUTS.map(([id, Icon, name]) => <Pressable key={id} style={[styles.layoutButton, layout === id && { backgroundColor: colors.pressed }]} onPress={() => { haptic.select(); change({ layout: id }); }} accessibilityRole="button" accessibilityState={{ selected: layout === id }} accessibilityLabel={`${name} layout`}>
+        {LAYOUTS.map(([id, Icon, name]) => <Pressable key={id} hitSlop={{ top: 7, bottom: 7 }} style={[styles.layoutButton, layout === id && { backgroundColor: colors.pressed }]} onPress={() => { haptic.select(); change({ layout: id }); }} accessibilityRole="button" accessibilityState={{ selected: layout === id }} accessibilityLabel={`${name} layout`}>
           <Icon size={14} color={layout === id ? colors.text : colors.muted} />
         </Pressable>)}
       </View>
@@ -112,7 +112,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   menuButton: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 30, paddingHorizontal: 6, borderRadius: 5 },
   menuText: { color: colors.muted, fontSize: 11, flexShrink: 1 },
   menu: { position: 'absolute', top: 34, left: 0, zIndex: 10, elevation: 8, maxHeight: 160, minWidth: 180, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelRaised },
-  menuItem: { minHeight: 32, paddingHorizontal: 8, justifyContent: 'center' },
+  menuItem: { minHeight: 40, paddingHorizontal: 8, justifyContent: 'center' },
   layouts: { flexDirection: 'row', gap: 2, flexShrink: 0 },
   layoutButton: { width: 30, height: 30, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
   count: { position: 'absolute', right: 8, top: 6, color: colors.text, fontSize: 10, backgroundColor: colors.panelRaised, paddingHorizontal: 5, borderRadius: 4, overflow: 'hidden' },

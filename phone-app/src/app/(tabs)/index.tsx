@@ -798,7 +798,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   immersivePluginWidgetContent: { gap: 7, paddingHorizontal: 8 },
   pluginWidgetTitle: { width: '100%', flexShrink: 1, color: colors.text, fontWeight: '600', textAlign: 'center', includeFontPadding: false },
   pluginWidgetBody: { width: '100%', flexShrink: 1, color: colors.muted, textAlign: 'center', includeFontPadding: false },
-  pluginWidgetUnavailable: { color: colors.muted, fontSize: 10, textAlign: 'center' },
+  pluginWidgetUnavailable: { color: colors.muted, fontSize: 11, textAlign: 'center' },
   sourceChipWrap: { position: 'absolute', top: 6, right: 6, zIndex: 5 },
   mediaKeyDot: { position: 'absolute', top: 7, right: 7, width: 7, height: 7, borderRadius: 4, backgroundColor: colors.star },
   nowPlayingWidget: { flex: 1, width: '100%', minWidth: 0, minHeight: 0, overflow: 'hidden', borderRadius: 6 },

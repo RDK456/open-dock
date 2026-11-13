@@ -671,10 +671,10 @@ button:focus-visible { outline: 2px solid var(--z300); outline-offset: 2px; }
 .secondary-button:hover:not(:disabled) { background: var(--z800); }
 .secondary-button:disabled { opacity: .5; cursor: default; }
 .pair-note { max-width: 430px; margin: 12px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.5; }
-.usb-setup { max-width: 440px; margin-top: 17px; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--z950); }
+.usb-setup { max-width: 440px; margin-top: 17px; padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--border); }
 .usb-setup strong, .usb-setup span { display: block; }
-.usb-setup strong { color: var(--z200); font-size: 12px; font-weight: 500; }
-.usb-setup span { margin-top: 4px; color: var(--subtle); font-size: 11px; line-height: 1.4; }
+.usb-setup strong { color: var(--z200); font-size: 13px; font-weight: 500; }
+.usb-setup span { margin-top: 4px; color: var(--subtle); font-size: 12px; line-height: 1.4; }
 .usb-setup .secondary-button { flex: none; }
 .usb-error { max-width: 430px; margin: 8px 0 0; color: var(--red); font-size: 12px; line-height: 1.5; }
 .reset-pairing-button { margin-top: 14px; }
@@ -1256,7 +1256,7 @@ html:has(.app-shell.glass-window), body:has(.app-shell.glass-window) { backgroun
 .connection-details code { font-size: 12px; }
 .qr-column { border-radius: 14px; border-color: var(--hairline); }
 .qr-frame { border-radius: 8px; }
-.usb-setup { border-radius: 12px; border-color: var(--hairline); }
+.usb-setup { border-color: var(--hairline); }
 .section-icon { border-radius: 10px; }
 .secondary-button, .primary-button { border-radius: 10px; }
 .transport-tabs { border-radius: 10px; }
@@ -1409,7 +1409,7 @@ html[data-look="atelier"] { font-family: "Segoe UI Variable Text", "IBM Plex San
 [data-look="atelier"] .pair-card, [data-look="atelier"] .status-card, [data-look="atelier"] .content > section.device-navigation-setting, [data-look="atelier"] .open-dock-plugin-settings, [data-look="atelier"] .deck-canvas-wrap, [data-look="atelier"] .button-properties { border-color: var(--border); border-radius: 2px; box-shadow: none; }
 [data-look="atelier"] .secondary-button, [data-look="atelier"] .primary-button, [data-look="atelier"] .transport-tabs, [data-look="atelier"] .transport-tab, [data-look="atelier"] .deck-page-tabs, [data-look="atelier"] .deck-page-tabs button { border-radius: 2px; }
 [data-look="atelier"] .primary-button, [data-look="atelier"] .secondary-button { letter-spacing: .06em; }
-[data-look="atelier"] .connection-details, [data-look="atelier"] .qr-column, [data-look="atelier"] .usb-setup, [data-look="atelier"] .qr-frame { border-radius: 2px; }
+[data-look="atelier"] .connection-details, [data-look="atelier"] .qr-column, [data-look="atelier"] .qr-frame { border-radius: 2px; }
 [data-look="atelier"] .ready-badge { border-radius: 0; letter-spacing: .1em; text-transform: uppercase; font-size: 11px; }
 [data-look="atelier"] .pin-hero strong { font-family: var(--serif); font-size: 58px; font-weight: 400; letter-spacing: .04em; }
 [data-look="atelier"] .deck-button:not(.deck-slot):not(.clock-widget) strong { font-family: var(--serif); letter-spacing: .005em; }
@@ -1499,7 +1499,7 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 /* Screen changes zoom in; menus, pickers and dialogs pop open. Kept on even when the OS turns animations off. */
 @keyframes screen-zoom { from { opacity: 0; transform: scale(.94); } }
 @keyframes pop-zoom { from { opacity: 0; transform: scale(.9); } }
-.content { animation: screen-zoom 380ms cubic-bezier(.34, 1.3, .64, 1) both !important; }
+.content { animation: screen-zoom 320ms var(--glide) both !important; }
 [role="dialog"], [role="menu"], [role="listbox"], .deck-menu, .select-menu, .app-picker, .icon-picker-menu { animation: pop-zoom 220ms cubic-bezier(.34, 1.4, .64, 1) both; }
 
 /* The Motion switch in Settings: with it off everything holds still (the specificity beats the !important rules above). */
