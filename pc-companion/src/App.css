@@ -1553,3 +1553,8 @@ html[data-motion="off"] .nav-item:hover, html[data-motion="off"] .primary-button
 .wallpaper-match-swatch { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .wallpaper-match-swatch span { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border); }
 html[data-match] body { background-image: radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--wallpaper-tint) 16%, transparent), transparent 70%); background-attachment: fixed; }
+
+/* Many short settings in one card, split by hairlines, instead of a stack of tall cards. */
+.setting-group { max-width: 760px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
+.setting-group > .device-navigation-setting { min-height: 0; padding: 14px 18px; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.setting-group > .device-navigation-setting + .device-navigation-setting { border-top: 1px solid var(--border); }

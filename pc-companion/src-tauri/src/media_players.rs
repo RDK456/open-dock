@@ -137,6 +137,7 @@ pub(super) fn resolve_and_publish(players: Vec<PlayerInfo>, windows_current: Opt
 }
 
 /// Where only one app is reported (macOS), that app is the only player.
+#[cfg(any(not(windows), test))]
 pub(super) fn single_player(source_app_id: Option<&str>, state: PlaybackState, title: Option<&str>, artist: Option<&str>) -> Vec<PlayerInfo> {
     match source_app_id {
         Some(id) if !id.is_empty() => vec![PlayerInfo { id: id.to_owned(), name: friendly_name(id), state, title: title.map(str::to_owned), artist: artist.map(str::to_owned) }],

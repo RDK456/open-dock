@@ -198,11 +198,14 @@ mod tests {
         std::fs::write(dir.join("old"), &old).unwrap();
         std::fs::write(dir.join("new"), &new).unwrap();
         let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/make-delta.py");
-        let status = std::process::Command::new("python")
+        use std::process::Command;
+        let out = crate::quiet(&mut Command::new("python"))
             .arg(script).arg("diff").arg(dir.join("old")).arg(dir.join("new")).arg(dir.join("patch"))
-            .status();
-        let Ok(status) = status else { return }; // no Python here: nothing to compare against
-        assert!(status.success());
+            .output();
+        let Ok(out) = out else { return }; // no Python here: nothing to compare against
+        // No bsdiff4 for this Python: nothing to compare against either.
+        if String::from_utf8_lossy(&out.stderr).contains("bsdiff4") { return; }
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         let patch = std::fs::read(dir.join("patch")).unwrap();
         assert_eq!(super::apply(&old, &patch).unwrap(), new);
         assert!(super::apply(&old, &patch[..patch.len() - 3]).is_err());

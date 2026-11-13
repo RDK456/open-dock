@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown, GalleryHorizontal, LayoutGrid, Monitor, RectangleVertical } from 'lucide-react-native';
 import Storage from 'expo-sqlite/kv-store';
 import { Pressable } from './motion';
-import { usePcConnection } from './connection';
 import { applyPcWallpaper, loadWallpaperThumb, loadWallpapers, useDesktopWallpapers, type PcWallpaper } from './desktop-wallpaper-feed';
 import { haptic } from './prefs';
 import { useStyles, useTheme, type Colors } from './theme';
-
-const COLUMNS = 3;
-const SHOWN = 60;
 
 function Tile({ item, preview, busy, chosen, fill, width, onPick }: { item: PcWallpaper; preview: string | null | undefined; busy: boolean; chosen?: boolean; fill?: boolean; width?: number; onPick: () => void }) {
   const styles = useStyles(makeStyles);
@@ -22,56 +18,6 @@ function Tile({ item, preview, busy, chosen, fill, width, onPick }: { item: PcWa
     </View>
     <Text style={styles.name} numberOfLines={1}>{item.title}</Text>
   </Pressable>;
-}
-
-/** The "Desktop wallpaper" card: lists the PC's Wallpaper Engine wallpapers and sets the one you tap. */
-export function DesktopWallpaperCard() {
-  const styles = useStyles(makeStyles);
-  const { colors } = useTheme();
-  const { status } = usePcConnection();
-  const { loaded, supported, installed, items, thumbs, result, seq } = useDesktopWallpapers();
-  const [query, setQuery] = useState('');
-  // The feed's counter when a wallpaper was tapped; the PC's answer, or a dropped connection, moves it on and ends the wait.
-  const [waitingAfter, setWaitingAfter] = useState<number | null>(null);
-  const pending = waitingAfter !== null && seq === waitingAfter;
-  const connected = status === 'connected';
-
-  useEffect(() => { if (connected) loadWallpapers(); }, [connected]);
-
-  const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return (needle ? items.filter((item) => item.title.toLowerCase().includes(needle)) : items).slice(0, SHOWN);
-  }, [items, query]);
-  const rows = useMemo(() => Array.from({ length: Math.ceil(shown.length / COLUMNS) }, (_, row) => shown.slice(row * COLUMNS, row * COLUMNS + COLUMNS)), [shown]);
-
-  const pick = (item: PcWallpaper) => {
-    haptic.select();
-    if (applyPcWallpaper(item.id)) setWaitingAfter(seq);
-  };
-
-  let body;
-  if (!connected) body = <Text style={styles.hint}>Connect to your PC to choose its wallpaper.</Text>;
-  else if (!loaded) body = <View style={styles.center}><ActivityIndicator color={colors.muted} /></View>;
-  else if (!supported) body = <Text style={styles.hint}>Wallpaper Engine control works on Windows PCs only.</Text>;
-  else if (!installed) body = <Text style={styles.hint}>Wallpaper Engine was not found on this PC. Install it from Steam, then refresh.</Text>;
-  else if (items.length === 0) body = <Text style={styles.hint}>No wallpapers yet. Subscribe to some in the Steam Workshop, then refresh.</Text>;
-  else body = <>
-    <TextInput value={query} onChangeText={setQuery} placeholder="Search wallpapers" placeholderTextColor={colors.faint} style={styles.search} autoCapitalize="none" autoCorrect={false} accessibilityLabel="Search wallpapers" />
-    {shown.length === 0 ? <Text style={styles.hint}>Nothing matches that search.</Text> : rows.map((row, index) => <View key={index} style={styles.row}>
-      {row.map((item) => <Tile key={item.id} item={item} preview={thumbs[item.id]} busy={pending} onPick={() => pick(item)} />)}
-      {Array.from({ length: COLUMNS - row.length }, (_, fill) => <View key={`fill-${fill}`} style={styles.tile} />)}
-    </View>)}
-    {items.length > SHOWN && !query ? <Text style={styles.hint}>Showing {SHOWN} of {items.length}. Search to find the rest.</Text> : null}
-  </>;
-
-  return <View style={styles.card}>
-    <View style={styles.head}>
-      <Text style={styles.title}>Desktop wallpaper</Text>
-      {connected && loaded && supported ? <Pressable style={styles.refresh} onPress={() => { haptic.select(); loadWallpapers(true); }} accessibilityRole="button" accessibilityLabel="Rescan wallpapers"><Text style={styles.refreshText}>Refresh</Text></Pressable> : null}
-    </View>
-    {body}
-    {pending ? <Text style={styles.hint}>Changing wallpaper…</Text> : result ? <Text style={[styles.hint, !result.ok && { color: colors.red }]} accessibilityLiveRegion="polite">{result.ok ? 'Wallpaper changed.' : result.error ?? 'Could not change the wallpaper.'}</Text> : null}
-  </View>;
 }
 
 type Layout = 'grid' | 'cards' | 'carousel';
@@ -154,15 +100,7 @@ export function WallpaperWidget({ connected, focused, face }: { connected: boole
 }
 
 const makeStyles = (colors: Colors) => StyleSheet.create({
-  card: { marginTop: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 7, backgroundColor: colors.panel },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { color: colors.text, fontSize: 13, fontWeight: '500' },
-  refresh: { paddingHorizontal: 10, minHeight: 32, borderRadius: 5, justifyContent: 'center', backgroundColor: colors.bg },
-  refreshText: { color: colors.muted, fontSize: 12 },
   hint: { color: colors.faint, fontSize: 12, marginTop: 9, lineHeight: 15 },
-  center: { paddingVertical: 18 },
-  search: { marginTop: 10, minHeight: 38, paddingHorizontal: 10, borderRadius: 5, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 13 },
-  row: { flexDirection: 'row', gap: 8, marginTop: 8 },
   tile: { flex: 1, minWidth: 0 },
   tileFill: { flex: 1, minWidth: 0 },
   rowTight: { flexDirection: 'row', gap: 8 },

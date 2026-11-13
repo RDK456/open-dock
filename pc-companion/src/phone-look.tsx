@@ -44,6 +44,7 @@ export function PhoneLookSetting() {
   const accents = ACCENTS.some(([hex]) => hex === now.accent) ? ACCENTS : [...ACCENTS, [now.accent, 'Custom'] as Option<string>];
   return <>
     {look ? null : <p className="panel-note">Connect your phone once to load its current settings.</p>}
+    <div className="setting-group">
     <Row title="Look" note="The phone's design. Each comes in light and dark." options={LOOKS} value={now.look} onChange={(value) => set({ look: value })} />
     <Row title="Light or dark" note="System follows the phone's own setting." options={MODES} value={now.mode} onChange={(value) => set({ mode: value })} />
     <Row title="Accent colour" note="Match PC wallpaper, when on, uses the wallpaper's colour instead." options={accents} value={now.accent} onChange={(value) => set({ accent: value })} />
@@ -53,5 +54,6 @@ export function PhoneLookSetting() {
     <Row title="Key transparency" options={KEYS} value={now.keyOpacity} onChange={(value) => set({ keyOpacity: value })} />
     <Row title="Background image opacity" note="For a picture chosen on the phone, or the PC wallpaper." options={IMAGE} value={now.imageOpacity} onChange={(value) => set({ imageOpacity: value })} />
     <Row title="Gradient over image" options={GRADIENT} value={now.gradient} onChange={(value) => set({ gradient: value })} />
+    </div>
   </>;
 }
