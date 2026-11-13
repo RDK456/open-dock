@@ -81,10 +81,12 @@ function follow() {
   if (want && !poll) poll = setInterval(() => loadWallpapers(), 30_000);
   if (!want && poll) { clearInterval(poll); poll = null; }
 }
-export function receiveWallpaperBackdrop(message: { id?: unknown; data?: unknown }) {
+export function receiveWallpaperBackdrop(message: { id?: unknown; data?: unknown; sharp?: unknown }) {
   if (message.id !== matched || !state.match) return;
-  if (typeof message.data === 'string' && message.data.length < 3_000_000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(message.data)) setPcBackdrop(message.data);
-  else matched = null;
+  const ok = typeof message.data === 'string' && message.data.length < 3_000_000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(message.data);
+  if (ok) setPcBackdrop(message.data as string);
+  // Only the small preview so far (Wallpaper Engine writes its full snapshot a moment later): ask again next look.
+  if (!ok || message.sharp !== true) matched = null;
 }
 /** Called with the deck config's setting, whenever a deck arrives. */
 export function setWallpaperMatch(on: boolean) {

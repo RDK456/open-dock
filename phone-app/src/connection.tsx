@@ -559,7 +559,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           if (message.type === 'wallpaper') receiveWallpapers(message as { supported?: unknown; installed?: unknown; items?: unknown; displays?: unknown; current?: unknown; color?: unknown });
           if (message.type === 'wallpaper_thumb') receiveWallpaperThumb(message as { id?: unknown; data?: unknown });
           if (message.type === 'wallpaper_result') receiveWallpaperResult(message as { id?: unknown; ok?: unknown; error?: unknown });
-          if (message.type === 'wallpaper_backdrop') receiveWallpaperBackdrop(message as { id?: unknown; data?: unknown });
+          if (message.type === 'wallpaper_backdrop') receiveWallpaperBackdrop(message as { id?: unknown; data?: unknown; sharp?: unknown });
           if (message.type === 'clipboard_result') receiveClipboardResult(message as { id?: unknown; ok?: unknown; error?: unknown });
           if (message.type === 'media_progress') {
             const progress = message as { playbackState?: unknown; positionMs?: unknown; durationMs?: unknown; volumePercent?: unknown; muted?: unknown; playbackRate?: unknown };

@@ -162,8 +162,7 @@ pub(super) fn current_message() -> serde_json::Value {
 
 /// A wallpaper's main colour as #rrggbb, made bright and strong enough to be an accent.
 fn color(found: &Library, id: &str) -> Option<String> {
-    let path = found.entries.iter().find(|entry| entry.id == id)?.preview.as_ref()?;
-    let [r, g, b] = accent_of(&tiny_pixels(path)?)?;
+    let [r, g, b] = accent_of(&tiny_pixels(&picture(found, id)?.0)?)?;
     Some(format!("#{r:02x}{g:02x}{b:02x}"))
 }
 
@@ -195,6 +194,26 @@ fn accent_of(bgr: &[u8]) -> Option<[u8; 3]> {
     Some([r, g, b].map(|value| ((value + m) * 255.0).round().clamp(0.0, 255.0) as u8))
 }
 
+/// Wallpaper Engine's full-size snapshot of the main display's wallpaper (it keeps one for the lock screen), when it
+/// is at least as new as the last wallpaper change. Previews are often tiny (128 px), this is the real picture.
+fn snapshot(found: &Library) -> Option<PathBuf> {
+    let config = std::fs::metadata(found.exe.as_ref()?.parent()?.join("config.json")).ok()?.modified().ok()?;
+    let path = PathBuf::from(std::env::var_os("APPDATA")?).join(r"Microsoft\Windows\Themes\WallpaperEngineLockOverride.jpg");
+    let taken = std::fs::metadata(&path).ok()?.modified().ok()?;
+    // Written a moment after config.json; a snapshot from well before the change shows the old wallpaper.
+    (taken + Duration::from_secs(10) >= config).then_some(path)
+}
+
+/// The best picture of a wallpaper: the snapshot when it is the one showing, else its preview. True when sharp.
+fn picture(found: &Library, id: &str) -> Option<(PathBuf, bool)> {
+    if current(found).as_deref() == Some(id) {
+        if let Some(path) = snapshot(found) {
+            return Some((path, true));
+        }
+    }
+    Some((found.entries.iter().find(|entry| entry.id == id)?.preview.clone()?, false))
+}
+
 /// The wallpaper on the main display, from Wallpaper Engine's own config.json (one block per Windows user).
 fn current(found: &Library) -> Option<String> {
     let config = found.exe.as_ref()?.parent()?.join("config.json");
@@ -212,11 +231,13 @@ fn current_id(found: &Library, file: &str) -> Option<String> {
     found.entries.iter().find(|entry| entry.project.parent().is_some_and(|parent| same(parent) == folder)).map(|entry| entry.id.clone())
 }
 
-/// One wallpaper's preview as a larger JPEG data URL, for the phone's background.
-pub(super) fn backdrop(id: &str) -> Option<String> {
+/// A wallpaper's picture as a larger JPEG data URL for the phone's background, and whether it is sharp (the
+/// snapshot) or only the preview, which the phone swaps out once the snapshot is ready.
+pub(super) fn backdrop(id: &str) -> Option<(String, bool)> {
     let found = library(false);
-    let path = found.entries.iter().find(|entry| entry.id == id)?.preview.as_ref()?;
-    small_jpeg(path, BACKDROP_WIDTH).map(|jpeg| format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(jpeg)))
+    let (path, sharp) = picture(&found, id)?;
+    let jpeg = small_jpeg(&path, BACKDROP_WIDTH)?;
+    Some((format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(jpeg)), sharp))
 }
 
 /// One wallpaper's preview as a data URL: shrunk to a small JPEG (a full-size GIF can run the phone out of memory),

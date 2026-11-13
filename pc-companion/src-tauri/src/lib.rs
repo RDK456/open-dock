@@ -4556,8 +4556,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
             }
             ClientMessage::WallpaperBackdrop { id } if authenticated && id.len() <= 80 => {
                 let reply_id = id.clone();
-                let data = tokio::task::spawn_blocking(move || wallpaper::backdrop(&id)).await.ok().flatten();
-                let reply = serde_json::json!({ "type": "wallpaper_backdrop", "id": reply_id, "data": data });
+                let found = tokio::task::spawn_blocking(move || wallpaper::backdrop(&id)).await.ok().flatten();
+                let (data, sharp) = found.map_or((None, false), |(data, sharp)| (Some(data), sharp));
+                let reply = serde_json::json!({ "type": "wallpaper_backdrop", "id": reply_id, "data": data, "sharp": sharp });
                 if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
                     break;
                 }
