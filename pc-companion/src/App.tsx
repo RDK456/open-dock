@@ -91,6 +91,7 @@ import { version } from "../package.json";
 import { UpdatesSetting, useUpdater } from "./updates";
 import { AppearanceSetting, inkIcon, motionOn, useTheme } from "./theme";
 import { useWallpaperMatch, WallpaperMatchSetting } from "./wallpaper/match";
+import { PhoneLookSetting } from "./phone-look";
 
 type DeviceInfo = { id: string; name: string; phoneName: string; online: boolean; ownDeck: boolean };
 
@@ -548,6 +549,8 @@ function App() {
           <h2 className="settings-group">Appearance</h2>
           <AppearanceSetting />
           <WallpaperMatchSetting {...wallpaperMatch} />
+          <h2 className="settings-group">Phone appearance</h2>
+          <PhoneLookSetting />
           <h2 className="settings-group">General</h2>
           <section className="device-navigation-setting pc-name-setting">
             <div className="device-navigation-copy"><h2>This PC's name</h2><p>Phones show this name instead of the IP address.</p></div>

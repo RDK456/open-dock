@@ -198,6 +198,68 @@ struct DeckConfig {
     /// The phone's background follows the wallpaper on this PC's main display.
     #[serde(default)]
     match_pc_wallpaper: bool,
+    /// The phone's look (design, colours, background), set on the phone or here. None until either sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    phone_look: Option<PhoneLook>,
+}
+
+/// The phone's appearance settings. Every field is optional so a change can carry just what changed.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct PhoneLook {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    look: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    accent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    corners: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wallpaper: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    motion: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_opacity: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    image_opacity: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gradient: Option<f64>,
+}
+
+impl PhoneLook {
+    /// Keeps only the fields with a value the phone knows.
+    fn cleaned(self) -> Self {
+        let one_of = |value: Option<String>, allowed: &[&str]| value.filter(|value| allowed.contains(&value.as_str()));
+        let unit = |value: Option<f64>| value.filter(|value| (0.0..=1.0).contains(value));
+        PhoneLook {
+            look: one_of(self.look, &["classic", "studio", "atelier", "signal", "glass", "funk", "dock"]),
+            mode: one_of(self.mode, &["light", "dark", "system"]),
+            accent: self.accent.filter(|hex| hex.is_empty() || (hex.len() == 7 && hex.starts_with('#') && hex[1..].chars().all(|c| c.is_ascii_hexdigit()))),
+            corners: one_of(self.corners, &["sharp", "default", "round"]),
+            wallpaper: one_of(self.wallpaper, &["none", "aurora", "ember", "ocean", "forest"]),
+            motion: self.motion,
+            key_opacity: unit(self.key_opacity),
+            image_opacity: unit(self.image_opacity),
+            gradient: unit(self.gradient),
+        }
+    }
+
+    /// This look with `patch`'s fields on top.
+    fn merged(&self, patch: PhoneLook) -> Self {
+        let patch = patch.cleaned();
+        PhoneLook {
+            look: patch.look.or_else(|| self.look.clone()),
+            mode: patch.mode.or_else(|| self.mode.clone()),
+            accent: patch.accent.or_else(|| self.accent.clone()),
+            corners: patch.corners.or_else(|| self.corners.clone()),
+            wallpaper: patch.wallpaper.or_else(|| self.wallpaper.clone()),
+            motion: patch.motion.or(self.motion),
+            key_opacity: patch.key_opacity.or(self.key_opacity),
+            image_opacity: patch.image_opacity.or(self.image_opacity),
+            gradient: patch.gradient.or(self.gradient),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -731,6 +793,7 @@ fn default_deck_config() -> DeckConfig {
         fallback_profile_id: "default".to_owned(),
         migration_notes: Vec::new(),
         match_pc_wallpaper: false,
+        phone_look: None,
     }
 }
 
@@ -2473,6 +2536,10 @@ enum ClientMessage {
     /// Turn "match PC wallpaper" on or off, on every deck.
     WallpaperMatch {
         on: bool,
+    },
+    /// The phone's appearance changed (only the fields that changed, or all of them the first time).
+    PhoneLook {
+        look: PhoneLook,
     },
     /// Show this wallpaper on the desktop.
     WallpaperApply {
@@ -4566,6 +4633,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
             ClientMessage::WallpaperMatch { on } if authenticated => {
                 let _ = set_match_everywhere(&state, on);
             }
+            ClientMessage::PhoneLook { look } if authenticated => {
+                let _ = set_look_everywhere(&state, look);
+            }
             ClientMessage::WallpaperApply { id, monitor } if authenticated && id.len() <= 80 => {
                 let reply_id = id.clone();
                 let result = tokio::task::spawn_blocking(move || wallpaper::apply(&id, monitor)).await.unwrap_or_else(|_| Err("Could not change the wallpaper".into()));
@@ -4714,6 +4784,31 @@ async fn current_wallpaper(state: tauri::State<'_, Arc<AppState>>) -> Result<ser
     let mut message = tokio::task::spawn_blocking(wallpaper::current_message).await.unwrap_or(serde_json::Value::Null);
     message["match"] = on.into();
     Ok(message)
+}
+
+/// The phone's look is one setting too, merged into the shared deck and every phone's own deck.
+fn set_look_everywhere(state: &AppState, patch: PhoneLook) -> Result<(), String> {
+    let keys: Vec<String> = state.device_decks.read().map_err(|_| "Deck config is unavailable".to_owned())?.keys().cloned().collect();
+    for key in std::iter::once(String::new()).chain(keys) {
+        let patch = patch.clone();
+        mutate_deck(state, &key, move |config| {
+            let next = config.phone_look.clone().unwrap_or_default().merged(patch);
+            config.phone_look = Some(next);
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_phone_look(patch: PhoneLook, state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+    set_look_everywhere(&state, patch)
+}
+
+/// The phone's look as last set (shared deck), for the PC's Phone appearance section.
+#[tauri::command]
+fn get_phone_look(state: tauri::State<'_, Arc<AppState>>) -> Option<PhoneLook> {
+    get_deck_config(&state).and_then(|config| config.phone_look)
 }
 
 #[tauri::command]
@@ -5884,6 +5979,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             set_match_pc_wallpaper,
+            set_phone_look,
+            get_phone_look,
             current_wallpaper,
             delta::download_delta_update,
             delta::install_delta_update,
@@ -6137,6 +6234,24 @@ mod info_option_tests {
         assert!(validate_deck_widget(&widget("stocks", serde_json::json!({ "symbols": "AAPL<script>" }))).is_err());
         assert!(validate_deck_widget(&widget("sports", serde_json::json!({ "league": "curling" }))).is_err());
         assert!(validate_deck_widget(&widget("reminders", serde_json::json!({ "items": ["  "] }))).is_err());
+    }
+}
+
+#[cfg(test)]
+mod phone_look_tests {
+    use super::PhoneLook;
+
+    #[test]
+    fn a_patch_keeps_good_fields_and_drops_bad_ones() {
+        let base = PhoneLook { look: Some("glass".into()), key_opacity: Some(0.5), ..Default::default() };
+        let patch = PhoneLook { look: Some("nope".into()), accent: Some("#ff0000".into()), gradient: Some(2.0), corners: Some("round".into()), ..Default::default() };
+        let next = base.merged(patch);
+        assert_eq!(next.look.as_deref(), Some("glass"));
+        assert_eq!(next.accent.as_deref(), Some("#ff0000"));
+        assert_eq!(next.corners.as_deref(), Some("round"));
+        assert_eq!(next.gradient, None);
+        assert_eq!(next.key_opacity, Some(0.5));
+        assert_eq!(base.merged(PhoneLook { accent: Some("red".into()), ..Default::default() }).accent, None);
     }
 }
 

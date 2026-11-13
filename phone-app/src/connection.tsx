@@ -8,6 +8,7 @@ import { AppState, Platform } from 'react-native';
 import type { WidgetSurface } from './now-playing-layout';
 import { clearClipboard, receiveClipboard, receiveClipboardResult, setClipboardSender } from './clipboard-feed';
 import type { InfoOptions } from './info-widgets';
+import { applyLook, currentLook, setLookSender, shareLook } from './phone-look-sync';
 import { clearWallpapers, receiveWallpaperBackdrop, receiveWallpaperResult, receiveWallpapers, receiveWallpaperThumb, setWallpaperMatch, setWallpaperSender } from './desktop-wallpaper-feed';
 import { clearPcStats, receivePcStats, setPcStatsSender } from './pc-stats-feed';
 import { countMessage } from './perf-overlay';
@@ -28,7 +29,7 @@ export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; 
 export type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
-export type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; matchPcWallpaper?: boolean };
+export type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; matchPcWallpaper?: boolean; phoneLook?: Record<string, unknown> };
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type PlaybackState = 'playing' | 'paused' | 'stopped' | 'unavailable';
 export type SystemMediaState = { sourceAppId?: string; sourceName?: string; title?: string; artist?: string; album?: string; playbackState: PlaybackState; positionMs?: number; durationMs?: number; artworkDataUrl?: string; volumePercent?: number; muted?: boolean; canSeek?: boolean; playbackRate?: number;
@@ -338,6 +339,8 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   const [deckConfig, setDeckConfig] = useState<DeckConfig | null>(null);
   // "Match PC wallpaper" comes with each deck; no deck (disconnected) keeps the last setting.
   useEffect(() => { if (deckConfig) setWallpaperMatch(deckConfig.matchPcWallpaper === true); }, [deckConfig]);
+  // The phone's look: the PC's copy wins; a PC that has none yet gets this phone's.
+  useEffect(() => { if (!deckConfig) return; if (deckConfig.phoneLook) applyLook(deckConfig.phoneLook); else if (status === 'connected') shareLook(currentLook()); }, [deckConfig, status]);
   const [independentNavigation, setIndependentNavigation] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
@@ -452,7 +455,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         try { socket.close(); } catch { /* it never opened */ }
         setPcStatsSender(null);
         setClipboardSender(null);
-        setWallpaperSender(null);
+        setWallpaperSender(null); setLookSender(null);
         pendingRequestsRef.current.clear();
         if (shouldReconnectRef.current) retry();
         else if (!terminalErrorRef.current) setStatus('disconnected');
@@ -507,6 +510,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
             if (AppState.currentState !== 'active') socket.send(JSON.stringify({ type: 'set_streaming', active: false }));
             // The PC samples only the readings the stats widgets on screen show.
             setWallpaperSender((message) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); });
+            setLookSender((message) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); });
             setClipboardSender((message) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); });
             setPcStatsSender((needs) => { if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'pc_stats_subscribe', needs })); });
           }
@@ -648,7 +652,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
         socketRef.current = null;
         setPcStatsSender(null);
         setClipboardSender(null);
-        setWallpaperSender(null);
+        setWallpaperSender(null); setLookSender(null);
         pendingRequestsRef.current.clear();
         if (shouldReconnectRef.current) retry();
         else if (!terminalErrorRef.current) setStatus('disconnected');

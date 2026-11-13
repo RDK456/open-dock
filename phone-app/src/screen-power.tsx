@@ -10,6 +10,7 @@ import { ACCENTS, CORNERS, LOOKS, setAccent, setCorners, setLook, setThemeMode, 
 import { clearWallpaperImage, pickWallpaperImage, setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
 import { sendWallpaperMatch, useDesktopWallpapers } from './desktop-wallpaper-feed';
 import { usePcConnection } from './connection';
+import { shareLook } from './phone-look-sync';
 
 const LOOK_HINTS: Record<Look, string> = {
   classic: 'Plain keys in light or dark, with a wallpaper of your choice.',
@@ -122,24 +123,24 @@ export function AppearanceSection() {
   return <View style={styles.card}>
     <Text style={styles.title}>Appearance</Text>
     <Text style={styles.label}>Look</Text>
-    <Choice options={LOOKS} value={look} onChange={setLook} />
+    <Choice options={LOOKS} value={look} onChange={(value) => { setLook(value); shareLook({ look: value }); }} />
     <Text style={styles.hint}>{LOOK_HINTS[look]}</Text>
     <Text style={styles.label}>Accent colour</Text>
-    <Choice options={ACCENTS} value={accent} onChange={setAccent} />
+    <Choice options={ACCENTS} value={accent} onChange={(value) => { setAccent(value); shareLook({ accent: value }); }} />
     <Text style={styles.label}>Corners</Text>
-    <Choice options={CORNERS} value={corners} onChange={setCorners} />
+    <Choice options={CORNERS} value={corners} onChange={(value) => { setCorners(value); shareLook({ corners: value }); }} />
     <Text style={styles.label}>Light or dark</Text>
-    <Choice options={options} value={mode} onChange={setThemeMode} />
+    <Choice options={options} value={mode} onChange={(value) => { setThemeMode(value); shareLook({ mode: value }); }} />
     <Text style={styles.hint}>{"System follows this phone's setting. Your PC has its own."}</Text>
     {look === 'classic' ? <>
     <Text style={styles.label}>Wallpaper</Text>
-    <Choice options={WALLPAPERS} value={wallpaper} onChange={(value) => setWallpaperSettings({ wallpaper: value })} />
+    <Choice options={WALLPAPERS} value={wallpaper} onChange={(value) => { setWallpaperSettings({ wallpaper: value }); shareLook({ wallpaper: value }); }} />
     <Text style={styles.label}>Wallpaper motion</Text>
-    <Choice options={[[false, 'Still'], [true, 'Drift']]} value={motion} onChange={(value) => setWallpaperSettings({ motion: value })} />
+    <Choice options={[[false, 'Still'], [true, 'Drift']]} value={motion} onChange={(value) => { setWallpaperSettings({ motion: value }); shareLook({ motion: value }); }} />
     <Text style={styles.hint}>Shows behind the Deck and Touch screens. Drift also stops when Motion is off below.</Text>
     </> : null}
     <Text style={styles.label}>Key transparency</Text>
-    <Choice options={[[1, 'Solid'], [0.55, 'Glass'], [0.25, 'Clear'], [0, 'Hidden']]} value={keyOpacity} onChange={(value) => setWallpaperSettings({ keyOpacity: value })} />
+    <Choice options={[[1, 'Solid'], [0.55, 'Glass'], [0.25, 'Clear'], [0, 'Hidden']]} value={keyOpacity} onChange={(value) => { setWallpaperSettings({ keyOpacity: value }); shareLook({ keyOpacity: value }); }} />
     {look !== 'signal' ? <>
     <Text style={styles.label}>Your own background</Text>
     <View style={styles.segments}>
@@ -148,9 +149,9 @@ export function AppearanceSection() {
     </View>
     {image ? <>
     <Text style={styles.label}>Image opacity</Text>
-    <Choice options={[[0.25, '25%'], [0.5, '50%'], [0.75, '75%'], [1, '100%']]} value={imageOpacity} onChange={(value) => setWallpaperSettings({ imageOpacity: value })} />
+    <Choice options={[[0.25, '25%'], [0.5, '50%'], [0.75, '75%'], [1, '100%']]} value={imageOpacity} onChange={(value) => { setWallpaperSettings({ imageOpacity: value }); shareLook({ imageOpacity: value }); }} />
     <Text style={styles.label}>Gradient over image</Text>
-    <Choice options={[[0, 'Off'], [0.35, 'Low'], [0.65, 'Medium'], [1, 'High']]} value={gradient} onChange={(value) => setWallpaperSettings({ gradient: value })} />
+    <Choice options={[[0, 'Off'], [0.35, 'Low'], [0.65, 'Medium'], [1, 'High']]} value={gradient} onChange={(value) => { setWallpaperSettings({ gradient: value }); shareLook({ gradient: value }); }} />
     </> : null}
     </> : null}
   </View>;

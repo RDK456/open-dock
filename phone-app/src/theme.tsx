@@ -51,7 +51,7 @@ let accent = '';
 let corners: Corners = 'default';
 try {
   const a = Storage.getItemSync(ACCENT_KEY);
-  accent = ACCENTS.some(([hex]) => hex === a) ? a ?? '' : '';
+  accent = a && /^#[0-9a-f]{6}$/i.test(a) ? a : '';
   const c = Storage.getItemSync(CORNERS_KEY);
   corners = c === 'sharp' || c === 'round' ? c : 'default';
 } catch { /* defaults */ }
@@ -73,6 +73,8 @@ export function setPcAccent(next: string) {
   pcAccent = next;
   listeners.forEach((listener) => listener());
 }
+/** The choices made on this phone (not the PC wallpaper's accent), for sharing with the PC. */
+export const getAppearance = () => ({ mode, look, accent, corners });
 export const useAccent = (): string => useSyncExternalStore(subscribe, () => pcAccent || accent);
 const usePcAccent = (): string => useSyncExternalStore(subscribe, () => pcAccent);
 /** `a` moved `amount` (0–1) of the way to `b`; both #rrggbb, anything else is returned as it is. */

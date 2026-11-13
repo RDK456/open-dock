@@ -81,6 +81,7 @@ export function setWallpaperSettings(next: Partial<WallpaperSettings>) {
   listeners.forEach((listener) => listener());
 }
 
+export const getWallpaperSettings = () => settings;
 export const useWallpaperSettings = () => useSyncExternalStore(subscribe, () => settings);
 
 const useReduceMotion = () => !usePrefs().motion;
