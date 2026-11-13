@@ -26,6 +26,9 @@ import { TabBarHiddenContext } from '../../navigation/tab-bar-context';
 import { useTabBarClearance } from '../../tab-inset';
 import { MediaToastView, PlayerSheet, SourceChip, useMediaSource } from '../../media-source';
 import { playerColor, type PlayersState } from '../../media-players';
+// Breathing room around every widget's content, so it stays centred in a tile that is a little off-size.
+const WIDGET_PAD = 8;
+
 // A clock, PC stats or pet widget can have a see-through background: the tile under it fades by the same amount.
 function widgetOpacityStyle(widget: { type: string; opacity?: number }, panel: string) {
   const opacity = (widget.type === 'clock' || widget.type === 'pc_stats' || widget.type === 'pet' || widget.type === 'clipboard') ? widget.opacity : undefined;
@@ -561,8 +564,8 @@ export default function DeckScreen() {
   const immersiveCellWidth = Math.max(0, (immersiveSize.width - 24 - immersiveGap * (columns - 1)) / columns);
   const immersiveCellHeight = Math.max(1, (immersiveAvailableHeight - 24 - immersiveGap * (rows - 1)) / rows);
   const immersiveIconSize = Math.min(64, Math.max(26, Math.min(immersiveCellHeight, immersiveCellWidth) * (immersiveCellHeight >= 84 ? 0.4 : 0.5)));
-  // Widget keys inset their content by a 1 px border plus clockWidgetKey's 4 px padding.
-  const widgetKeyInset = 5;
+  // Widget keys inset their content by a 1 px border plus clockWidgetKey's padding (WIDGET_PAD).
+  const widgetKeyInset = 1 + WIDGET_PAD;
   const immersiveSurfaceWidth = immersiveSize.width - 24;
   const immersiveSurfaceHeight = immersiveAvailableHeight - 24;
   // Reported for every page, widgets or not: the desktop draws its preview in the same shape and orientation.
@@ -786,7 +789,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   immersiveKey: { borderRadius: 16, borderWidth: 1, borderColor: colors.glassBorder, backgroundColor: colors.glass, alignItems: 'center', justifyContent: 'center', gap: 6 },
   plateLabel: { maxWidth: '88%', fontSize: 11, fontWeight: '600', opacity: 0.8, includeFontPadding: false },
   plateLed: { position: 'absolute', bottom: 7, alignSelf: 'center', width: 16, height: 3, borderRadius: 2, opacity: 0.75 },
-  clockWidgetKey: { padding: 4, alignItems: 'center', justifyContent: 'center' },
+  clockWidgetKey: { padding: WIDGET_PAD, alignItems: 'center', justifyContent: 'center' },
   pluginWidgetContent: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 3, overflow: 'hidden' },
   immersivePluginWidgetContent: { gap: 7, paddingHorizontal: 8 },
   pluginWidgetTitle: { width: '100%', flexShrink: 1, color: colors.text, fontWeight: '600', textAlign: 'center', includeFontPadding: false },
