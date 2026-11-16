@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { setPcAccent } from './theme';
+import { setPcAccent, setPcScheme } from './theme';
 import { setPcBackdrop } from './wallpaper';
 
 // The Wallpaper Engine wallpapers on the PC, and picking one for its desktop. Outside the connection context so
@@ -21,11 +21,13 @@ type State = {
   /** The wallpaper on the PC's main display, and its colour (#rrggbb). */
   current: string | null;
   color: string | null;
+  /** The main display's wallpaper is dark overall: keys and widgets over it use light ink. */
+  dark: boolean | null;
   /** "Match PC wallpaper", from the deck config. */
   match: boolean;
 };
 
-const EMPTY: State = { loaded: false, supported: true, installed: true, items: [], displays: [], thumbs: {}, result: null, seq: 0, current: null, color: null, match: false };
+const EMPTY: State = { loaded: false, supported: true, installed: true, items: [], displays: [], thumbs: {}, result: null, seq: 0, current: null, color: null, dark: null, match: false };
 let state: State = EMPTY;
 const listeners = new Set<() => void>();
 const set = (next: State) => { state = next; listeners.forEach((listener) => listener()); };
@@ -38,7 +40,7 @@ const validItem = (value: unknown): value is PcWallpaper => {
 };
 
 /** Called by the connection for each wallpaper message from the PC. */
-export function receiveWallpapers(message: { supported?: unknown; installed?: unknown; items?: unknown; displays?: unknown; current?: unknown; color?: unknown }) {
+export function receiveWallpapers(message: { supported?: unknown; installed?: unknown; items?: unknown; displays?: unknown; current?: unknown; color?: unknown; dark?: unknown }) {
   if (!Array.isArray(message.items)) return;
   const items = message.items.filter(validItem).slice(0, 500).map((item) => ({ id: item.id, title: text(item.title, 80), kind: text(item.kind, 16), preview: item.preview === true }));
   const displays = (Array.isArray(message.displays) ? message.displays : []).flatMap((value): PcDisplay[] => {
@@ -47,7 +49,8 @@ export function receiveWallpapers(message: { supported?: unknown; installed?: un
   }).slice(0, 8);
   const current = typeof message.current === 'string' && message.current.length <= 80 ? message.current : null;
   const color = typeof message.color === 'string' && /^#[0-9a-f]{6}$/i.test(message.color) ? message.color : null;
-  set({ ...state, loaded: true, supported: message.supported !== false, installed: message.installed !== false, items, displays, current, color });
+  const dark = typeof message.dark === 'boolean' ? message.dark : null;
+  set({ ...state, loaded: true, supported: message.supported !== false, installed: message.installed !== false, items, displays, current, color, dark });
   follow();
 }
 export function receiveWallpaperThumb(message: { id?: unknown; data?: unknown }) {
@@ -70,6 +73,7 @@ let matched: string | null = null;
 let poll: ReturnType<typeof setInterval> | null = null;
 function follow() {
   setPcAccent(state.match && state.color ? state.color : '');
+  setPcScheme(state.match && state.dark !== null ? (state.dark ? 'dark' : 'light') : null);
   if (!state.match) {
     if (matched !== null) { matched = null; setPcBackdrop(null); }
   } else if (state.current && state.current !== matched && sender) {
@@ -102,7 +106,7 @@ export function sendWallpaperMatch(on: boolean): boolean {
   setWallpaperMatch(on);
   return true;
 }
-export function clearWallpapers() { requested.clear(); matched = null; set({ ...EMPTY, seq: ++resultSeq, match: state.match, color: state.color }); }
+export function clearWallpapers() { requested.clear(); matched = null; set({ ...EMPTY, seq: ++resultSeq, match: state.match, color: state.color, dark: state.dark }); }
 
 export const useDesktopWallpapers = () => useSyncExternalStore(subscribe, () => state);
 

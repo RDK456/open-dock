@@ -1443,6 +1443,9 @@ html[data-look="signal"] { font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 [data-look="signal"] .topbar { height: 48px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
 [data-look="signal"] .network-badge { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
 [data-look="signal"] .content { padding-bottom: 120px; }
+/* The deck editor fills the window, so it stops above the floating nav instead of running under it. */
+[data-look="signal"] .content.deck-content { padding-bottom: 96px; }
+[data-look="signal"] .deck-workspace { height: calc(100vh - 48px - 96px); min-height: 360px; }
 [data-look="signal"] .page-heading h1 { font-family: var(--mono); font-size: 24px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
 [data-look="signal"] .page-heading h1::after { content: ""; display: inline-block; width: 9px; height: 9px; margin-left: 12px; border-radius: 50%; background: var(--accent); vertical-align: middle; animation: signal-blink 1.6s steps(1) infinite; }
 [data-look="signal"] .panel-head h2, [data-look="signal"] .device-navigation-copy h2, [data-look="signal"] .deck-canvas-heading h2, [data-look="signal"] .properties-heading h2 { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }

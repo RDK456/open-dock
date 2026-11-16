@@ -44,7 +44,7 @@ export function WallpaperMatchSetting({ match, tint, color, setMatch }: ReturnTy
   return <section className="device-navigation-setting">
     <div className="device-navigation-copy">
       <h2>Match PC wallpaper</h2>
-      <p>This app and the phone take their accent colour from the wallpaper on your main display, and the phone shows it as its background. Follows Wallpaper Engine.</p>
+      <p>This app and the phone take their accent colour from the wallpaper on your main display, the phone shows it as its background, and keys turn light or dark to stay readable on it. Follows Wallpaper Engine.</p>
       {swatch ? <p className="wallpaper-match-swatch"><span style={{ background: swatch }} aria-hidden="true" />{match ? 'Using' : 'Would use'} {swatch}</p> : null}
     </div>
     <button className={`setting-switch ${match ? 'enabled' : ''}`} type="button" role="switch" aria-checked={match} aria-label="Match PC wallpaper" onClick={() => setMatch(!match)}><span /></button>

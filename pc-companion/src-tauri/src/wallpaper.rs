@@ -144,26 +144,35 @@ fn library(force: bool) -> Arc<Library> {
 /// The `wallpaper` message for the phone: every wallpaper's id, title and kind (previews come one at a time).
 pub(super) fn list_message(force: bool) -> serde_json::Value {
     let found = library(force);
+    let shade = current(&found).and_then(|id| shade(&found, &id));
     let items: Vec<_> = found
         .entries
         .iter()
         .map(|entry| serde_json::json!({ "id": entry.id, "title": entry.title, "kind": entry.kind, "preview": entry.preview.is_some() }))
         .collect();
-    serde_json::json!({ "type": "wallpaper", "supported": SUPPORTED, "installed": found.exe.is_some(), "items": items, "displays": displays(), "current": current(&found), "color": current(&found).and_then(|id| color(&found, &id)) })
+    serde_json::json!({ "type": "wallpaper", "supported": SUPPORTED, "installed": found.exe.is_some(), "items": items, "displays": displays(), "current": current(&found), "color": shade.as_ref().map(|(color, _)| color), "dark": shade.map(|(_, dark)| dark) })
 }
 
-/// `{ id, color }` of the main display's wallpaper; nulls when unknown.
+/// `{ id, color, dark }` of the main display's wallpaper; nulls when unknown.
 pub(super) fn current_message() -> serde_json::Value {
     let found = library(false);
     let id = current(&found);
-    let color = id.as_ref().and_then(|id| color(&found, id));
-    serde_json::json!({ "id": id, "color": color })
+    let shade = id.as_ref().and_then(|id| shade(&found, id));
+    serde_json::json!({ "id": id, "color": shade.as_ref().map(|(color, _)| color), "dark": shade.map(|(_, dark)| dark) })
 }
 
-/// A wallpaper's main colour as #rrggbb, made bright and strong enough to be an accent.
-fn color(found: &Library, id: &str) -> Option<String> {
-    let [r, g, b] = accent_of(&tiny_pixels(&picture(found, id)?.0)?)?;
-    Some(format!("#{r:02x}{g:02x}{b:02x}"))
+/// A wallpaper's main colour as #rrggbb, made bright and strong enough to be an accent, and whether the picture is
+/// dark overall (so keys and widgets drawn over it use light ink).
+fn shade(found: &Library, id: &str) -> Option<(String, bool)> {
+    let pixels = tiny_pixels(&picture(found, id)?.0)?;
+    let [r, g, b] = accent_of(&pixels)?;
+    Some((format!("#{r:02x}{g:02x}{b:02x}"), is_dark(&pixels)))
+}
+
+/// True when the average brightness of BGR pixels is below the middle.
+fn is_dark(bgr: &[u8]) -> bool {
+    let (sum, count) = bgr.chunks_exact(3).fold((0f64, 0f64), |(sum, count), p| (sum + 0.114 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.299 * f64::from(p[2]), count + 1.0));
+    count > 0.0 && sum / count < 128.0
 }
 
 /// The colour that stands out in BGR pixels: an average weighted to vivid pixels, so a red wallpaper with a dark
@@ -336,6 +345,7 @@ mod tests {
         let [r, g, b] = accent_of(&bgr).unwrap();
         assert!(r > 200 && g < 120 && b < 60, "{r} {g} {b}");
         // A grey picture stays grey.
+        assert!(super::is_dark(&[30u8; 300]) && !super::is_dark(&[220u8; 300]));
         let [r, g, b] = accent_of(&[128u8; 300]).unwrap();
         assert!(r.abs_diff(g) < 4 && g.abs_diff(b) < 4);
     }

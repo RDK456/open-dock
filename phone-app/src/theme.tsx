@@ -29,14 +29,14 @@ const subscribe = (listener: () => void) => { listeners.add(listener); return ()
 export function setThemeMode(next: ThemeMode) {
   mode = next;
   try { Storage.setItemSync(KEY, next); } catch { /* the choice lasts until the app closes */ }
-  Appearance.setColorScheme(nativeScheme());
+  Appearance.setColorScheme(pcScheme ?? nativeScheme());
   listeners.forEach((listener) => listener());
 }
 
 export function setLook(next: Look) {
   look = next;
   try { Storage.setItemSync(LOOK_KEY, next); } catch { /* the choice lasts until the app closes */ }
-  Appearance.setColorScheme(nativeScheme());
+  Appearance.setColorScheme(pcScheme ?? nativeScheme());
   listeners.forEach((listener) => listener());
 }
 
@@ -77,6 +77,15 @@ export function setPcAccent(next: string) {
 export const getAppearance = () => ({ mode, look, accent, corners });
 export const useAccent = (): string => useSyncExternalStore(subscribe, () => pcAccent || accent);
 const usePcAccent = (): string => useSyncExternalStore(subscribe, () => pcAccent);
+// Set while "Match PC wallpaper" is on: light ink over a dark wallpaper, dark ink over a light one, over the mode chosen here.
+let pcScheme: Scheme | null = null;
+export function setPcScheme(next: Scheme | null) {
+  if (next === pcScheme) return;
+  pcScheme = next;
+  Appearance.setColorScheme(pcScheme ?? nativeScheme());
+  listeners.forEach((listener) => listener());
+}
+const usePcScheme = (): Scheme | null => useSyncExternalStore(subscribe, () => pcScheme);
 /** `a` moved `amount` (0–1) of the way to `b`; both #rrggbb, anything else is returned as it is. */
 const mix = (a: string, b: string, amount: number) => {
   if (!/^#[0-9a-f]{6}$/i.test(a) || !/^#[0-9a-f]{6}$/i.test(b)) return a;
@@ -102,9 +111,10 @@ export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; l
   const system = useColorScheme();
   const tint = useAccent();
   const fromPc = usePcAccent();
+  const wallpaperScheme = usePcScheme();
   const shape = useCorners();
   return useMemo(() => {
-    const scheme: Scheme = chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen;
+    const scheme: Scheme = wallpaperScheme ?? (chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen);
     const base = current === 'classic' ? (scheme === 'light' ? lightColors : darkColors) : LOOK_THEMES[current][scheme];
     const tinted = tint ? { ...base, accent: tint, onAccent: inkOn(tint), borderFocus: tint } : base;
     // Matching the PC's wallpaper washes the surfaces with its colour too, lightly so text keeps its contrast.
@@ -115,7 +125,7 @@ export function useTheme(): { colors: Colors; scheme: Scheme; mode: ThemeMode; l
     const key = k === 1 ? key0 : { ...key0, radius: round(key0.radius, k) };
     const surface = k === 1 ? surf : { ...surf, radius: round(surf.radius, k), chipRadius: round(surf.chipRadius, k), railRadius: round(surf.railRadius, k), puck: Math.min(0.5, surf.puck * k) };
     return { colors, scheme, mode: chosen, look: current, key, heading: headingLook(current), surface };
-  }, [chosen, current, system, tint, fromPc, shape]);
+  }, [chosen, current, system, tint, fromPc, wallpaperScheme, shape]);
 }
 
 /** Styles built from the current colors: `const styles = useStyles(makeStyles)`, with `makeStyles = (colors) => StyleSheet.create({...})`. */

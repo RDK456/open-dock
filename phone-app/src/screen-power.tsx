@@ -157,7 +157,7 @@ export function AppearanceSection() {
   </View>;
 }
 
-/** The Match PC wallpaper section: the accent follows the PC wallpaper's colour, and the background its picture. */
+/** The Match PC wallpaper section: the accent follows the PC wallpaper's colour, the background its picture, light/dark its brightness. */
 export function MatchPcSection() {
   const styles = useStyles(makeStyles);
   const { match, color, items, current } = useDesktopWallpapers();
@@ -168,7 +168,7 @@ export function MatchPcSection() {
     <Text style={styles.title}>Match PC wallpaper</Text>
     <Text style={styles.label}>Colours and background</Text>
     <Choice options={[[false, 'Off'], [true, 'On']]} value={match} onChange={(value) => { if (connected) sendWallpaperMatch(value); }} />
-    <Text style={styles.hint}>{!connected ? 'Connect to your PC to change this. ' : ''}{match && color ? `Using ${color}${title ? ` from “${title}”` : ''}. ` : ''}The accent colour and background follow the wallpaper on your PC&apos;s main display. Same switch as the PC&apos;s Settings › Appearance.</Text>
+    <Text style={styles.hint}>{!connected ? 'Connect to your PC to change this. ' : ''}{match && color ? `Using ${color}${title ? ` from “${title}”` : ''}. ` : ''}The accent colour, background and light or dark keys follow the wallpaper on your PC&apos;s main display. Same switch as the PC&apos;s Settings › Appearance.</Text>
   </View>;
 }
 
