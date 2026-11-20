@@ -12,10 +12,14 @@
 
 <a href="docs/media/brag.mp4"><img src="docs/media/brag.jpg" alt="Open Dock launch video (click to play)"></a>
 
+<p align="center"><img src="docs/media/phone-widgets.jpg" alt="Phone as a PC dock: live CPU, GPU, RAM and temperature widgets with a clock"></p>
+
 <p align="center">
-  <img src="site/assets/s_deck.png" width="49%" alt="Deck">
-  <img src="site/assets/s_touch.png" width="49%" alt="Touchpad">
-  <img src="site/assets/s_voice.png" width="49%" alt="Voice">
+  <img src="docs/media/phone-apps.jpg" width="49%" alt="App launcher keys">
+  <img src="docs/media/phone-clock.jpg" width="49%" alt="Clock widget">
+  <img src="docs/media/phone-stats.jpg" width="49%" alt="PC stats widgets">
+  <img src="docs/media/phone-touch.jpg" width="49%" alt="Touchpad">
+  <img src="docs/media/phone-voice.jpg" width="49%" alt="Voice commands">
   <img src="site/assets/s_connect.png" width="49%" alt="Connect">
 </p>
 
