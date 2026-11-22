@@ -6130,8 +6130,6 @@ pub fn run() {
                     let _ = remote::set_autostart(true);
                 }
             });
-            // Started with Windows, the app waits minimized in the taskbar.
-            let autostarted = std::env::args().any(|arg| arg == "--autostart");
 
             let profile_monitor = state.clone();
             thread::spawn(move || loop {
@@ -6156,8 +6154,8 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
                 apply_appearance(&window, clean_appearance(&saved));
-                // Started with Windows it waits in the taskbar; started by hand it opens.
-                if autostarted { let _ = window.minimize(); } else { let _ = window.set_focus(); }
+                // Every start, by hand or with Windows, waits minimized in the taskbar.
+                let _ = window.minimize();
             }
 
             island::init(app.handle());
