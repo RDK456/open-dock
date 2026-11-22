@@ -86,6 +86,8 @@ struct AppState {
     independent_navigation: AtomicBool,
     navigation_updates: broadcast::Sender<bool>,
     auto_profile_updates: broadcast::Sender<String>,
+    /// A page the PC asked one phone to show now: (device id, profile id, page id).
+    page_pushes: broadcast::Sender<(String, String, String)>,
     pending_legacy: RwLock<HashMap<String, LegacyPhonePageSet>>,
     legacy_offers: RwLock<HashMap<String, LegacyImportSummary>>,
     legacy_requests: broadcast::Sender<String>,
@@ -2343,6 +2345,16 @@ fn get_independent_navigation(state: tauri::State<'_, Arc<AppState>>) -> bool {
     state.independent_navigation.load(Ordering::Relaxed)
 }
 
+/// Turns one connected phone to a page now, whatever it was showing.
+#[tauri::command]
+fn show_on_phone(device_id: String, profile_id: String, page_id: String, state: tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+    if !state.online_devices.lock().is_ok_and(|online| online.contains_key(&device_id)) {
+        return Err("That phone isn't connected".into());
+    }
+    let _ = state.page_pushes.send((device_id, profile_id, page_id));
+    Ok(())
+}
+
 #[tauri::command]
 fn set_independent_navigation(
     enabled: bool,
@@ -3789,6 +3801,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
     pet_updates.mark_changed();
     let mut navigation_updates = state.navigation_updates.subscribe();
     let mut auto_profile_updates = state.auto_profile_updates.subscribe();
+    let mut page_pushes = state.page_pushes.subscribe();
     let mut legacy_requests = state.legacy_requests.subscribe();
     let mut legacy_source_id: Option<String> = None;
     // Playback state is checked every 500 ms, and every 100 ms for 2 s after this phone sends a
@@ -3868,6 +3881,19 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                         }
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
+                }
+                continue;
+            }
+            push = page_pushes.recv(), if authenticated => {
+                if let Ok((target, profile_id, page_id)) = push {
+                    if target == device_id {
+                        if let Some(config) = device_config(&state, &device_id) {
+                            selected_profile_id = profile_id;
+                            selected_page_id = page_id;
+                            let message = device_deck_snapshot(protocol, &config, state.independent_navigation.load(Ordering::Relaxed), &mut selected_profile_id, &mut selected_page_id);
+                            if socket.send(Message::Text(message.to_string().into())).await.is_err() { break; }
+                        }
+                    }
                 }
                 continue;
             }
@@ -5933,6 +5959,7 @@ pub fn run() {
     let (legacy_requests, _) = broadcast::channel(16);
     let (navigation_updates, _) = broadcast::channel(16);
     let (auto_profile_updates, _) = broadcast::channel(16);
+    let (page_pushes, _) = broadcast::channel(16);
     let state = Arc::new(AppState {
         host,
         device_name: RwLock::new(machine_name()),
@@ -5954,6 +5981,7 @@ pub fn run() {
         independent_navigation: AtomicBool::new(false),
         navigation_updates,
         auto_profile_updates,
+        page_pushes,
         pending_legacy: RwLock::new(HashMap::new()),
         legacy_offers: RwLock::new(HashMap::new()),
         legacy_requests,
@@ -6007,6 +6035,7 @@ pub fn run() {
             uninstall_open_dock_plugin,
             get_independent_navigation,
             set_independent_navigation,
+            show_on_phone,
             save_deck_config,
             get_playback_state,
             get_system_media_state,
@@ -6028,7 +6057,8 @@ pub fn run() {
             restart_app,
             listen_voice,
             stop_voice,
-            arm_voice
+            arm_voice,
+            island::island_state
         ])
         .setup(move |app| {
             delta::remove_replaced_exe();
@@ -6089,15 +6119,18 @@ pub fn run() {
             thread::spawn(move || run_usb_monitor(monitor_state));
 
             // Start with Windows unless the user turned it off: the first run turns it on, once.
+            // Off the main thread: reg.exe and schtasks.exe would hold up the window.
             let autostart_marker = config_dir.join("autostart-set");
-            if !autostart_marker.exists() && remote::set_autostart(true).is_ok() {
-                let _ = fs::write(&autostart_marker, "true");
-            }
-            // The first run with admin rights moves autostart onto the elevated logon task.
-            if remote::is_elevated() && remote::autostart_needs_task() {
-                let _ = remote::set_autostart(true);
-            }
-            // Started with Windows, the app waits hidden in the tray, no taskbar button.
+            thread::spawn(move || {
+                if !autostart_marker.exists() && remote::set_autostart(true).is_ok() {
+                    let _ = fs::write(&autostart_marker, "true");
+                }
+                // The first run with admin rights moves autostart onto the elevated logon task.
+                if remote::is_elevated() && remote::autostart_needs_task() {
+                    let _ = remote::set_autostart(true);
+                }
+            });
+            // Started with Windows, the app waits minimized in the taskbar.
             let autostarted = std::env::args().any(|arg| arg == "--autostart");
 
             let profile_monitor = state.clone();
@@ -6123,13 +6156,11 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
                 apply_appearance(&window, clean_appearance(&saved));
-                // Started by hand it sits in the taskbar; with Windows it hides in the tray.
-                let _ = if autostarted { window.hide() } else { window.minimize() };
+                // Started with Windows it waits in the taskbar; started by hand it opens.
+                if autostarted { let _ = window.minimize(); } else { let _ = window.set_focus(); }
             }
 
-            if let Err(error) = island::init(app.handle()) {
-                eprintln!("Open Dock: no voice island ({error})");
-            }
+            island::init(app.handle());
 
             tauri::async_runtime::spawn(serve(state));
             let open = MenuItem::with_id(app, "open", "Show Open Dock", true, None::<&str>)?;

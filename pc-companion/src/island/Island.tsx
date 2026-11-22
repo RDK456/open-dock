@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import './island.css';
 
@@ -12,7 +13,10 @@ const HOLD_MS = { done: 2600, failed: 3600, listening: 15000, working: 15000 } a
 export function Island() {
   const [shown, setShown] = useState<Shown>(IDLE);
   useEffect(() => {
-    const off = listen<Shown>('island', (event) => setShown(event.payload));
+    let heard = false;
+    const off = listen<Shown>('island', (event) => { heard = true; setShown(event.payload); });
+    // The window opens on the first voice command, after that event was sent.
+    void invoke<Shown | null>('island_state').then((last) => { if (last && !heard) setShown(last); }).catch(() => {});
     return () => { void off.then((stop) => stop()); };
   }, []);
   useEffect(() => {

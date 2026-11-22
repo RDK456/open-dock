@@ -2057,6 +2057,7 @@ function DesktopDeckEditor({ config: savedConfig, deviceId, onSaved, playbackSta
           {profile.pages.map((entry) => <button type="button" role="tab" key={entry.id} aria-selected={entry.id === page.id} className={entry.id === page.id ? 'active' : ''} disabled={busy} onClick={() => selectPage(profile, entry)}>{entry.name}</button>)}
           <button type="button" className="deck-page-add" aria-label="Add page" disabled={busy || profile.pages.length >= 8} onClick={() => addPageTo(profile)}><Plus size={13} /></button>
         </div>}
+        {deviceId && !folder ? <button type="button" className="secondary-button" title="Turn this phone to this page now" onClick={() => { setError(''); invoke('show_on_phone', { deviceId, profileId: profile.id, pageId: page.id }).then(() => setAnnounce(`${page.name} is showing on the phone`)).catch((reason) => setError(String(reason))); }}><Smartphone size={13} /> Show on phone</button> : null}
         {folder ? <button type="button" className="secondary-button" data-deck-back onClick={closeFolder}><ArrowLeft size={13} /> Back to {page.name}</button> : null}
         <button type="button" className="secondary-button deck-panel-toggle" aria-expanded={sidePanelOpen} onClick={() => setSidePanelOpen(!sidePanelOpen)}><PanelRight size={14} /> {hasSelection ? 'Settings' : 'Add'}</button>
         <span className={`deck-save-state ${savedLabel === 'All changes saved' ? 'saved' : savedLabel === 'Could not save' ? 'failed' : ''}`} role="status"><i />{savedLabel}</span>
@@ -2724,7 +2725,7 @@ function VoiceSettings({ voice }: { voice: ReturnType<typeof usePcVoice> }) {
   );
 }
 
-/** Starts Open Dock when you sign in to Windows, waiting in the tray so the phone connects without opening anything. */
+/** Starts Open Dock when you sign in to Windows, waiting minimized in the taskbar so the phone connects without opening anything. */
 function StartWithWindowsSetting() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState('');
@@ -2741,7 +2742,7 @@ function StartWithWindowsSetting() {
   };
   return (
     <section className="device-navigation-setting">
-      <div className="device-navigation-copy"><h2>Start with Windows</h2><p>Open Dock starts in the tray when you sign in, so your phone connects as soon as the PC is on.</p></div>
+      <div className="device-navigation-copy"><h2>Start with Windows</h2><p>Open Dock starts minimized in the taskbar when you sign in, so your phone connects as soon as the PC is on.</p></div>
       <button className={`setting-switch ${enabled ? 'enabled' : ''}`} type="button" role="switch" aria-checked={Boolean(enabled)} aria-label="Start with Windows" disabled={enabled === null} onClick={() => void toggle()}><span /></button>
       {error ? <p className="setting-error" role="alert">{error}</p> : null}
     </section>
