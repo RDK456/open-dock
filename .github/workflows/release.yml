@@ -1,4 +1,4 @@
-# Builds Windows, macOS and Android from a version tag into one draft GitHub release.
+# Builds Windows and Android from a version tag into one draft GitHub release.
 # Publishing the draft makes it releases/latest, which is what installed apps check.
 # Release: node scripts/bump-version.ts 1.2.0, commit, then git tag v1.2.0 && git push origin v1.2.0
 # Secrets come from scripts/setup-release-signing.sh.
@@ -37,12 +37,6 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: macos-latest # Apple silicon
-            target: aarch64-apple-darwin
-            macos_config: --config src-tauri/tauri.macos-release.conf.json
-          - os: macos-latest # Intel, cross-compiled
-            target: x86_64-apple-darwin
-            macos_config: --config src-tauri/tauri.macos-release.conf.json
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,42 +48,15 @@ jobs:
           targets: ${{ matrix.target }}
       - run: npm ci
         working-directory: pc-companion
-      # Reads now playing on macOS; bundled through tauri.macos-release.conf.json.
-      - name: Build the now playing adapter
-        if: runner.os == 'macOS'
-        run: bash scripts/build-mediaremote-adapter.sh
-      # Tauri's own APPLE_CERTIFICATE import only accepts Apple-issued certificates, so the
-      # self-signed one goes into a keychain here and Tauri signs with it by name.
-      - name: Import the self-signed signing certificate
-        if: runner.os == 'macOS'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          keychain="$RUNNER_TEMP/signing.keychain-db"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
-          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -f pkcs12 -T /usr/bin/codesign -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain" > /dev/null
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          # codesign only uses a self-signed identity the system trusts for code signing.
-          openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -nokeys -passin env:APPLE_CERTIFICATE_PASSWORD -out "$RUNNER_TEMP/cert.pem"
-          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
-          rm "$RUNNER_TEMP/cert.p12"
-          security find-identity -v -p codesigning "$keychain"
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && 'Open Dock Self-Signed' || '' }}
         with:
           projectPath: pc-companion
           releaseId: ${{ needs.draft.outputs.id }}
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.macos_config }}
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
 
   android:
     needs: draft

@@ -1,4 +1,4 @@
-# Builds and tests the PC companion's sensor code on Windows and macOS, and checks the shared PC stats
+# Builds and tests the PC companion's sensor code on Windows, and checks the shared PC stats
 # widgets render in every GPU scenario. The live sample runs the real sensor sources on each runner
 # (no physical GPU there, so it proves they start, read and fall back without crashing).
 name: PC stats
@@ -7,16 +7,16 @@ on:
   push:
     # Branches only: a release tag points at a commit these checks already ran on.
     branches: ['**']
-    paths: ['pc-companion/**', 'phone-app/src/pc-stats*', 'scripts/*pc-stats*', 'scripts/build-mediaremote-adapter.sh', '.github/workflows/pc-stats.yml']
+    paths: ['pc-companion/**', 'phone-app/src/pc-stats*', 'scripts/*pc-stats*', '.github/workflows/pc-stats.yml']
   pull_request:
-    paths: ['pc-companion/**', 'phone-app/src/pc-stats*', 'scripts/*pc-stats*', 'scripts/build-mediaremote-adapter.sh', '.github/workflows/pc-stats.yml']
+    paths: ['pc-companion/**', 'phone-app/src/pc-stats*', 'scripts/*pc-stats*', '.github/workflows/pc-stats.yml']
 
 jobs:
   rust:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -27,22 +27,11 @@ jobs:
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
-        with:
-          targets: ${{ matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '' }}
       # Tauri's build script needs the built frontend.
       - run: npm ci && npx vite build
-      # Builds the macOS now playing adapter and checks it still loads and reads MediaRemote.
-      - name: Build the now playing adapter
-        if: matrix.os == 'macos-latest'
-        run: MEDIAREMOTE_FULL_TEST=1 bash scripts/build-mediaremote-adapter.sh
-        working-directory: .
       - run: cargo test --lib
         working-directory: pc-companion/src-tauri
       - run: cargo test --lib live_sample -- --ignored --nocapture
-        working-directory: pc-companion/src-tauri
-      - name: Type-check for Intel Macs
-        if: matrix.os == 'macos-latest'
-        run: cargo check --target x86_64-apple-darwin
         working-directory: pc-companion/src-tauri
 
   widgets:

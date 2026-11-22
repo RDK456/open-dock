@@ -31,7 +31,7 @@
 - **Seven looks.** Classic, Studio, Atelier, Signal, Glass, Funk and Dock, each in light and dark. Change the phone's look from the PC too.
 - **More than buttons.** Touchpad with gestures, voice commands with a wake phrase, and the phone as a webcam.
 - **Private by design.** Runs on your local network. No cloud, no sign-up, no tracking.
-- **Updates itself** on Windows, macOS and Android.
+- **Updates itself** on Windows and Android.
 
 <p align="center"><img src="docs/media/pc-appearance.png" width="80%" alt="PC app: appearance settings with Match PC wallpaper"></p>
 
@@ -42,10 +42,7 @@ Download from the [latest release](https://github.com/RDK456/open-dock/releases/
 | Platform | File | First-run note |
 |---|---|---|
 | Windows | `Open Dock_*_x64-setup.exe` | "Windows protected your PC": choose **More info → Run anyway** (installer is unsigned). |
-| macOS | `Open Dock_*_aarch64.dmg` (Apple silicon) or `_x64.dmg` (Intel) | Not notarized: **System Settings → Privacy & Security → Open Anyway**. Also allow Open Dock under **Accessibility** so it can send media keys. |
 | Android | `OpenDock.apk` | Allow installs from your browser or file manager. |
-
-iOS runs from source with Expo Go (Wi-Fi only).
 
 ## Get started
 
@@ -121,7 +118,7 @@ A desktop pet widget that plays games, wears outfits and reacts to your music.
 ## Build from source
 
 ```bash
-# PC app (Windows or macOS; macOS needs Xcode Command Line Tools)
+# PC app (Windows)
 cd pc-companion && npm install && npm run tauri dev
 
 # Phone app
@@ -132,4 +129,4 @@ The PC app listens on port `39421`. Protocol details: [pc-companion/README.md](p
 
 ## License
 
-[GPL-3.0](LICENSE). `phone-app/` includes MIT-licensed Expo template files; macOS builds bundle [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause); picker icons come from the [Papirus theme](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme) (GPL-3.0).
+[GPL-3.0](LICENSE). `phone-app/` includes MIT-licensed Expo template files; picker icons come from the [Papirus theme](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme) (GPL-3.0).
