@@ -227,6 +227,8 @@ struct PhoneLook {
     image_opacity: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     gradient: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    orientation: Option<String>,
 }
 
 impl PhoneLook {
@@ -244,6 +246,7 @@ impl PhoneLook {
             key_opacity: unit(self.key_opacity),
             image_opacity: unit(self.image_opacity),
             gradient: unit(self.gradient),
+            orientation: one_of(self.orientation, &["auto", "portrait", "landscape"]),
         }
     }
 
@@ -260,6 +263,7 @@ impl PhoneLook {
             key_opacity: patch.key_opacity.or(self.key_opacity),
             image_opacity: patch.image_opacity.or(self.image_opacity),
             gradient: patch.gradient.or(self.gradient),
+            orientation: patch.orientation.or_else(|| self.orientation.clone()),
         }
     }
 }
@@ -6281,6 +6285,8 @@ mod phone_look_tests {
         assert_eq!(next.gradient, None);
         assert_eq!(next.key_opacity, Some(0.5));
         assert_eq!(base.merged(PhoneLook { accent: Some("red".into()), ..Default::default() }).accent, None);
+        assert_eq!(base.merged(PhoneLook { orientation: Some("portrait".into()), ..Default::default() }).orientation.as_deref(), Some("portrait"));
+        assert_eq!(base.merged(PhoneLook { orientation: Some("sideways".into()), ..Default::default() }).orientation, None);
     }
 }
 

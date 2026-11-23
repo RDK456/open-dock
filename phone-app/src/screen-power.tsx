@@ -7,7 +7,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setAppLock, useAppLockEnabled } from './app-lock';
 import { setPrefs, usePrefs } from './prefs';
 import { ACCENTS, CORNERS, LOOKS, setAccent, setCorners, setLook, setThemeMode, useAccent, useCorners, useLook, useStyles, useThemeMode, type Colors, type Look, type ThemeMode } from './theme';
-import { clearWallpaperImage, pickWallpaperImage, setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
+import { clearWallpaperImage, ORIENTATIONS, pickWallpaperImage, setWallpaperSettings, useWallpaperSettings, WALLPAPERS } from './wallpaper';
 import { sendWallpaperMatch, useDesktopWallpapers } from './desktop-wallpaper-feed';
 import { usePcConnection } from './connection';
 import { shareLook } from './phone-look-sync';
@@ -118,7 +118,7 @@ export function AppearanceSection() {
   const look = useLook();
   const accent = useAccent();
   const corners = useCorners();
-  const { wallpaper, motion, image, imageOpacity, gradient, keyOpacity } = useWallpaperSettings();
+  const { wallpaper, motion, image, imageOpacity, gradient, keyOpacity, orientation } = useWallpaperSettings();
   const options: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
   return <View style={styles.card}>
     <Text style={styles.title}>Appearance</Text>
@@ -129,6 +129,9 @@ export function AppearanceSection() {
     <Choice options={ACCENTS} value={accent} onChange={(value) => { setAccent(value); shareLook({ accent: value }); }} />
     <Text style={styles.label}>Corners</Text>
     <Choice options={CORNERS} value={corners} onChange={(value) => { setCorners(value); shareLook({ corners: value }); }} />
+    <Text style={styles.label}>Orientation</Text>
+    <Choice options={ORIENTATIONS} value={orientation} onChange={(value) => { setWallpaperSettings({ orientation: value }); shareLook({ orientation: value }); }} />
+    <Text style={styles.hint}>Auto turns with the phone. You can set this from the PC too.</Text>
     <Text style={styles.label}>Light or dark</Text>
     <Choice options={options} value={mode} onChange={(value) => { setThemeMode(value); shareLook({ mode: value }); }} />
     <Text style={styles.hint}>{"System follows this phone's setting. Your PC has its own."}</Text>

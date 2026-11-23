@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
-import * as ScreenOrientation from 'expo-screen-orientation';
 import { NavigationBar } from 'expo-navigation-bar';
 import { SvgXml } from 'react-native-svg';
 import { DeckButton, DeckMediaCommand, DeckPlacement, DeckWidget, PlaybackState, SystemMediaState, livePositionMs, useMediaState, usePcConnection, useSystemMuted } from '../../connection';
@@ -17,7 +16,7 @@ import { InfoWidget } from '../../info-widgets';
 import { sendWidgetTouch, WebWidgetLayer, type WebWidget, type WidgetTouch } from '../../web-widgets';
 import { countRender, PerfOverlay } from '../../perf-overlay';
 import { useDeckScreenPower } from '../../screen-power';
-import { DockBackdrop, fade, useWallpaperSettings, Wallpaper } from '../../wallpaper';
+import { DockBackdrop, fade, lockOrientation, useWallpaperSettings, Wallpaper } from '../../wallpaper';
 import { ButtonEditor, type EditTarget } from '../../button-editor';
 import { DeckStack } from '../../deck-stack';
 import { PuckRail, usePins } from '../../puck-rail';
@@ -465,8 +464,8 @@ export default function DeckScreen() {
     let alive = true;
     const setOrientation = async () => {
       try {
-        // Full screen follows the phone too: portrait gives a tall deck, landscape a wide one.
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
+        // Full screen keeps the Orientation setting: portrait gives a tall deck, landscape a wide one.
+        await lockOrientation();
       } catch {
         if (alive && immersive) {
           setImmersive(false);
@@ -508,7 +507,7 @@ export default function DeckScreen() {
 
   useEffect(() => () => {
     if (immersiveToolsTimer.current) clearTimeout(immersiveToolsTimer.current);
-    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
+    void lockOrientation();
   }, []);
 
   const revealImmersiveTools = () => {

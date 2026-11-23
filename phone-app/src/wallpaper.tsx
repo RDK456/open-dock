@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Animated, Easing, Image, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { File, Paths } from 'expo-file-system';
 import Svg, { Circle, Defs, LinearGradient, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Storage from 'expo-sqlite/kv-store';
@@ -11,15 +12,18 @@ import { backdrops, wallpaperGlows } from './theme-colors';
 // Soft light behind the Deck and Touch screens, under glass panels. Kept on this phone only, like the theme.
 export type WallpaperId = 'none' | 'aurora' | 'ember' | 'ocean' | 'forest';
 // image: a picture of your own (file uri) shown under the gradient; imageOpacity and gradient are 0–1.
-export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean; image: string | null; imageOpacity: number; gradient: number; keyOpacity: number; ownImage: string | null };
+// orientation: how the app turns; auto follows the phone.
+export type Orientation = 'auto' | 'portrait' | 'landscape';
+export type WallpaperSettings = { wallpaper: WallpaperId; motion: boolean; image: string | null; imageOpacity: number; gradient: number; keyOpacity: number; ownImage: string | null; orientation: Orientation };
 
 /** A #rrggbb color at the given opacity; anything else (rgba, transparent) is returned as it is. */
 export const fade = (color: string, opacity: number) => opacity >= 1 || !/^#[0-9a-f]{6}$/i.test(color) ? color : `${color}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
 
 export const WALLPAPERS: [WallpaperId, string][] = [['none', 'None'], ['aurora', 'Aurora'], ['ember', 'Ember'], ['ocean', 'Ocean'], ['forest', 'Forest']];
+export const ORIENTATIONS: [Orientation, string][] = [['auto', 'Auto'], ['portrait', 'Portrait'], ['landscape', 'Landscape']];
 
 const KEY = 'opendock.wallpaper';
-const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true, image: null, imageOpacity: 1, gradient: 0.5, keyOpacity: 0.55, ownImage: null };
+const DEFAULTS: WallpaperSettings = { wallpaper: 'aurora', motion: true, image: null, imageOpacity: 1, gradient: 0.5, keyOpacity: 0.55, ownImage: null, orientation: 'auto' };
 const unit = (value: unknown, fallback: number) => typeof value === 'number' && value >= 0 && value <= 1 ? value : fallback;
 
 /** Lets the user pick a picture and keeps a copy in the app's own storage, so it outlives the picker's cache. */
@@ -65,6 +69,7 @@ function read(): WallpaperSettings {
       gradient: unit(saved.gradient, DEFAULTS.gradient),
       keyOpacity: unit(saved.keyOpacity, DEFAULTS.keyOpacity),
       ownImage: typeof saved.ownImage === 'string' ? saved.ownImage : null,
+      orientation: ORIENTATIONS.some(([id]) => id === saved.orientation) ? saved.orientation as Orientation : DEFAULTS.orientation,
     };
   } catch {
     return DEFAULTS;
@@ -79,7 +84,12 @@ export function setWallpaperSettings(next: Partial<WallpaperSettings>) {
   settings = { ...settings, ...next };
   try { Storage.setItemSync(KEY, JSON.stringify(settings)); } catch { /* lasts until the app closes */ }
   listeners.forEach((listener) => listener());
+  if (next.orientation) lockOrientation();
 }
+
+const LOCKS = { auto: ScreenOrientation.OrientationLock.DEFAULT, portrait: ScreenOrientation.OrientationLock.PORTRAIT_UP, landscape: ScreenOrientation.OrientationLock.LANDSCAPE } as const;
+/** Turns the app the way the Orientation setting says. */
+export function lockOrientation() { return ScreenOrientation.lockAsync(LOCKS[settings.orientation]).catch(() => undefined); }
 
 export const getWallpaperSettings = () => settings;
 export const useWallpaperSettings = () => useSyncExternalStore(subscribe, () => settings);

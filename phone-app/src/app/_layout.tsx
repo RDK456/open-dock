@@ -8,6 +8,7 @@ import { ConnectionProvider } from '../connection';
 import { HandsFreeProvider } from '../hands-free';
 import { setLyricsUserAgent } from '../lyrics';
 import { useTheme } from '../theme';
+import { lockOrientation } from '../wallpaper';
 
 if (Platform.OS === 'android') {
   setLyricsUserAgent('Open Dock/1.0 (https://github.com/RDK456/open-dock)');
@@ -22,6 +23,7 @@ export default function RootLayout() {
   }, [colors, scheme]);
   // The window behind the app (seen while rotating, with the keyboard, or past the end of a list) follows the look.
   useEffect(() => { void SystemUI.setBackgroundColorAsync(colors.bg); }, [colors.bg]);
+  useEffect(() => { void lockOrientation(); }, []);
   return (
     <ThemeProvider value={navigationTheme}>
       <ConnectionProvider>

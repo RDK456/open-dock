@@ -1,9 +1,9 @@
 import { getAppearance, setAccent, setCorners, setLook, setThemeMode, ACCENTS, CORNERS, LOOKS, type Corners, type Look, type ThemeMode } from './theme';
-import { getWallpaperSettings, setWallpaperSettings, WALLPAPERS, type WallpaperId } from './wallpaper';
+import { getWallpaperSettings, ORIENTATIONS, setWallpaperSettings, WALLPAPERS, type Orientation, type WallpaperId } from './wallpaper';
 
 // The phone's look is one setting shared with the PC (kept in its deck config), so it can be changed from either.
 // Changes made here are sent to the PC; each deck that arrives brings the PC's copy, applied here.
-export type PhoneLook = { look?: Look; mode?: ThemeMode; accent?: string; corners?: Corners; wallpaper?: WallpaperId; motion?: boolean; keyOpacity?: number; imageOpacity?: number; gradient?: number };
+export type PhoneLook = { look?: Look; mode?: ThemeMode; accent?: string; corners?: Corners; wallpaper?: WallpaperId; motion?: boolean; keyOpacity?: number; imageOpacity?: number; gradient?: number; orientation?: Orientation };
 
 type Send = (message: Record<string, unknown>) => void;
 let sender: Send | null = null;
@@ -15,8 +15,8 @@ const unit = (value: unknown) => typeof value === 'number' && value >= 0 && valu
 /** Everything as it is on this phone now. */
 export function currentLook(): PhoneLook {
   const { mode, look, accent, corners } = getAppearance();
-  const { wallpaper, motion, keyOpacity, imageOpacity, gradient } = getWallpaperSettings();
-  return { look, mode, accent, corners, wallpaper, motion, keyOpacity, imageOpacity, gradient };
+  const { wallpaper, motion, keyOpacity, imageOpacity, gradient, orientation } = getWallpaperSettings();
+  return { look, mode, accent, corners, wallpaper, motion, keyOpacity, imageOpacity, gradient, orientation };
 }
 
 /** Tells the PC what changed here. */
@@ -38,5 +38,6 @@ export function applyLook(remote: unknown) {
   if (unit(next.keyOpacity) && next.keyOpacity !== now.keyOpacity) wallpaper.keyOpacity = next.keyOpacity as number;
   if (unit(next.imageOpacity) && next.imageOpacity !== now.imageOpacity) wallpaper.imageOpacity = next.imageOpacity as number;
   if (unit(next.gradient) && next.gradient !== now.gradient) wallpaper.gradient = next.gradient as number;
+  if (ORIENTATIONS.some(([id]) => id === next.orientation) && next.orientation !== now.orientation) wallpaper.orientation = next.orientation as Orientation;
   if (Object.keys(wallpaper).length) setWallpaperSettings(wallpaper);
 }
