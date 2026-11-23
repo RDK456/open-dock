@@ -20,7 +20,11 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.graphics.Rect
+import android.graphics.RectF
 import android.hardware.camera2.params.ExtensionSessionConfiguration
+import android.hardware.camera2.params.Face
+import android.hardware.camera2.params.MeteringRectangle
 import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
 import android.media.MediaCodec
@@ -66,6 +70,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -139,6 +144,12 @@ class CamService : Service() {
     @Volatile private var lastFocus = 0f
     @Volatile private var lastIso = 0
     @Volatile private var lastExp = 0L
+
+    // Target tracking (cam thread): the face being followed, when it was last seen, and the framing that eases towards it.
+    private var face: Rect? = null
+    private var faceSeen = 0L
+    private var crop: RectF? = null
+    private var trackFrame = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -216,6 +227,7 @@ class CamService : Service() {
         val oldMode = state.optString("mode", "video")
         state.put(k, v)
         if (k == "af" && v == false) state.put("focus", lastFocus.toDouble())
+        if (k == "track" || k == "facing") { face = null; crop = null }
         if (k == "mode" && v == "pro" && lastIso > 0) state.put("iso", lastIso).put("exp", lastExp)
         clampState()
         prefs.edit().putString("state", state.toString()).apply()
@@ -265,7 +277,7 @@ class CamService : Service() {
         fun def(k: String, v: Any) { if (!s.has(k)) s.put(k, v) }
         def("facing", "back"); def("zoom", 1.0); def("mode", "video"); def("af", true); def("focus", 0.0)
         def("ev", 0); def("wb", "auto"); def("torch", false); def("stab", false); def("res", "1920x1080")
-        def("fps", 30); def("mbps", 0); def("live", true); def("mirror", false); def("rot180", false)
+        def("fps", 30); def("mbps", 0); def("live", true); def("mirror", false); def("rot180", false); def("track", false)
         if (c.length() == 0) return
         s.put("zoom", s.optDouble("zoom", 1.0).coerceIn(c.optDouble("zoomMin", 1.0), c.optDouble("zoomMax", 1.0)))
         s.put("ev", s.optInt("ev").coerceIn(c.optInt("evMin"), c.optInt("evMax")))
@@ -315,6 +327,9 @@ class CamService : Service() {
         j.put("focusMax", (c.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f).toDouble())
         val afModes = c.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES) ?: IntArray(0)
         j.put("af", CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO in afModes)
+        // Tracking needs the camera's own face detection, and zoom ratios (Android 11) so the framing can be set by hand.
+        val faceModes = c.get(CameraCharacteristics.STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES) ?: IntArray(0)
+        j.put("track", Build.VERSION.SDK_INT >= 30 && faceModes.any { it != CameraMetadata.STATISTICS_FACE_DETECT_MODE_OFF })
         j.put("apertures", JSONArray((c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES) ?: FloatArray(0)).map { it.toDouble() }))
         j.put("torch", c.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true)
         val stabModes = c.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES) ?: IntArray(0)
@@ -558,13 +573,47 @@ class CamService : Service() {
         WB[s.optString("wb")]?.let { b.set(CaptureRequest.CONTROL_AWB_MODE, it) }
         val aps = c.optJSONArray("apertures")
         if (aps != null && aps.length() > 1 && s.has("aperture")) b.set(CaptureRequest.LENS_APERTURE, s.getDouble("aperture").toFloat())
+        if (tracking()) {
+            val modes = chars?.get(CameraCharacteristics.STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES) ?: IntArray(0)
+            b.set(CaptureRequest.STATISTICS_FACE_DETECT_MODE, modes.max())
+            crop?.let { r ->
+                b.set(CaptureRequest.CONTROL_ZOOM_RATIO, 1f)
+                b.set(CaptureRequest.SCALER_CROP_REGION, Rect(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt()))
+            }
+            // Focus and exposure on the face being followed.
+            face?.let { f ->
+                val region = arrayOf(MeteringRectangle(f, MeteringRectangle.METERING_WEIGHT_MAX))
+                if ((chars?.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF) ?: 0) > 0) b.set(CaptureRequest.CONTROL_AF_REGIONS, region)
+                if ((chars?.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE) ?: 0) > 0) b.set(CaptureRequest.CONTROL_AE_REGIONS, region)
+            }
+        }
     }
+
+    private fun tracking() = caps.optBoolean("track") && state.optBoolean("track") && extSession == null
+
+    /** Eases the framing towards the biggest face, or back out to the whole view when nobody has been seen for a while. */
+    private fun follow(faces: Array<Face>?) {
+        val active = chars?.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) ?: return
+        val now = SystemClock.uptimeMillis()
+        faces?.filter { it.score >= 30 }?.maxByOrNull { it.bounds.width() * it.bounds.height() }?.let { face = it.bounds; faceSeen = now }
+        if (now - faceSeen > 1500) face = null
+        val target = framing(RectF(0f, 0f, active.width().toFloat(), active.height().toFloat()), face?.let { RectF(it) }, max(1.0, state.optDouble("zoom", 1.0)).toFloat(), caps.optDouble("zoomMax", 1.0).toFloat())
+        val from = crop ?: target
+        val next = RectF(from.left + (target.left - from.left) * 0.12f, from.top + (target.top - from.top) * 0.12f,
+            from.right + (target.right - from.right) * 0.12f, from.bottom + (target.bottom - from.bottom) * 0.12f)
+        val moved = crop == null || abs(next.left - crop!!.left) + abs(next.width() - crop!!.width()) > active.width() * 0.002f
+        crop = next
+        // A new request every other frame at most, and only when the framing actually moved.
+        if (moved && ++trackFrame % 2 == 0) applyControls()
+    }
+
 
     private val captureCb = object : CameraCaptureSession.CaptureCallback() {
         override fun onCaptureCompleted(s: CameraCaptureSession, r: CaptureRequest, res: TotalCaptureResult) {
             res.get(CaptureResult.LENS_FOCUS_DISTANCE)?.let { lastFocus = it }
             res.get(CaptureResult.SENSOR_SENSITIVITY)?.let { lastIso = it }
             res.get(CaptureResult.SENSOR_EXPOSURE_TIME)?.let { lastExp = it }
+            if (tracking()) follow(res.get(CaptureResult.STATISTICS_FACES))
         }
     }
 
@@ -758,4 +807,21 @@ class CamService : Service() {
             }
         }
     }
+}
+
+/**
+ * Where to point the view: the face a little below centre (room for shoulders), about three faces tall, never tighter
+ * than 4x or the camera's limit, never wider than the user's own zoom; with no face, the whole view at that zoom.
+ */
+internal fun framing(active: RectF, face: RectF?, zoom: Float, zoomMax: Float): RectF {
+    val aspect = active.width() / active.height()
+    val widest = active.height() / zoom
+    val tightest = active.height() / minOf(4f, maxOf(zoom, zoomMax))
+    val h = if (face == null) widest else (face.height() * 3.2f).coerceIn(minOf(tightest, widest), widest)
+    val w = h * aspect
+    val cx = face?.centerX() ?: active.centerX()
+    val cy = face?.let { it.centerY() + it.height() * 0.35f } ?: active.centerY()
+    val left = (cx - w / 2).coerceIn(active.left, active.right - w)
+    val top = (cy - h / 2).coerceIn(active.top, active.bottom - h)
+    return RectF(left, top, left + w, top + h)
 }

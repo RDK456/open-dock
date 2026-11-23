@@ -99,6 +99,7 @@ export default function CameraScreen() {
                   <Chip label={state.facing === 'front' ? 'Front' : 'Back'} ok={(caps.facings?.length ?? 0) > 1} onPress={() => set('facing', state.facing === 'front' ? 'back' : 'front')} />
                   <Chip label="Torch" on={state.torch} ok={!!caps.torch} onPress={() => set('torch', !state.torch)} />
                   <Chip label="Stabilise" on={state.stab} ok={!!caps.stab} onPress={() => set('stab', !state.stab)} />
+                  <Chip label="Track face" on={state.track} ok={!!caps.track} onPress={() => set('track', !state.track)} />
                 </View>
                 <View style={styles.row}>
                   {['video', 'pro', 'portrait'].map((m) => <Chip key={m} label={m} on={state.mode === m} ok={m !== 'portrait' || !!caps.portrait} onPress={() => set('mode', m)} />)}

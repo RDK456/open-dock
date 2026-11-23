@@ -4,13 +4,13 @@ import { requireOptionalNativeModule } from 'expo';
 export type CamCaps = {
   zoomMin?: number; zoomMax?: number; evMin?: number; evMax?: number; evStep?: number;
   manual?: boolean; isoMin?: number; isoMax?: number; expMin?: number; expMax?: number;
-  focusMax?: number; af?: boolean; apertures?: number[]; torch?: boolean; stab?: boolean;
+  focusMax?: number; af?: boolean; track?: boolean; apertures?: number[]; torch?: boolean; stab?: boolean;
   wb?: string[]; portrait?: boolean; modes?: string[]; facings?: string[];
 };
 export type CamState = {
   facing?: string; zoom?: number; mode?: string; af?: boolean; focus?: number; ev?: number; iso?: number; exp?: number;
   wb?: string; aperture?: number; torch?: boolean; stab?: boolean; res?: string; fps?: number; mbps?: number;
-  live?: boolean; mirror?: boolean; rot180?: boolean; conn?: string; demand?: boolean; cam?: boolean; ip?: string; model?: string;
+  live?: boolean; track?: boolean; mirror?: boolean; rot180?: boolean; conn?: string; demand?: boolean; cam?: boolean; ip?: string; model?: string;
 };
 export type CamUpdate = { caps?: CamCaps; state?: CamState; quit?: boolean };
 
