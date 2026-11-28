@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "opendock.obs",
+  "name": "OBS Studio",
+  "version": "1.0.0",
+  "description": "Record, stream, switch scenes and mute sources in OBS Studio through its built-in WebSocket server (OBS 28 or later).",
+  "actions": [
+    {
+      "id": "obs",
+      "name": "OBS action",
+      "description": "Turn on Tools > WebSocket Server Settings in OBS first.",
+      "script": "scripts/obs.ps1",
+      "inputs": [
+        { "id": "command", "label": "Action", "type": "select",
+          "options": ["ToggleRecord", "ToggleRecordPause", "ToggleStream", "ToggleVirtualCam", "SaveReplayBuffer", "SetCurrentProgramScene", "ToggleInputMute"],
+          "optionLabels": ["Start or stop recording", "Pause or resume recording", "Start or stop streaming", "Start or stop virtual camera", "Save replay", "Switch to scene", "Mute or unmute source"],
+          "default": "ToggleRecord" },
+        { "id": "target", "label": "Scene or source name (for switch and mute)", "type": "text", "default": "" },
+        { "id": "port", "label": "WebSocket port", "type": "number", "default": "4455" },
+        { "id": "password", "label": "WebSocket password (blank if off; stored in the deck)", "type": "text", "default": "" }
+      ]
+    }
+  ]
+}

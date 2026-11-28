@@ -35,6 +35,7 @@ mod clipboard;
 mod delta;
 mod icon_png;
 mod island;
+mod mcp;
 mod media_players;
 mod pc_stats;
 #[cfg(windows)]
@@ -5838,6 +5839,7 @@ async fn serve(state: Arc<AppState>) {
         .route("/ws", get(upgrade_socket))
         .route("/discover", get(discover))
         .route("/pair", axum::routing::post(pair))
+        .route("/mcp", axum::routing::post(mcp::handle))
         .with_state(state.clone());
     let listener = match TcpListener::bind(("0.0.0.0", PORT)).await {
         Ok(listener) => listener,
@@ -6062,7 +6064,8 @@ pub fn run() {
             listen_voice,
             stop_voice,
             arm_voice,
-            island::island_state
+            island::island_state,
+            mcp::mcp_command
         ])
         .setup(move |app| {
             delta::remove_replaced_exe();

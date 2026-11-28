@@ -561,6 +561,7 @@ function App() {
             {pcNameError ? <p className="setting-error" role="alert">{pcNameError}</p> : null}
           </section>
           <StartWithWindowsSetting />
+          <AiControlSetting />
           <UpdatesSetting updater={updater} />
           <h2 className="settings-group">Phones</h2>
           <section className="device-navigation-setting">
@@ -2722,6 +2723,26 @@ function VoiceSettings({ voice }: { voice: ReturnType<typeof usePcVoice> }) {
         {voice.error ? <p className="setting-error" role="alert">{voice.error}</p> : null}
       </section>
     </>
+  );
+}
+
+/** Copies the command that lets Claude press deck keys (Open Dock's MCP server, this PC only). */
+function AiControlSetting() {
+  const [copied, setCopied] = useState('');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(await invoke<string>('mcp_command'));
+      setCopied('Copied. Paste it into a terminal; it holds your pairing key, so keep it private.');
+    } catch (failure) {
+      setCopied(String(failure));
+    }
+  };
+  return (
+    <section className="device-navigation-setting">
+      <div className="device-navigation-copy"><h2>AI control</h2><p>Let Claude, or any MCP client on this PC, list and press your deck keys. Only this PC can connect.</p></div>
+      <button type="button" className="secondary-button" onClick={() => void copy()}>Copy setup command</button>
+      {copied ? <p className="panel-note" role="status">{copied}</p> : null}
+    </section>
   );
 }
 
