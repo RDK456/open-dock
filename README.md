@@ -89,15 +89,24 @@ Tap the PC name (top right) to switch between paired PCs.
 
 #### Dials
 
-Drag a **Volume dial**, **Brightness dial** or **App volume dial** onto the grid.
+Drag a **Volume dial**, **Mic dial**, **Brightness dial** or **App volume dial** onto the grid. Tap a dial's icon to mute it.
 
 | Dial | What it controls |
 |---|---|
 | Volume | This PC's main volume. |
+| Mic | Your default microphone's level. |
 | Brightness | The screen brightness: desktop monitors over DDC/CI, laptop screens through Windows. It starts at the screen's real level. |
-| App volume | The app you're using right now, from the Windows volume mixer. Or pick one app (Spotify, a game, a browser) from what's playing, or type its program name. |
+| App volume | The app you're using right now, from the Windows volume mixer, with its icon. Or pick one app (Spotify, a game, a browser) from what's playing, or type its program name. |
 
 Pick a design (**Bar**, **Pill**, **Tower**, **Ring** or **Meter**) and a colour. A dial is greyed out while its app is quiet or the monitor can't be read.
+
+#### Game profiles
+
+Give a profile its apps (**Deck → profile → Switch automatically**) and the phone switches to it whenever one of them is in front on the PC. Apps playing sound show up as one-tap picks.
+
+#### Handy keys
+
+**System & power** keys include **Switch speakers** (move sound to the next headphones or speakers) and **Mute microphone**.
 
 ### Make it yours
 
@@ -137,6 +146,10 @@ In OBS, turn on **Tools → WebSocket Server Settings**. In the PC app, install 
 ### Pet
 
 A desktop pet widget that plays games, wears outfits and reacts to your music.
+
+## Report a problem
+
+**Settings → Report a problem** opens a GitHub issue with your Open Dock version and Windows build filled in. Nothing is sent until you submit it.
 
 ## Build from source
 

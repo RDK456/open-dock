@@ -13,7 +13,7 @@ type Kind = 'media' | 'hotkey' | 'type_text' | 'open_url' | 'system';
 const EDITABLE = new Set<DeckAction['type']>(['media', 'hotkey', 'type_text', 'open_url', 'system', 'select_page', 'select_profile']);
 const KINDS: [Kind, string][] = [['media', 'Media'], ['hotkey', 'Shortcut'], ['type_text', 'Type text'], ['open_url', 'Website'], ['system', 'System']];
 const MEDIA: [DeckMediaCommand, string][] = [['play_pause', 'Play / Pause'], ['next_track', 'Next'], ['previous_track', 'Previous'], ['volume_up', 'Volume up'], ['volume_down', 'Volume down'], ['mute', 'Mute']];
-const SYSTEM: [SystemCommand, string][] = [['screenshot', 'Screenshot'], ['lock', 'Lock'], ['sleep', 'Sleep'], ['brightness_up', 'Brightness up'], ['brightness_down', 'Brightness down']];
+const SYSTEM: [SystemCommand, string][] = [['screenshot', 'Screenshot'], ['lock', 'Lock'], ['sleep', 'Sleep'], ['brightness_up', 'Brightness up'], ['brightness_down', 'Brightness down'], ['next_audio_output', 'Switch speakers'], ['mic_mute', 'Mute mic']];
 
 /** Adds, changes or removes one deck button from the phone; the PC saves it and every device updates. */
 export function ButtonEditor({ target, onClose }: { target: EditTarget; onClose: () => void }) {

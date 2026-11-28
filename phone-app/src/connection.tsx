@@ -19,7 +19,7 @@ export type PcConnection = { host: string; port: number; token: string; deviceNa
 export type DeckMediaCommand = 'play_pause' | 'next_track' | 'previous_track' | 'volume_up' | 'volume_down' | 'mute';
 export type DeckStep = { type: 'media'; command: DeckMediaCommand } | { type: 'hotkey'; keys: string[] } | { type: 'launch_app'; app: string } | { type: 'launch_file'; path: string } | { type: 'launch_folder'; path: string } | { type: 'type_text'; text: string } | { type: 'open_url'; url: string } | { type: 'delay'; ms: number };
 export type DeckAction = DeckStep | { type: 'run_script'; path: string; allowOnPc: boolean } | { type: 'plugin_action'; pluginId: string; actionId: string; allowOnPc: boolean; inputs?: Record<string, string> } | { type: 'sequence'; steps: DeckStep[] } | { type: 'select_profile'; profileId: string } | { type: 'select_page'; pageId: string } | { type: 'open_folder'; folderId: string } | { type: 'system'; command: SystemCommand };
-export type SystemCommand = 'lock' | 'sleep' | 'restart' | 'shutdown' | 'sign_out' | 'brightness_up' | 'brightness_down' | 'screenshot';
+export type SystemCommand = 'lock' | 'sleep' | 'restart' | 'shutdown' | 'sign_out' | 'brightness_up' | 'brightness_down' | 'screenshot' | 'next_audio_output' | 'mic_mute';
 /** Touchpad and keyboard input; `move` and `scroll` are in PC pixels and wheel steps. */
 export type PointerEvent = { kind: 'move' | 'scroll'; dx: number; dy: number } | { kind: 'zoom'; steps: number } | { kind: 'click' | 'press' | 'release'; button: 'left' | 'right' | 'middle' } | { kind: 'text'; text: string } | { kind: 'key'; key: string };
 export type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
@@ -30,7 +30,7 @@ export type DeckFolder = { id: string; name: string; rows: number; columns: numb
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
 export type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; matchPcWallpaper?: boolean; phoneLook?: Record<string, unknown> };
-export type LevelReply = { level: number | null; app?: string };
+export type LevelReply = { level: number | null; app?: string; muted?: boolean; icon?: string };
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type PlaybackState = 'playing' | 'paused' | 'stopped' | 'unavailable';
 export type SystemMediaState = { sourceAppId?: string; sourceName?: string; title?: string; artist?: string; album?: string; playbackState: PlaybackState; positionMs?: number; durationMs?: number; artworkDataUrl?: string; volumePercent?: number; muted?: boolean; canSeek?: boolean; playbackRate?: number;
@@ -63,7 +63,11 @@ type ConnectionContextValue = {
   sendBrightness: (level: number) => boolean;
   sendAppVolume: (app: string, level: number) => boolean;
   /** A dial's level on the PC now ("brightness", "app:<name>" or "app-focused", which also names the app); null when the PC can't tell. */
-  requestLevel: (target: string) => Promise<LevelReply>;
+  requestLevel: (target: string, icon?: boolean) => Promise<LevelReply>;
+  /** The microphone dial ("mic"). */
+  sendLevel: (target: string, level: number) => boolean;
+  /** A dial's icon tap: "mic", "app:<name>" or "app-focused". */
+  toggleMute: (target: string) => boolean;
   seekMedia: (positionMs: number) => boolean;
   selectProfile: (profileId: string) => boolean;
   selectPage: (pageId: string) => boolean;
@@ -81,7 +85,7 @@ type ConnectionContextValue = {
 };
 
 const STORAGE_KEY = 'opendock.pc-connection';
-const PAIRED_KEY = 'opendock.pc-connections';
+export const PAIRED_KEY = 'opendock.pc-connections';
 const LEGACY_STORAGE_KEY = 'decklink.pc-connection';
 const MAX_RECONNECT_ATTEMPTS = 3;
 // Some phones (iPhones especially) let a connection to an address nobody answers hang for over a minute.
@@ -231,7 +235,7 @@ function validDeckWidget(value: unknown): value is DeckWidget {
     const { face, app, look, color } = widget as { face?: unknown; app?: unknown; look?: unknown; color?: unknown };
     return (look === undefined || (typeof look === 'string' && /^[a-z]{1,24}$/.test(look))) &&
       (color === undefined || (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color))) &&
-      (face === undefined || face === 'volume' || face === 'brightness' || face === 'app') &&
+      (face === undefined || face === 'volume' || face === 'brightness' || face === 'app' || face === 'mic') &&
       (app === undefined || (typeof app === 'string' && /^[A-Za-z0-9._ -]{1,64}$/.test(app)));
   }
   if (widget.type === 'now_playing' || widget.type === 'lyrics') return true;
@@ -502,7 +506,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       socket.onmessage = async (event) => {
         if (socketRef.current !== socket || typeof event.data !== 'string') return;
         try {
-          const message = JSON.parse(event.data) as { type?: string; name?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown; game?: unknown; level?: unknown; app?: unknown };
+          const message = JSON.parse(event.data) as { type?: string; name?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown; game?: unknown; level?: unknown; app?: unknown; muted?: unknown; icon?: unknown };
           countMessage(message.type ?? 'unknown');
           if (message.type === 'ready') {
             // The PC's own name for itself replaces whatever the pairing saved (often its IP address).
@@ -593,7 +597,12 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           }
           if (message.type === 'level' && message.requestId) {
             const level = message.level;
-            levelRepliesRef.current.get(message.requestId)?.({ level: typeof level === 'number' && Number.isInteger(level) && level >= 0 && level <= 100 ? level : null, app: typeof message.app === 'string' && message.app.length <= 64 ? message.app : undefined });
+            levelRepliesRef.current.get(message.requestId)?.({
+              level: typeof level === 'number' && Number.isInteger(level) && level >= 0 && level <= 100 ? level : null,
+              app: typeof message.app === 'string' && message.app.length <= 64 ? message.app : undefined,
+              muted: typeof message.muted === 'boolean' ? message.muted : undefined,
+              icon: typeof message.icon === 'string' && message.icon.startsWith('data:image/png;base64,') && message.icon.length < 80_000 ? message.icon : undefined,
+            });
             levelRepliesRef.current.delete(message.requestId);
           }
           if (message.type === 'signature_result') {
@@ -839,14 +848,16 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   const sendSystemVolume = useCallback((volumePercent: number) => sendRequest('set_system_volume', 'volumePercent', Math.round(Math.max(0, Math.min(100, volumePercent)))), [sendRequest]);
   const sendAppVolume = useCallback((app: string, level: number) => sendRequest('set_app_volume', 'app', app, { level: Math.round(Math.max(0, Math.min(100, level))) }), [sendRequest]);
   const levelRepliesRef = useRef(new Map<string, (reply: LevelReply) => void>());
-  const requestLevel = useCallback((target: string) => new Promise<LevelReply>((resolve) => {
+  const sendLevel = useCallback((target: string, level: number) => sendRequest('set_level', 'target', target, { level: Math.round(Math.max(0, Math.min(100, level))) }), [sendRequest]);
+  const toggleMute = useCallback((target: string) => sendRequest('toggle_mute', 'target', target), [sendRequest]);
+  const requestLevel = useCallback((target: string, icon = false) => new Promise<LevelReply>((resolve) => {
     const socket = socketRef.current;
     if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return resolve({ level: null });
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     levelRepliesRef.current.set(requestId, resolve);
     // Older PCs never answer.
     setTimeout(() => { if (levelRepliesRef.current.delete(requestId)) resolve({ level: null }); }, 4000);
-    try { socket.send(JSON.stringify({ type: 'get_level', requestId, target })); } catch { levelRepliesRef.current.delete(requestId); resolve({ level: null }); }
+    try { socket.send(JSON.stringify({ type: 'get_level', requestId, target, icon })); } catch { levelRepliesRef.current.delete(requestId); resolve({ level: null }); }
   }), [status]);
   const sendBrightness = useCallback((level: number) => sendRequest('set_brightness', 'level', Math.round(Math.max(0, Math.min(100, level)))), [sendRequest]);
   const seekMedia = useCallback((positionMs: number) => sendRequest('seek_media', 'positionMs', Math.round(Math.max(0, positionMs))), [sendRequest]);
@@ -947,7 +958,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   }), [status]);
 
   return (
-    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, sendBrightness, sendAppVolume, requestLevel, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice, sendVoiceState }}>
+    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, sendBrightness, sendAppVolume, requestLevel, sendLevel, toggleMute, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice, sendVoiceState }}>
       {children}
     </ConnectionContext.Provider>
   );

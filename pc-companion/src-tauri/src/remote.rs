@@ -24,6 +24,9 @@ pub(super) enum SystemCommand {
     BrightnessUp,
     BrightnessDown,
     Screenshot,
+    /// Moves sound to the next plugged-in speakers or headphones.
+    NextAudioOutput,
+    MicMute,
 }
 
 pub(super) fn run_system_command(command: SystemCommand) -> Result<(), String> {
@@ -31,6 +34,8 @@ pub(super) fn run_system_command(command: SystemCommand) -> Result<(), String> {
         SystemCommand::Screenshot => screenshot().map(|_| ()),
         SystemCommand::BrightnessUp => change_brightness(10),
         SystemCommand::BrightnessDown => change_brightness(-10),
+        SystemCommand::NextAudioOutput => super::app_volume::next_output().map(|_| ()),
+        SystemCommand::MicMute => super::app_volume::toggle_mic_mute(),
         _ => power(command),
     }
 }

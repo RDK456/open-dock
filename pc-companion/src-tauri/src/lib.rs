@@ -442,7 +442,7 @@ const WALLPAPER_FACES: &[&str] = &["grid", "cards", "carousel"];
 /// Info widgets (read on the phone itself): which one this tile is.
 const INFO_FACES: &[&str] = &["weather", "news", "stocks", "sports", "countdown", "timer", "reminders", "quote"];
 /// What a slider widget controls.
-const SLIDER_FACES: &[&str] = &["volume", "brightness", "app"];
+const SLIDER_FACES: &[&str] = &["volume", "brightness", "app", "mic"];
 const SLIDER_LOOKS: &[&str] = &["bar", "pill", "vertical", "ring", "notch"];
 const INFO_LEAGUES: &[&str] = &["nba", "nfl", "epl", "laliga", "ucl", "mlb", "nhl"];
 const INFO_DONE: &[&str] = &["show", "bottom", "hide"];
@@ -2541,6 +2541,19 @@ enum ClientMessage {
         #[serde(rename = "requestId")]
         request_id: String,
         target: String,
+        #[serde(default)]
+        icon: bool,
+    },
+    SetLevel {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        target: String,
+        level: u8,
+    },
+    ToggleMute {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        target: String,
     },
     SelectProfile {
         #[serde(rename = "requestId")]
@@ -4367,7 +4380,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     && (app.is_empty() || app_volume::valid_name(&app))
                     // No app means the one in focus.
                     && tokio::task::spawn_blocking(move || {
-                        let app = if app.is_empty() { app_volume::focused().ok_or("nothing in focus")? } else { app };
+                        let app = if app.is_empty() { app_volume::focused().ok_or("nothing in focus")?.0 } else { app };
                         app_volume::set(&app, level)
                     })
                     .await
@@ -4381,21 +4394,65 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
             }
-            ClientMessage::GetLevel { request_id, target } if authenticated && valid_id(&request_id) && target.len() <= 80 => {
+            ClientMessage::GetLevel { request_id, target, icon } if authenticated && valid_id(&request_id) && target.len() <= 80 => {
                 let asked = target.clone();
-                // "app-focused" follows the window in use and names it in the reply.
-                let (level, app) = tokio::task::spawn_blocking(move || match asked.strip_prefix("app:") {
-                    Some(app) if app_volume::valid_name(app) => (app_volume::level(app), None),
-                    None if asked == "brightness" => (remote::brightness_level(), None),
-                    None if asked == "app-focused" => match app_volume::focused() {
-                        Some(app) => (app_volume::level(&app), Some(app)),
-                        None => (None, None),
-                    },
-                    _ => (None, None),
+                // "app-focused" follows the window in use and names it in the reply; `icon` adds the app's icon.
+                let (reading, app, icon) = tokio::task::spawn_blocking(move || {
+                    let app_icon = |path: Option<String>| -> Option<String> {
+                        #[cfg(windows)]
+                        {
+                            use base64::Engine;
+                            let png = win_icon::app_icon_png(&path?, 48 * 1024).ok()?;
+                            Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+                        }
+                        #[cfg(not(windows))]
+                        {
+                            let _ = path;
+                            None
+                        }
+                    };
+                    match asked.strip_prefix("app:") {
+                        Some(app) if app_volume::valid_name(app) => (app_volume::reading(app), None, if icon { app_icon(app_volume::path_of(app)) } else { None }),
+                        None if asked == "brightness" => (app_volume::Reading { level: remote::brightness_level(), muted: None }, None, None),
+                        None if asked == "mic" => (app_volume::mic_reading(), None, None),
+                        None if asked == "app-focused" => match app_volume::focused() {
+                            Some((app, path)) => (app_volume::reading(&app), Some(app), if icon { app_icon(Some(path)) } else { None }),
+                            None => Default::default(),
+                        },
+                        _ => Default::default(),
+                    }
                 })
                 .await
                 .unwrap_or_default();
-                let reply = serde_json::json!({ "type": "level", "requestId": request_id, "target": target, "level": level, "app": app });
+                let reply = serde_json::json!({ "type": "level", "requestId": request_id, "target": target, "level": reading.level, "muted": reading.muted, "app": app, "icon": icon });
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
+            // The microphone dial ("mic"); other dials have their own messages.
+            ClientMessage::SetLevel { request_id, target, level } if authenticated => {
+                let ok = valid_id(&request_id)
+                    && level <= 100
+                    && target == "mic"
+                    && tokio::task::spawn_blocking(move || app_volume::set_mic(level)).await.is_ok_and(|result| result.is_ok());
+                let reply = serde_json::json!({ "type": "action_result", "requestId": request_id, "ok": ok, "reason": if ok { None } else { Some("control_failed") } });
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
+            // A dial's icon tap: "mic", "app:<name>" or "app-focused".
+            ClientMessage::ToggleMute { request_id, target } if authenticated => {
+                let ok = valid_id(&request_id)
+                    && target.len() <= 80
+                    && tokio::task::spawn_blocking(move || match target.strip_prefix("app:") {
+                        Some(app) if app_volume::valid_name(app) => app_volume::toggle_mute(app),
+                        None if target == "mic" => app_volume::toggle_mic_mute(),
+                        None if target == "app-focused" => app_volume::toggle_mute(&app_volume::focused().ok_or("nothing in focus")?.0),
+                        _ => Err("unknown dial".into()),
+                    })
+                    .await
+                    .is_ok_and(|result| result.is_ok());
+                let reply = serde_json::json!({ "type": "action_result", "requestId": request_id, "ok": ok, "reason": if ok { None } else { Some("control_failed") } });
                 if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
                     break;
                 }
@@ -6075,6 +6132,36 @@ fn set_taskbar_icon(hwnd: windows::Win32::Foundation::HWND) {
     }
 }
 
+/// Opens a new GitHub issue with this PC's details filled in. Nothing is sent until the user submits it
+/// there, and the details hold no names or paths: version, Windows build, admin rights, the CPU sensor log.
+#[tauri::command]
+fn report_bug() -> Result<(), String> {
+    let windows = std::process::Command::new("cmd").args(["/C", "ver"]).output().ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned()).unwrap_or_default();
+    let sensor = std::env::var_os("APPDATA")
+        .and_then(|dir| fs::read_to_string(Path::new(&dir).join("app.opendock.pc").join("pawnio.log")).ok())
+        .map(|log| log.lines().rev().take(3).map(|line| line.split_once("} ").map_or(line, |(_, step)| step).to_owned()).collect::<Vec<_>>().join("; "))
+        .map(|text| text.chars().take(300).collect::<String>())
+        .unwrap_or_default();
+    let body = format!(
+        "**What happened?**
+
+
+**What did you expect?**
+
+
+---
+Open Dock {} · {windows} · admin: {} · CPU sensor: {sensor}",
+        env!("CARGO_PKG_VERSION"),
+        remote::is_elevated()
+    );
+    let encode = |text: &str| text.bytes().map(|byte| match byte {
+        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (byte as char).to_string(),
+        _ => format!("%{byte:02X}"),
+    }).collect::<String>();
+    open_url(&format!("https://github.com/RDK456/open-dock/issues/new?labels=bug&body={}", encode(&body)))
+}
+
 /// Apps playing sound now, for picking a per-app volume dial's app.
 #[tauri::command]
 async fn audio_apps() -> Vec<String> {
@@ -6206,7 +6293,8 @@ pub fn run() {
             arm_voice,
             island::island_state,
             mcp::mcp_command,
-            audio_apps
+            audio_apps,
+            report_bug
         ])
         .setup(move |app| {
             delta::remove_replaced_exe();

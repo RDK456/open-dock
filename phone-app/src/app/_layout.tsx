@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { Platform } from 'react-native';
 import { AppLockGate } from '../app-lock';
+import { FirstRunTour } from '../first-run';
 import { ConnectionProvider } from '../connection';
 import { HandsFreeProvider } from '../hands-free';
 import { setLyricsUserAgent } from '../lyrics';
@@ -33,6 +34,7 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
               <Stack.Screen name="(tabs)" />
             </Stack>
+            <FirstRunTour />
           </AppLockGate>
         </HandsFreeProvider>
       </ConnectionProvider>

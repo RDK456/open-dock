@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanResponder, Text, View, type GestureResponderEvent } from 'react-native';
+import { Image, PanResponder, Text, View, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { AppWindow, Sun, Volume2 } from 'lucide-react-native';
-import { useMediaState, type LevelReply } from './connection';
+import { AppWindow, Mic, MicOff, Sun, Volume2, VolumeX } from 'lucide-react-native';
+import { useMediaState, useSystemMuted, type DeckMediaCommand, type LevelReply } from './connection';
+import { Pressable } from './motion';
 import { useTheme } from './theme';
 import { fade } from './wallpaper';
 
@@ -11,39 +12,66 @@ export const SLIDER_LOOKS = ['bar', 'pill', 'vertical', 'ring', 'notch'] as cons
 type Props = {
   face?: string; app?: string; look?: string; color?: string; connected: boolean;
   sendVolume: (value: number) => boolean; sendBrightness: (value: number) => boolean;
-  sendAppVolume: (app: string, value: number) => boolean; requestLevel: (target: string) => Promise<LevelReply>;
+  sendAppVolume: (app: string, value: number) => boolean; requestLevel: (target: string, icon?: boolean) => Promise<LevelReply>;
+  sendLevel: (target: string, value: number) => boolean; toggleMute: (target: string) => boolean; sendMediaCommand: (command: DeckMediaCommand) => boolean;
 };
 
-// A dial for the PC's volume, screen brightness or one app's volume, in one of five designs. Brightness and
+// A dial for the PC's volume, the microphone, screen brightness or one app's volume, in one of five designs.
+// Tapping its icon mutes it (not brightness); an app dial shows the app's own icon. Brightness and
 // app levels are read from the PC when the dial appears (apps again every 5 s, as they start and stop playing).
 // An app dial with no app of its own follows the app in focus on the PC, checked every 1.5 s.
-export function SliderWidget({ face, app, look = 'bar', color, connected, sendVolume, sendBrightness, sendAppVolume, requestLevel }: Props) {
+export function SliderWidget({ face, app, look = 'bar', color, connected, sendVolume, sendBrightness, sendAppVolume, requestLevel, sendLevel, toggleMute, sendMediaCommand }: Props) {
   const { colors } = useTheme();
   const brightness = face === 'brightness';
   const perApp = face === 'app';
+  const mic = face === 'mic';
   const volume = useMediaState().volumePercent;
+  const systemMuted = useSystemMuted();
   const [level, setLevel] = useState<number | undefined>(undefined);
+  const [readMuted, setReadMuted] = useState<boolean | undefined>(undefined);
+  const [appIcon, setAppIcon] = useState<string | undefined>(undefined);
+  // The icon is sent once per app: asked for again only when the app in focus changes.
+  const iconFor = useRef<string | undefined>(undefined);
   const [focusedApp, setFocusedApp] = useState<string | undefined>(undefined);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [scrub, setScrub] = useState<number | null>(null);
   const dragging = useRef(false);
-  const target = brightness ? 'brightness' : perApp ? app ? `app:${app}` : 'app-focused' : null;
+  const target = brightness ? 'brightness' : mic ? 'mic' : perApp ? app ? `app:${app}` : 'app-focused' : null;
   useEffect(() => {
     if (!connected || !target) return;
     let live = true;
     // Not while a finger is on the dial, so a reply doesn't yank it back.
-    const read = () => { if (!dragging.current) void requestLevel(target).then((next) => { if (live) { setLevel(next.level ?? undefined); setFocusedApp(next.app); } }); };
+    let wantIcon = perApp;
+    const read = () => {
+      if (dragging.current) return;
+      void requestLevel(target, wantIcon).then((next) => {
+        if (!live) return;
+        setLevel(next.level ?? undefined);
+        setReadMuted(next.muted);
+        setFocusedApp(next.app);
+        const shownApp = next.app ?? app;
+        if (next.icon) { setAppIcon(next.icon); iconFor.current = shownApp; wantIcon = false; }
+        else if (perApp && shownApp !== iconFor.current) wantIcon = true;
+      });
+    };
     read();
-    const timer = perApp ? setInterval(read, app ? 5000 : 1500) : undefined;
+    const timer = perApp || mic ? setInterval(read, perApp && !app ? 1500 : 5000) : undefined;
     return () => { live = false; if (timer) clearInterval(timer); };
-  }, [connected, target, perApp, app, requestLevel]);
+  }, [connected, target, perApp, mic, app, requestLevel]);
+  const muted = target ? readMuted : systemMuted;
+  const muteTarget = mic ? 'mic' : perApp ? app ? `app:${app}` : 'app-focused' : null;
+  const tapMute = () => {
+    if (brightness) return;
+    setReadMuted((now) => now === undefined ? now : !now);
+    if (muteTarget) toggleMute(muteTarget); else sendMediaCommand('mute');
+  };
 
   const value = target ? level : volume;
   const disabled = !connected || value === undefined;
   const send = (next: number) => {
     if (target) setLevel(next);
     // An empty app tells the PC to use the app in focus.
-    return brightness ? sendBrightness(next) : perApp ? sendAppVolume(app ?? '', next) : sendVolume(next);
+    return brightness ? sendBrightness(next) : mic ? sendLevel('mic', next) : perApp ? sendAppVolume(app ?? '', next) : sendVolume(next);
   };
   const vertical = look === 'vertical' || look === 'ring';
 
@@ -94,12 +122,16 @@ export function SliderWidget({ face, app, look = 'bar', color, connected, sendVo
 
   const shown = scrub ?? (value ?? 0) / 100;
   const percent = value === undefined && scrub === null ? '—' : `${Math.round(shown * 100)}%`;
-  const accent = color ?? colors.blue;
+  const accent = muted ? colors.muted : color ?? colors.blue;
   const unit = Math.max(22, Math.min(vertical ? size.width / 2 : size.height, (vertical ? size.height : size.width) / 4) || 40);
-  const Icon = brightness ? Sun : perApp ? AppWindow : Volume2;
+  const Icon = brightness ? Sun : mic ? muted ? MicOff : Mic : muted ? VolumeX : perApp ? AppWindow : Volume2;
   const name = perApp ? app ?? focusedApp ?? 'App in focus' : null;
-  const label = brightness ? 'PC brightness' : perApp ? `${name} volume` : 'PC volume';
-  const icon = (tint: string) => <Icon size={unit * 0.5} color={tint} strokeWidth={1.8} />;
+  const label = brightness ? 'PC brightness' : mic ? 'Microphone' : perApp ? `${name} volume` : 'PC volume';
+  const glyph = (tint: string) => perApp && appIcon && !muted
+    ? <Image source={{ uri: appIcon }} style={{ width: unit * 0.56, height: unit * 0.56 }} accessibilityIgnoresInvertColors />
+    : <Icon size={unit * 0.5} color={tint} strokeWidth={1.8} />;
+  const icon = (tint: string) => brightness ? glyph(tint)
+    : <Pressable onPress={tapMute} disabled={!connected} hitSlop={8} accessibilityRole="button" accessibilityLabel={muted ? `Unmute ${label}` : `Mute ${label}`}>{glyph(tint)}</Pressable>;
   const caption = (tint: string, scale = 1) => <View style={{ alignItems: vertical ? 'center' : 'flex-end' }}>
     <Text allowFontScaling={false} style={{ color: tint, fontSize: unit * 0.34 * scale, fontWeight: '600', fontVariant: ['tabular-nums'], includeFontPadding: false }}>{percent}</Text>
     {name ? <Text allowFontScaling={false} numberOfLines={1} style={{ color: tint, opacity: 0.75, fontSize: unit * 0.22 * scale, maxWidth: unit * 2.4 }}>{name}</Text> : null}
