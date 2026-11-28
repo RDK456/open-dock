@@ -108,6 +108,10 @@ Give a profile its apps (**Deck → profile → Switch automatically**) and the 
 
 **System & power** keys include **Switch speakers** (move sound to the next headphones or speakers) and **Mute microphone**.
 
+#### Ambient screen
+
+**Connect → Screen → Clock and now playing when idle** turns the deck into a bedside or desk clock after 1, 2 or 5 minutes: a big clock, the date, and what the PC is playing with play, pause and skip. Tap anywhere to get the deck back. It uses your chosen look's colours and type.
+
 ### Make it yours
 
 1. **Phone:** open **Connect → Appearance** and choose a look, light or dark, accent colour, corners and wallpaper.

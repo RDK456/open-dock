@@ -11,6 +11,7 @@ import { clearWallpaperImage, ORIENTATIONS, pickWallpaperImage, setWallpaperSett
 import { sendWallpaperMatch, useDesktopWallpapers } from './desktop-wallpaper-feed';
 import { usePcConnection } from './connection';
 import { shareLook } from './phone-look-sync';
+import { AmbientView } from './ambient';
 
 const LOOK_HINTS: Record<Look, string> = {
   classic: 'Plain keys in light or dark, with a wallpaper of your choice.',
@@ -24,9 +25,9 @@ const LOOK_HINTS: Record<Look, string> = {
 
 // The screen is a deck's biggest power draw. These settings decide whether the deck keeps it on and
 // whether it dims when nobody is touching it. (Expo Go keeps the screen on while developing anyway.)
-export type ScreenSettings = { keepAwake: boolean; dimAfterMin: 0 | 1 | 2 | 5 };
+export type ScreenSettings = { keepAwake: boolean; dimAfterMin: 0 | 1 | 2 | 5; ambientAfterMin: 0 | 1 | 2 | 5 };
 const KEY = 'opendock.screen';
-const DEFAULTS: ScreenSettings = { keepAwake: false, dimAfterMin: 0 };
+const DEFAULTS: ScreenSettings = { keepAwake: false, dimAfterMin: 0, ambientAfterMin: 0 };
 const DIM_LEVEL = 0.05;
 
 let settings = DEFAULTS;
@@ -37,6 +38,7 @@ void Storage.getItem(KEY).then((saved) => {
     settings = {
       keepAwake: value.keepAwake === true,
       dimAfterMin: ([0, 1, 2, 5] as const).find((minutes) => minutes === value.dimAfterMin) ?? 0,
+      ambientAfterMin: ([0, 1, 2, 5] as const).find((minutes) => minutes === value.ambientAfterMin) ?? 0,
     };
     listeners.forEach((listener) => listener());
   } catch { /* defaults */ }
@@ -53,10 +55,13 @@ export function useScreenSettings(): ScreenSettings {
 /**
  * Applies the screen settings while the deck is open. Spread `touchProps` on the deck's root view
  * and render `overlay` last inside it: once dimmed, the first tap only brightens the screen again.
+ * The ambient screen (clock and now playing) comes in after its own idle time, under the dimming.
  */
 export function useDeckScreenPower() {
-  const { keepAwake, dimAfterMin } = useScreenSettings();
+  const { keepAwake, dimAfterMin, ambientAfterMin } = useScreenSettings();
   const [dimmed, setDimmed] = useState(false);
+  const [ambient, setAmbient] = useState(false);
+  const ambientTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved = useRef<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -82,6 +87,8 @@ export function useDeckScreenPower() {
   const poke = () => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = dimAfterMin ? setTimeout(() => void dim(), dimAfterMin * 60_000) : null;
+    if (ambientTimer.current) clearTimeout(ambientTimer.current);
+    ambientTimer.current = ambientAfterMin ? setTimeout(() => setAmbient(true), ambientAfterMin * 60_000) : null;
   };
   useEffect(() => {
     poke();
@@ -90,15 +97,17 @@ export function useDeckScreenPower() {
     return () => {
       subscription.remove();
       if (timer.current) clearTimeout(timer.current);
+      if (ambientTimer.current) clearTimeout(ambientTimer.current);
       restore();
     };
     // poke/restore read refs and the current setting; re-run only when the setting changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimAfterMin]);
+  }, [dimAfterMin, ambientAfterMin]);
 
-  const overlay = dimmed
-    ? <Pressable style={StyleSheet.absoluteFill} onPress={() => { restore(); poke(); }} accessibilityRole="button" accessibilityLabel="Screen dimmed. Tap to brighten" />
-    : null;
+  const overlay = <>
+    {ambient ? <AmbientView onWake={() => { setAmbient(false); poke(); }} /> : null}
+    {dimmed ? <Pressable style={StyleSheet.absoluteFill} onPress={() => { restore(); poke(); }} accessibilityRole="button" accessibilityLabel="Screen dimmed. Tap to brighten" /> : null}
+  </>;
   return { touchProps: { onTouchStart: poke }, overlay };
 }
 
@@ -205,13 +214,15 @@ export function PrivacySection() {
 /** The Screen section of the settings tab. */
 export function ScreenSettingsSection() {
   const styles = useStyles(makeStyles);
-  const { keepAwake, dimAfterMin } = useScreenSettings();
+  const { keepAwake, dimAfterMin, ambientAfterMin } = useScreenSettings();
   return <View style={styles.card}>
     <Text style={styles.title}>Screen</Text>
     <Text style={styles.label}>Keep screen on while the deck is open</Text>
     <Choice options={[[false, 'Off'], [true, 'On']]} value={keepAwake} onChange={(value) => setScreenSettings({ keepAwake: value })} />
     <Text style={styles.label}>Dim when idle</Text>
     <Choice options={[[0, 'Off'], [1, '1 min'], [2, '2 min'], [5, '5 min']]} value={dimAfterMin} onChange={(value) => setScreenSettings({ dimAfterMin: value })} />
+    <Text style={styles.label}>Clock and now playing when idle</Text>
+    <Choice options={[[0, 'Off'], [1, '1 min'], [2, '2 min'], [5, '5 min']]} value={ambientAfterMin} onChange={(value) => setScreenSettings({ ambientAfterMin: value })} />
     <Text style={styles.hint}>{"The screen uses the most battery on a deck. Dimming brings it back on your first tap, which won't press a button."}</Text>
   </View>;
 }
