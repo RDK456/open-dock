@@ -2725,7 +2725,7 @@ function VoiceSettings({ voice }: { voice: ReturnType<typeof usePcVoice> }) {
   );
 }
 
-/** Starts Open Dock when you sign in to Windows, waiting minimized in the taskbar so the phone connects without opening anything. */
+/** Starts Open Dock when you sign in to Windows, waiting hidden in the tray so the phone connects without opening anything. */
 function StartWithWindowsSetting() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState('');
@@ -2742,7 +2742,7 @@ function StartWithWindowsSetting() {
   };
   return (
     <section className="device-navigation-setting">
-      <div className="device-navigation-copy"><h2>Start with Windows</h2><p>Open Dock starts minimized in the taskbar when you sign in, so your phone connects as soon as the PC is on.</p></div>
+      <div className="device-navigation-copy"><h2>Start with Windows</h2><p>Open Dock starts hidden in the tray (the taskbar's hidden icons) when you sign in, so your phone connects as soon as the PC is on.</p></div>
       <button className={`setting-switch ${enabled ? 'enabled' : ''}`} type="button" role="switch" aria-checked={Boolean(enabled)} aria-label="Start with Windows" disabled={enabled === null} onClick={() => void toggle()}><span /></button>
       {error ? <p className="setting-error" role="alert">{error}</p> : null}
     </section>

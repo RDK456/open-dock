@@ -6158,8 +6158,8 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
                 apply_appearance(&window, clean_appearance(&saved));
-                // Every start, by hand or with Windows, waits minimized in the taskbar.
-                let _ = window.minimize();
+                // Every start, by hand or with Windows, waits hidden in the tray (no taskbar button); its icon opens it.
+                let _ = window.hide();
             }
 
             island::init(app.handle());
