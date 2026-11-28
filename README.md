@@ -85,6 +85,19 @@ Tap the PC name (top right) to switch between paired PCs.
 1. On the PC, open **Deck** and pick a profile and page.
 2. Drag a widget from the shelf onto the grid, or tap **✏️ Edit → +** on the phone.
 3. Select it to choose its design, size and options (city for weather, tickers for stocks, teams for sports and so on).
+4. **Background** sets how solid the tile is. At 0% the widget floats over your wallpaper. This works on every built-in widget.
+
+#### Dials
+
+Drag a **Volume dial**, **Brightness dial** or **App volume dial** onto the grid.
+
+| Dial | What it controls |
+|---|---|
+| Volume | This PC's main volume. |
+| Brightness | The screen brightness: desktop monitors over DDC/CI, laptop screens through Windows. It starts at the screen's real level. |
+| App volume | One app in the Windows volume mixer (Spotify, a game, a browser). Pick the app from what's playing, or type its program name. |
+
+Pick a design (**Bar**, **Pill**, **Tower**, **Ring** or **Meter**) and a colour. A dial is greyed out while its app is quiet or the monitor can't be read.
 
 ### Make it yours
 
@@ -111,7 +124,7 @@ Tap the mic and say a command, or turn on hands-free and say your wake phrase (w
 
 ### Camera
 
-Use the phone as a webcam: start it on the **Camera** tab, then open the Camera section in the PC app. Switch front/back, torch, stabilise and zoom from the phone. **Track face** keeps you framed and in focus (Android 11+), **Blur background** softens the room behind you (on the phone, no PC work), and the **Call**, **Stream** and **Low light** presets set everything in one tap.
+Use the phone as a webcam: start it on the **Camera** tab, then open the Camera section in the PC app. Switch front/back, torch, stabilise and zoom from the phone. **Track face** keeps you framed and in focus (Android 11+), **Blur background** softens the room behind you (done on the phone, so the PC does no extra work), and the **Call**, **Stream** and **Low light** presets set everything in one tap.
 
 ### OBS Studio
 
