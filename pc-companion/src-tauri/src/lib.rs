@@ -5912,9 +5912,27 @@ fn set_appearance(app: tauri::AppHandle, state: tauri::State<'_, Arc<AppState>>,
     Ok(())
 }
 
+/// Tells the web view to trim its memory while the window is hidden in the tray, and to use what it needs once shown.
+fn set_webview_memory(window: &tauri::WebviewWindow, low: bool) {
+    #[cfg(windows)]
+    let _ = window.with_webview(move |webview| {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL};
+        use windows::core::Interface;
+        // SAFETY: COM calls on the web view's own controller, on the thread Tauri runs this closure on.
+        unsafe {
+            if let Ok(view) = webview.controller().CoreWebView2().and_then(|view| view.cast::<ICoreWebView2_19>()) {
+                let _ = view.SetMemoryUsageTargetLevel(if low { COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW } else { COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL });
+            }
+        }
+    });
+    #[cfg(not(windows))]
+    let _ = (window, low);
+}
+
 /// Brings the window back from the tray, the taskbar or a second launch.
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        set_webview_memory(&window, false);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
@@ -6161,8 +6179,15 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
                 apply_appearance(&window, clean_appearance(&saved));
-                // Every start, by hand or with Windows, waits hidden in the tray (no taskbar button); its icon opens it.
-                let _ = window.hide();
+                // Every start waits hidden in the tray (no taskbar button); its icon opens it. Until a phone has
+                // paired the window opens, so a new user sees the pairing code.
+                let paired = state.known_devices.read().is_ok_and(|known| !known.is_empty());
+                if paired {
+                    let _ = window.hide();
+                    set_webview_memory(&window, true);
+                } else {
+                    let _ = window.set_focus();
+                }
             }
 
             island::init(app.handle());
@@ -6217,6 +6242,9 @@ pub fn run() {
                 api.prevent_close();
                 // Closing tucks the app into the tray (the hidden icons); the tray menu's Quit exits.
                 let _ = window.hide();
+                if let Some(view) = window.app_handle().get_webview_window(window.label()) {
+                    set_webview_memory(&view, true);
+                }
             }
         })
         .build(tauri::generate_context!())

@@ -102,6 +102,11 @@ export default function CameraScreen() {
                   <Chip label="Track face" on={state.track} ok={!!caps.track} onPress={() => set('track', !state.track)} />
                 </View>
                 <View style={styles.row}>
+                  <Chip label="Call preset" onPress={() => { set('mode', 'video'); set('res', '1280x720'); set('fps', 30); set('af', true); if (caps.track) set('track', true); }} />
+                  <Chip label="Stream preset" onPress={() => { set('mode', 'video'); set('res', '1920x1080'); set('fps', 60); set('af', true); if (caps.stab) set('stab', true); }} />
+                  <Chip label="Low light" onPress={() => { set('mode', 'video'); set('fps', 30); set('ev', Math.round((caps.evMax ?? 0) / 2)); }} />
+                </View>
+                <View style={styles.row}>
                   {['video', 'pro', 'portrait'].map((m) => <Chip key={m} label={m} on={state.mode === m} ok={m !== 'portrait' || !!caps.portrait} onPress={() => set('mode', m)} />)}
                 </View>
                 <Text style={styles.label}>Zoom {zoom.toFixed(1)}×</Text>

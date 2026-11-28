@@ -231,6 +231,12 @@ export function CameraPanel() {
                 {chip('Rotate 180°', state.rot180, true, () => set('rot180', !state.rot180))}
               </div>
               <div className="camera-row">
+                <span>Presets</span>
+                {chip('Call', false, true, () => { set('mode', 'video'); set('res', '1280x720'); set('fps', 30); set('af', true); if (caps.track) set('track', true); })}
+                {chip('Stream', false, true, () => { set('mode', 'video'); set('res', '1920x1080'); set('fps', 60); set('af', true); if (caps.stab) set('stab', true); })}
+                {chip('Low light', false, true, () => { set('mode', 'video'); set('fps', 30); set('ev', Math.round((caps.evMax ?? 0) / 2)); })}
+              </div>
+              <div className="camera-row">
                 {['video', 'pro', 'portrait'].map((mode) => chip(mode, state.mode === mode, mode !== 'portrait' || !!caps.portrait, () => set('mode', mode)))}
                 {chip('Autofocus', state.af !== false, !!caps.af, () => set('af', state.af === false))}
               </div>

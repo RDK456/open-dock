@@ -10,7 +10,7 @@
 
 **Turn the phone in your drawer into a Stream Deck–style control panel for your PC.** Media keys, hotkeys, app launchers, live widgets, voice commands, a touchpad and a webcam. Free, open source, no account, nothing leaves your network. Works over Wi-Fi, or USB on Android.
 
-<a href="docs/media/brag.mp4"><img src="docs/media/brag.jpg" alt="Open Dock launch video (click to play)"></a>
+<a href="docs/media/brag.mp4"><img src="docs/media/demo.gif" alt="Open Dock in action (click for the full video with sound)"></a>
 
 <p align="center"><img src="docs/media/phone-widgets.jpg" alt="Phone as a PC dock: live CPU, GPU, RAM and temperature widgets with a clock"></p>
 
@@ -29,7 +29,9 @@
 - **Live widgets.** Clock faces, PC stats, now playing with synced lyrics, weather, news, stocks, sports scores, countdowns, timers, reminders, a daily quote, clipboard history, a desktop pet and your Wallpaper Engine library.
 - **Matches your PC.** Turn on *Match PC wallpaper* and both apps take the colour of your desktop wallpaper, with the wallpaper itself as the phone's background.
 - **Seven looks.** Classic, Studio, Atelier, Signal, Glass, Funk and Dock, each in light and dark. Change the phone's look from the PC too.
-- **More than buttons.** Touchpad with gestures, voice commands with a wake phrase, and the phone as a webcam.
+- **More than buttons.** Touchpad with gestures, voice commands with a wake phrase, and the phone as a webcam that can track your face.
+- **OBS and AI control.** Record, stream and switch scenes in OBS, and let Claude press your keys.
+- **Portrait or landscape.** Lock the deck either way, from the phone or the PC.
 - **Private by design.** Runs on your local network. No cloud, no sign-up, no tracking.
 - **Updates itself** on Windows and Android.
 
@@ -109,7 +111,15 @@ Tap the mic and say a command, or turn on hands-free and say your wake phrase (w
 
 ### Camera
 
-Use the phone as a webcam: start it on the **Camera** tab, then open the Camera section in the PC app. Switch front/back, torch, stabilise and zoom from the phone.
+Use the phone as a webcam: start it on the **Camera** tab, then open the Camera section in the PC app. Switch front/back, torch, stabilise and zoom from the phone. **Track face** keeps you framed and in focus (Android 11+), and the **Call**, **Stream** and **Low light** presets set everything in one tap.
+
+### OBS Studio
+
+In OBS, turn on **Tools → WebSocket Server Settings**. In the PC app, install the plugin folder [`plugins/obs`](plugins/obs), then pick **OBS action** for a key: record, stream, virtual camera, save replay, switch scene or mute a source.
+
+### AI control
+
+**Settings → AI control → Copy setup command** gives a `claude mcp add …` line. Run it once and Claude (or any MCP client on this PC) can list and press your keys. Only this PC can connect, and the command holds your pairing key, so keep it private.
 
 ### Pet
 
