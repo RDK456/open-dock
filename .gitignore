@@ -31,3 +31,6 @@ pc-companion/src-tauri/mediaremote/
 pc-companion/docs/elgato-plugin-ip-risk-research.md
 pc-companion/docs/stream-deck-plugin-compatibility-research.md
 pc-companion/docs/stream-deck-plus-xl-layout-research.md
+
+# Gradle output of local native modules
+phone-app/modules/*/android/build/

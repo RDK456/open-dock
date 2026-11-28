@@ -6136,7 +6136,7 @@ fn set_taskbar_icon(hwnd: windows::Win32::Foundation::HWND) {
 /// there, and the details hold no names or paths: version, Windows build, admin rights, the CPU sensor log.
 #[tauri::command]
 fn report_bug() -> Result<(), String> {
-    let windows = std::process::Command::new("cmd").args(["/C", "ver"]).output().ok()
+    let windows = quiet(&mut Command::new("cmd")).args(["/C", "ver"]).output().ok()
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned()).unwrap_or_default();
     let sensor = std::env::var_os("APPDATA")
         .and_then(|dir| fs::read_to_string(Path::new(&dir).join("app.opendock.pc").join("pawnio.log")).ok())

@@ -40,7 +40,7 @@ export function ButtonEditor({ target, onClose }: { target: EditTarget; onClose:
     const parts = keys.toUpperCase().split('+').map((key) => key.trim()).filter(Boolean);
     return parts.length >= 2 ? { type: 'hotkey', keys: parts } : 'Enter a shortcut such as CTRL+C';
   };
-  const fallbackLabel = () => kind === 'media' ? MEDIA.find(([value]) => value === media)![1] : kind === 'system' ? SYSTEM.find(([value]) => value === system)![1] : kind === 'hotkey' ? keys.toUpperCase() : kind === 'open_url' ? url.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0] : text;
+  const fallbackLabel = () => kind === 'media' ? MEDIA.find(([value]) => value === media)![1] : kind === 'system' ? (SYSTEM.find(([value]) => value === system)?.[1] ?? system) : kind === 'hotkey' ? keys.toUpperCase() : kind === 'open_url' ? url.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0] : text;
 
   const run = async (edit: { button?: DeckButton; removeId?: string }) => {
     setBusy(true);
