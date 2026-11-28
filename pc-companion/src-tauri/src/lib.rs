@@ -30,6 +30,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
 mod adb;
+mod app_volume;
 mod camera;
 mod clipboard;
 mod delta;
@@ -339,6 +340,12 @@ struct DeckWidget {
     /// Clock face or PC stats colour as #rrggbb.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     color: Option<String>,
+    /// The program a per-app volume slider controls ("spotify").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    app: Option<String>,
+    /// A slider's design (one of SLIDER_LOOKS; missing means "bar").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    look: Option<String>,
     /// PC stats reading; one of PC_STATS_METRICS. Missing means CPU load.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     metric: Option<String>,
@@ -435,7 +442,8 @@ const WALLPAPER_FACES: &[&str] = &["grid", "cards", "carousel"];
 /// Info widgets (read on the phone itself): which one this tile is.
 const INFO_FACES: &[&str] = &["weather", "news", "stocks", "sports", "countdown", "timer", "reminders", "quote"];
 /// What a slider widget controls.
-const SLIDER_FACES: &[&str] = &["volume", "brightness"];
+const SLIDER_FACES: &[&str] = &["volume", "brightness", "app"];
+const SLIDER_LOOKS: &[&str] = &["bar", "pill", "vertical", "ring", "notch"];
 const INFO_LEAGUES: &[&str] = &["nba", "nfl", "epl", "laliga", "ucl", "mlb", "nhl"];
 const INFO_DONE: &[&str] = &["show", "bottom", "hide"];
 /// Each info face's designs (pc-companion/src/DeckLibrary.tsx and phone-app/src/info-widgets.tsx list the same).
@@ -990,9 +998,9 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
     }
     if widget.opacity.is_some_and(|opacity| {
         opacity > 100
-            || !matches!(widget.kind, DeckWidgetType::Clock | DeckWidgetType::PcStats | DeckWidgetType::Pet | DeckWidgetType::Clipboard | DeckWidgetType::Wallpaper | DeckWidgetType::Info)
+            || matches!(widget.kind, DeckWidgetType::Plugin)
     }) {
-        return Err("Widget opacity must be 0 to 100, on a clock, PC stats, pet, clipboard or wallpaper widget".into());
+        return Err("Widget opacity must be 0 to 100, on a built-in widget".into());
     }
     if widget.scroll.as_deref().is_some_and(|scroll| widget.kind != DeckWidgetType::Clipboard || !CLIPBOARD_SCROLL.contains(&scroll)) {
         return Err("Unknown clipboard scroll style".into());
@@ -1023,6 +1031,12 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         {
             return Err("Invalid info widget options".into());
         }
+    }
+    if widget.look.as_deref().is_some_and(|look| widget.kind != DeckWidgetType::Slider || !SLIDER_LOOKS.contains(&look)) {
+        return Err("Unknown slider design".into());
+    }
+    if widget.app.as_deref().is_some_and(|app| widget.kind != DeckWidgetType::Slider || widget.face.as_deref() != Some("app") || !app_volume::valid_name(app)) {
+        return Err("Invalid app for the volume dial".into());
     }
     if widget.metric.as_deref().is_some_and(|metric| {
         widget.kind != DeckWidgetType::PcStats || !PC_STATS_METRICS.contains(&metric)
@@ -2515,6 +2529,18 @@ enum ClientMessage {
         #[serde(rename = "requestId")]
         request_id: String,
         level: u8,
+    },
+    SetAppVolume {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        app: String,
+        level: u8,
+    },
+    /// A dial's current level: "brightness" or "app:<name>"; the reply is a "level" message.
+    GetLevel {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        target: String,
     },
     SelectProfile {
         #[serde(rename = "requestId")]
@@ -4335,6 +4361,35 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     break;
                 }
             }
+            ClientMessage::SetAppVolume { request_id, app, level } if authenticated => {
+                let ok = valid_id(&request_id)
+                    && level <= 100
+                    && app_volume::valid_name(&app)
+                    && tokio::task::spawn_blocking(move || app_volume::set(&app, level)).await.is_ok_and(|result| result.is_ok());
+                let reply = if ok {
+                    serde_json::json!({ "type": "action_result", "requestId": request_id, "ok": true })
+                } else {
+                    serde_json::json!({ "type": "action_result", "requestId": request_id, "ok": false, "reason": "control_failed" })
+                };
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
+            ClientMessage::GetLevel { request_id, target } if authenticated && valid_id(&request_id) && target.len() <= 80 => {
+                let asked = target.clone();
+                let level = tokio::task::spawn_blocking(move || match asked.strip_prefix("app:") {
+                    Some(app) if app_volume::valid_name(app) => app_volume::level(app),
+                    None if asked == "brightness" => remote::brightness_level(),
+                    _ => None,
+                })
+                .await
+                .ok()
+                .flatten();
+                let reply = serde_json::json!({ "type": "level", "requestId": request_id, "target": target, "level": level });
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
             ClientMessage::SetBrightness { request_id, level } if authenticated => {
                 let ok = valid_id(&request_id)
                     && level <= 100
@@ -6010,11 +6065,22 @@ fn set_taskbar_icon(hwnd: windows::Win32::Foundation::HWND) {
     }
 }
 
+/// Apps playing sound now, for picking a per-app volume dial's app.
+#[tauri::command]
+async fn audio_apps() -> Vec<String> {
+    tokio::task::spawn_blocking(app_volume::apps).await.unwrap_or_default()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Open Dock runs as administrator so it can read the CPU temperature: a manual launch asks once,
     // before anything else starts. Declining keeps it running without admin rights.
     let quiet_start = std::env::args().any(|arg| arg == "--autostart" || arg == "--no-elevate");
+    // The updater restarts Open Dock with its --autostart arguments but without admin rights; the
+    // elevated logon task brings admin back without a prompt (the task's own run is already elevated).
+    if std::env::args().any(|arg| arg == "--autostart") && !remote::is_elevated() && remote::run_startup_task() {
+        return;
+    }
     if !quiet_start && !remote::is_elevated() && remote::relaunch_elevated() {
         return;
     }
@@ -6129,7 +6195,8 @@ pub fn run() {
             stop_voice,
             arm_voice,
             island::island_state,
-            mcp::mcp_command
+            mcp::mcp_command,
+            audio_apps
         ])
         .setup(move |app| {
             delta::remove_replaced_exe();

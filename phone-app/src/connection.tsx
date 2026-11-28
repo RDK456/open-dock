@@ -25,7 +25,7 @@ export type PointerEvent = { kind: 'move' | 'scroll'; dx: number; dy: number } |
 export type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
 export type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction; longPress?: DeckAction };
 export type PetOptions = { outfit?: string; mood?: boolean; sound?: boolean; camera?: boolean; sleepy?: number; hyper?: number; shy?: number; grumpy?: number; quietFrom?: number; quietTo?: number };
-export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'wallpaper'; placement: DeckPlacement; face?: string; opacity?: number } | { id: string; type: 'info'; placement: DeckPlacement; face?: string; opacity?: number; info?: InfoOptions } | { id: string; type: 'clipboard'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; scroll?: string } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'slider'; placement: DeckPlacement; face?: string } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
+export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement; opacity?: number } | { id: string; type: 'lyrics'; placement: DeckPlacement; opacity?: number } | { id: string; type: 'wallpaper'; placement: DeckPlacement; face?: string; opacity?: number } | { id: string; type: 'info'; placement: DeckPlacement; face?: string; opacity?: number; info?: InfoOptions } | { id: string; type: 'clipboard'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; scroll?: string } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'slider'; placement: DeckPlacement; face?: string; app?: string; look?: string; color?: string; opacity?: number } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
 export type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
@@ -60,6 +60,9 @@ type ConnectionContextValue = {
   sendMediaCommand: (command: DeckMediaCommand) => boolean;
   sendSystemVolume: (volumePercent: number) => boolean;
   sendBrightness: (level: number) => boolean;
+  sendAppVolume: (app: string, level: number) => boolean;
+  /** A dial's level on the PC now ("brightness" or "app:<name>"); null when the PC can't tell. */
+  requestLevel: (target: string) => Promise<number | null>;
   seekMedia: (positionMs: number) => boolean;
   selectProfile: (profileId: string) => boolean;
   selectPage: (pageId: string) => boolean;
@@ -176,7 +179,7 @@ function validDeckWidget(value: unknown): value is DeckWidget {
   const placement = widget.placement;
   if (typeof widget.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(widget.id) || !placement || typeof placement !== 'object' ||
       ![placement.row, placement.column, placement.rowSpan, placement.columnSpan].every(Number.isInteger)) return false;
-  if ((widget.type === 'clock' || widget.type === 'pet' || widget.type === 'pc_stats' || widget.type === 'clipboard' || widget.type === 'wallpaper' || widget.type === 'info') && (widget as { opacity?: unknown }).opacity !== undefined) {
+  if (widget.type !== 'plugin' && (widget as { opacity?: unknown }).opacity !== undefined) {
     const opacity = (widget as { opacity?: unknown }).opacity;
     if (typeof opacity !== 'number' || !Number.isInteger(opacity) || opacity < 0 || opacity > 100) return false;
   }
@@ -224,8 +227,11 @@ function validDeckWidget(value: unknown): value is DeckWidget {
     return face === undefined || (typeof face === 'string' && /^[a-z]{1,24}$/.test(face));
   }
   if (widget.type === 'slider') {
-    const face = (widget as { face?: unknown }).face;
-    return face === undefined || face === 'volume' || face === 'brightness';
+    const { face, app, look, color } = widget as { face?: unknown; app?: unknown; look?: unknown; color?: unknown };
+    return (look === undefined || (typeof look === 'string' && /^[a-z]{1,24}$/.test(look))) &&
+      (color === undefined || (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color))) &&
+      (face === undefined || face === 'volume' || face === 'brightness' || face === 'app') &&
+      (app === undefined || (typeof app === 'string' && /^[A-Za-z0-9._ -]{1,64}$/.test(app)));
   }
   if (widget.type === 'now_playing' || widget.type === 'lyrics') return true;
   if (widget.type !== 'plugin' || !('pluginId' in widget) || !('widgetId' in widget) || !('renderType' in widget) || !('values' in widget)) return false;
@@ -495,7 +501,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       socket.onmessage = async (event) => {
         if (socketRef.current !== socket || typeof event.data !== 'string') return;
         try {
-          const message = JSON.parse(event.data) as { type?: string; name?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown; game?: unknown };
+          const message = JSON.parse(event.data) as { type?: string; name?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown; game?: unknown; level?: unknown };
           countMessage(message.type ?? 'unknown');
           if (message.type === 'ready') {
             // The PC's own name for itself replaces whatever the pairing saved (often its IP address).
@@ -583,6 +589,11 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
               muted: typeof progress.muted === 'boolean' ? progress.muted : current.muted,
               volumePercent: typeof progress.volumePercent === 'number' && Number.isFinite(progress.volumePercent) && progress.volumePercent >= 0 && progress.volumePercent <= 100 ? Math.round(progress.volumePercent) : current.volumePercent,
             }));
+          }
+          if (message.type === 'level' && message.requestId) {
+            const level = message.level;
+            levelRepliesRef.current.get(message.requestId)?.(typeof level === 'number' && Number.isInteger(level) && level >= 0 && level <= 100 ? level : null);
+            levelRepliesRef.current.delete(message.requestId);
           }
           if (message.type === 'signature_result') {
             signatureReplyRef.current?.(message.ok ? null : typeof message.error === 'string' ? message.error : 'Could not paste the signature');
@@ -825,6 +836,17 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     return sent;
   }, [sendRequest, showPlayPausePressed]);
   const sendSystemVolume = useCallback((volumePercent: number) => sendRequest('set_system_volume', 'volumePercent', Math.round(Math.max(0, Math.min(100, volumePercent)))), [sendRequest]);
+  const sendAppVolume = useCallback((app: string, level: number) => sendRequest('set_app_volume', 'app', app, { level: Math.round(Math.max(0, Math.min(100, level))) }), [sendRequest]);
+  const levelRepliesRef = useRef(new Map<string, (level: number | null) => void>());
+  const requestLevel = useCallback((target: string) => new Promise<number | null>((resolve) => {
+    const socket = socketRef.current;
+    if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return resolve(null);
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    levelRepliesRef.current.set(requestId, resolve);
+    // Older PCs never answer.
+    setTimeout(() => { if (levelRepliesRef.current.delete(requestId)) resolve(null); }, 4000);
+    try { socket.send(JSON.stringify({ type: 'get_level', requestId, target })); } catch { levelRepliesRef.current.delete(requestId); resolve(null); }
+  }), [status]);
   const sendBrightness = useCallback((level: number) => sendRequest('set_brightness', 'level', Math.round(Math.max(0, Math.min(100, level)))), [sendRequest]);
   const seekMedia = useCallback((positionMs: number) => sendRequest('seek_media', 'positionMs', Math.round(Math.max(0, positionMs))), [sendRequest]);
   const selectMediaPlayer = useCallback((playerId: string | null) => {
@@ -924,7 +946,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   }), [status]);
 
   return (
-    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, sendBrightness, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice, sendVoiceState }}>
+    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, sendBrightness, sendAppVolume, requestLevel, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice, sendVoiceState }}>
       {children}
     </ConnectionContext.Provider>
   );

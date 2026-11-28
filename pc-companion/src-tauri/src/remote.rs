@@ -75,14 +75,108 @@ fn power(_: SystemCommand) -> Result<(), String> {
     Err("Power actions are not supported on this platform".into())
 }
 
-/// Built-in panels only (WMI); ponytail: external monitors need DDC/CI, add it when someone asks.
+/// Brightness keys: external monitors over DDC/CI first, then a laptop's built-in panel (WMI).
 fn change_brightness(step: i32) -> Result<(), String> {
-    brightness(&format!("$b+({step})"))
+    match ddc::level() {
+        Some(now) => set_brightness((now as i32 + step).clamp(0, 100) as u8),
+        None => brightness(&format!("$b+({step})")),
+    }
 }
 
 /// The slider widget's absolute level, 0 to 100.
 pub(super) fn set_brightness(level: u8) -> Result<(), String> {
+    if ddc::set(level.min(100)) {
+        return Ok(());
+    }
     brightness(&level.min(100).to_string())
+}
+
+/// The screen's brightness now, for the slider widget; None on displays Windows can't read.
+#[cfg(windows)]
+pub(super) fn brightness_level() -> Option<u8> {
+    if let Some(level) = ddc::level() {
+        return Some(level);
+    }
+    let output = quiet(&mut Command::new("powershell.exe"))
+        .args(["-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1).CurrentBrightness"])
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&output.stdout).trim().parse::<u8>().ok().filter(|level| *level <= 100)
+}
+
+#[cfg(not(windows))]
+pub(super) fn brightness_level() -> Option<u8> {
+    None
+}
+
+/// Desktop monitors' own brightness, over the DDC/CI link in the video cable (monitors that turn it off don't answer).
+#[cfg(windows)]
+mod ddc {
+    use windows::Win32::Devices::Display::{
+        DestroyPhysicalMonitors, GetMonitorBrightness, GetNumberOfPhysicalMonitorsFromHMONITOR, GetPhysicalMonitorsFromHMONITOR, SetMonitorBrightness,
+        PHYSICAL_MONITOR,
+    };
+    use windows::Win32::Foundation::{LPARAM, RECT};
+    use windows::Win32::Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR};
+
+    /// Calls `each` with every monitor's (handle, min, current, max) that answers.
+    fn monitors(mut each: impl FnMut(&PHYSICAL_MONITOR, u32, u32, u32)) {
+        unsafe extern "system" fn collect(monitor: HMONITOR, _: HDC, _: *mut RECT, data: LPARAM) -> windows::core::BOOL {
+            // SAFETY: data is the Vec passed below, alive for the whole enumeration.
+            unsafe { (*(data.0 as *mut Vec<HMONITOR>)).push(monitor) };
+            true.into()
+        }
+        let mut handles: Vec<HMONITOR> = Vec::new();
+        // SAFETY: the callback only pushes into `handles`, which outlives the call; physical monitors are destroyed after use.
+        unsafe {
+            let _ = EnumDisplayMonitors(None, None, Some(collect), LPARAM(&mut handles as *mut _ as isize));
+            for handle in handles {
+                let mut count = 0;
+                if GetNumberOfPhysicalMonitorsFromHMONITOR(handle, &mut count).is_err() || count == 0 {
+                    continue;
+                }
+                let mut physical = vec![PHYSICAL_MONITOR::default(); count as usize];
+                if GetPhysicalMonitorsFromHMONITOR(handle, &mut physical).is_err() {
+                    continue;
+                }
+                for monitor in &physical {
+                    let (mut min, mut now, mut max) = (0, 0, 0);
+                    if GetMonitorBrightness(monitor.hPhysicalMonitor, &mut min, &mut now, &mut max) != 0 && max > min {
+                        each(monitor, min, now, max);
+                    }
+                }
+                let _ = DestroyPhysicalMonitors(&physical);
+            }
+        }
+    }
+
+    pub(super) fn level() -> Option<u8> {
+        let mut found = None;
+        monitors(|_, min, now, max| {
+            found.get_or_insert(((now.clamp(min, max) - min) * 100 / (max - min)) as u8);
+        });
+        found
+    }
+
+    /// Sets every monitor that answers; false when none does.
+    pub(super) fn set(level: u8) -> bool {
+        let mut any = false;
+        monitors(|monitor, min, _, max| {
+            // SAFETY: the handle is live inside the callback.
+            any |= unsafe { SetMonitorBrightness(monitor.hPhysicalMonitor, min + (max - min) * level as u32 / 100) } != 0;
+        });
+        any
+    }
+}
+
+#[cfg(not(windows))]
+mod ddc {
+    pub(super) fn level() -> Option<u8> {
+        None
+    }
+    pub(super) fn set(_level: u8) -> bool {
+        false
+    }
 }
 
 #[cfg(windows)]
@@ -255,6 +349,17 @@ pub(super) fn set_autostart(on: bool) -> Result<(), String> {
         run_quiet("reg.exe", &["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", &launch, "/f"])
     };
     if saved { Ok(()) } else { Err("Windows did not save the startup setting".into()) }
+}
+
+/// Starts the elevated logon task now; false when there is none (start-with-Windows set up without admin).
+#[cfg(windows)]
+pub(super) fn run_startup_task() -> bool {
+    run_quiet("schtasks.exe", &["/Run", "/TN", TASK_NAME])
+}
+
+#[cfg(not(windows))]
+pub(super) fn run_startup_task() -> bool {
+    false
 }
 
 #[cfg(windows)]

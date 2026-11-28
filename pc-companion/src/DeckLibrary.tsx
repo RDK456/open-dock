@@ -61,6 +61,7 @@ export function DeckLibrary({ shelf = false, pluginActions, pluginWidgets, targe
     ...INFO_ENTRIES.map(([face, title, detail]): Entry => ({ key: `info-${face}`, icon: <Info size={16} />, title, detail, choice: { kind: 'info', face } })),
     { key: 'slider-volume', icon: <SlidersHorizontal size={16} />, title: 'Volume dial', detail: 'Drag to set this PC’s volume', choice: { kind: 'slider', face: 'volume' } },
     { key: 'slider-brightness', icon: <SlidersHorizontal size={16} />, title: 'Brightness dial', detail: 'Drag to set this PC’s screen brightness (laptop screens)', choice: { kind: 'slider', face: 'brightness' } },
+    { key: 'slider-app', icon: <SlidersHorizontal size={16} />, title: 'App volume dial', detail: 'One app’s volume, like Spotify or a game', choice: { kind: 'slider', face: 'app' } },
     { key: 'lyrics', icon: <MicVocal size={16} />, title: 'Lyrics', detail: 'Synced lyrics for what this PC is playing', choice: { kind: 'lyrics' } },
     ...pluginWidgets.map((item) => ({ key: `${item.pluginId}::${item.widgetId}`, icon: <Package size={16} />, title: item.label, detail: 'Plugin widget', choice: { kind: 'plugin', pluginId: item.pluginId, widgetId: item.widgetId } as LibraryChoice })),
   ];

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import Storage from 'expo-sqlite/kv-store';
+import Constants from 'expo-constants';
 import { Pressable } from './motion';
 import { useStyles, type Colors } from './theme';
 
@@ -11,6 +12,15 @@ const KEY = 'opendock.app-lock';
 const AWAY_MS = 15_000;
 
 let enabled = (() => { try { return Storage.getItemSync(KEY) === 'on'; } catch { return false; } })();
+// The first start of a new version is the updater reopening the app you were just using: no check then.
+const justUpdated = (() => {
+  const version = Constants.expoConfig?.version ?? '';
+  try {
+    const last = Storage.getItemSync(`${KEY}.version`);
+    Storage.setItemSync(`${KEY}.version`, version);
+    return last !== null && last !== version;
+  } catch { return false; }
+})();
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 export const useAppLockEnabled = () => useSyncExternalStore(subscribe, () => enabled);
@@ -34,11 +44,11 @@ export async function setAppLock(on: boolean): Promise<string | null> {
   return null;
 }
 
-/** Covers the app until the check passes: at launch, and when you come back after more than 15 seconds away. */
+/** Covers the app until the check passes: at launch (except the first one after an update), and when you come back after more than 15 seconds away. */
 export function AppLockGate({ children }: { children: ReactNode }) {
   const styles = useStyles(makeStyles);
   const on = useAppLockEnabled();
-  const [locked, setLocked] = useState(on);
+  const [locked, setLocked] = useState(on && !justUpdated);
   const away = useRef<number | null>(null);
   const asking = useRef(false);
 

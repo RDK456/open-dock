@@ -26,7 +26,7 @@
 ## Why Open Dock
 
 - **Free Stream Deck.** Unlimited keys, pages and profiles on a phone you already own.
-- **Live widgets.** Clock faces, PC stats, now playing with synced lyrics, weather, news, stocks, sports scores, countdowns, timers, reminders, a daily quote, clipboard history, a desktop pet, volume and brightness dials, and your Wallpaper Engine library.
+- **Live widgets.** Clock faces, PC stats, now playing with synced lyrics, weather, news, stocks, sports scores, countdowns, timers, reminders, a daily quote, clipboard history, a desktop pet, dials for volume, brightness and each app's volume (five designs), and your Wallpaper Engine library. Every widget can be see-through.
 - **Matches your PC.** Turn on *Match PC wallpaper* and both apps take the colour of your desktop wallpaper, with the wallpaper itself as the phone's background.
 - **Seven looks.** Classic, Studio, Atelier, Signal, Glass, Funk and Dock, each in light and dark. Change the phone's look from the PC too.
 - **More than buttons.** Touchpad with gestures, voice commands with a wake phrase, and the phone as a webcam that can track your face and blur the room behind you.
