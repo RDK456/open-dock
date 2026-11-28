@@ -13,6 +13,9 @@
     "macOSPrivateApi": true,
     "windows": [
       {
+        "label": "main",
+        "create": false,
+        "visible": false,
         "title": "Open Dock",
         "width": 1080,
         "height": 760,

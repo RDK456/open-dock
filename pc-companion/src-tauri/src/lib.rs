@@ -5929,9 +5929,30 @@ fn set_webview_memory(window: &tauri::WebviewWindow, low: bool) {
     let _ = (window, low);
 }
 
+/// The main window, made the first time it's needed: its web view is the heaviest thing Open Dock starts, so a
+/// start with Windows leaves it out and keeps sign-in fast. It starts hidden; showing it is the caller's call.
+fn main_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
+    if let Some(window) = app.get_webview_window("main") {
+        return Some(window);
+    }
+    let config = app.config().app.windows.iter().find(|window| window.label == "main")?.clone();
+    let window = tauri::WebviewWindowBuilder::from_config(app, &config).ok()?.build().ok()?;
+    let saved = app.path().app_config_dir().ok().and_then(|dir| fs::read_to_string(dir.join("appearance")).ok()).unwrap_or_default();
+    apply_appearance(&window, clean_appearance(&saved));
+    // The icon itself, small (title bar, Alt+Tab) and big (taskbar).
+    if let Some(icon) = app.default_window_icon() {
+        let _ = window.set_icon(icon.clone());
+    }
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        set_taskbar_icon(hwnd);
+    }
+    Some(window)
+}
+
 /// Brings the window back from the tray, the taskbar or a second launch.
 fn show_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = main_window(app) {
         set_webview_memory(&window, false);
         let _ = window.unminimize();
         let _ = window.show();
@@ -6150,8 +6171,9 @@ pub fn run() {
                 if !autostart_marker.exists() && remote::set_autostart(true).is_ok() {
                     let _ = fs::write(&autostart_marker, "true");
                 }
-                // The first run with admin rights moves autostart onto the elevated logon task.
-                if remote::is_elevated() && remote::autostart_needs_task() {
+                // With admin rights, autostart goes on the elevated logon task, rewritten each start so older installs
+                // pick up its sign-in delay.
+                if remote::is_elevated() && remote::autostart_enabled() {
                     let _ = remote::set_autostart(true);
                 }
             });
@@ -6176,18 +6198,22 @@ pub fn run() {
             pc_stats::spawn_pc_stats_monitor(state.pc_stats.clone(), state.pc_stats_demand.clone());
             clipboard::spawn_monitor(state.clipboard.clone());
 
-            if let Some(window) = app.get_webview_window("main") {
-                let saved = fs::read_to_string(config_dir.join("appearance")).unwrap_or_default();
-                apply_appearance(&window, clean_appearance(&saved));
-                // Every start waits hidden in the tray (no taskbar button); its icon opens it. Until a phone has
-                // paired the window opens, so a new user sees the pairing code.
-                let paired = state.known_devices.read().is_ok_and(|known| !known.is_empty());
-                if paired {
-                    let _ = window.hide();
-                    set_webview_memory(&window, true);
-                } else {
-                    let _ = window.set_focus();
-                }
+            // Every start waits in the tray (no taskbar button); its icon opens the window. Until a phone has paired
+            // the window opens at once, so a new user sees the pairing code. Otherwise its page loads a minute and a
+            // half later, hidden, once sign-in has settled: it checks for updates and draws widgets for the phone.
+            let paired = state.known_devices.read().is_ok_and(|known| !known.is_empty());
+            if paired {
+                let handle = app.handle().clone();
+                thread::spawn(move || {
+                    thread::sleep(Duration::from_secs(90));
+                    if handle.get_webview_window("main").is_none() {
+                        if let Some(window) = main_window(&handle) {
+                            set_webview_memory(&window, true);
+                        }
+                    }
+                });
+            } else {
+                show_main_window(app.handle());
             }
 
             island::init(app.handle());
@@ -6201,14 +6227,6 @@ pub fn run() {
                 .default_window_icon()
                 .ok_or("missing default window icon")?
                 .clone();
-            // Give every window the icon itself, small (title bar, Alt+Tab) and big (taskbar).
-            for window in app.webview_windows().values() {
-                let _ = window.set_icon(icon.clone());
-                #[cfg(windows)]
-                if let Ok(hwnd) = window.hwnd() {
-                    set_taskbar_icon(hwnd);
-                }
-            }
 
             TrayIconBuilder::new()
                 .icon(icon)

@@ -241,7 +241,7 @@ pub(super) fn set_autostart(on: bool) -> Result<(), String> {
         return Ok(());
     }
     let saved = if is_elevated() {
-        run_quiet("schtasks.exe", &["/Create", "/TN", TASK_NAME, "/TR", &launch, "/SC", "ONLOGON", "/RL", "HIGHEST", "/F"])
+        run_quiet("schtasks.exe", &["/Create", "/TN", TASK_NAME, "/TR", &launch, "/SC", "ONLOGON", "/DELAY", "0000:20", "/RL", "HIGHEST", "/F"])
     } else {
         run_quiet("reg.exe", &["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", &launch, "/f"])
     };
@@ -251,12 +251,6 @@ pub(super) fn set_autostart(on: bool) -> Result<(), String> {
 #[cfg(windows)]
 pub(super) fn autostart_enabled() -> bool {
     run_quiet("schtasks.exe", &["/Query", "/TN", TASK_NAME]) || run_quiet("reg.exe", &["query", RUN_KEY, "/v", RUN_VALUE])
-}
-
-/// Whether autostart still goes through the Run key, which starts Open Dock without admin rights.
-#[cfg(windows)]
-pub(super) fn autostart_needs_task() -> bool {
-    !run_quiet("schtasks.exe", &["/Query", "/TN", TASK_NAME]) && run_quiet("reg.exe", &["query", RUN_KEY, "/v", RUN_VALUE])
 }
 
 #[cfg(not(windows))]
@@ -276,11 +270,6 @@ pub(super) fn is_elevated() -> bool {
 
 #[cfg(not(windows))]
 pub(super) fn relaunch_elevated() -> bool {
-    false
-}
-
-#[cfg(not(windows))]
-pub(super) fn autostart_needs_task() -> bool {
     false
 }
 
