@@ -76,11 +76,20 @@ fn power(_: SystemCommand) -> Result<(), String> {
 }
 
 /// Built-in panels only (WMI); ponytail: external monitors need DDC/CI, add it when someone asks.
-#[cfg(windows)]
 fn change_brightness(step: i32) -> Result<(), String> {
+    brightness(&format!("$b+({step})"))
+}
+
+/// The slider widget's absolute level, 0 to 100.
+pub(super) fn set_brightness(level: u8) -> Result<(), String> {
+    brightness(&level.min(100).to_string())
+}
+
+#[cfg(windows)]
+fn brightness(level: &str) -> Result<(), String> {
     let script = format!(
         "$b=(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1).CurrentBrightness; \
-         $n=[Math]::Max(0,[Math]::Min(100,$b+({step}))); \
+         $n=[Math]::Max(0,[Math]::Min(100,{level})); \
          Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{{Timeout=1;Brightness=[byte]$n}} | Out-Null"
     );
     let output = quiet(&mut Command::new("powershell.exe"))
@@ -95,7 +104,7 @@ fn change_brightness(step: i32) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-fn change_brightness(_step: i32) -> Result<(), String> {
+fn brightness(_level: &str) -> Result<(), String> {
     // ponytail: macOS has no public brightness API; the keyboard's brightness keys still work.
     Err("Use the Mac's brightness keys".into())
 }

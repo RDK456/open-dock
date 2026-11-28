@@ -13,3 +13,8 @@ android {
     versionName '1.0.0'
   }
 }
+
+dependencies {
+  // Background blur: on-device person mask, model bundled (no download, works offline).
+  implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta6'
+}

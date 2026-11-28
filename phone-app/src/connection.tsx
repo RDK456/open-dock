@@ -25,7 +25,7 @@ export type PointerEvent = { kind: 'move' | 'scroll'; dx: number; dy: number } |
 export type DeckPlacement = { row: number; column: number; rowSpan: number; columnSpan: number };
 export type DeckButton = { id: string; label: string; icon: string; placement?: DeckPlacement; iconSvg?: string; appIconData?: string; action: DeckAction; longPress?: DeckAction };
 export type PetOptions = { outfit?: string; mood?: boolean; sound?: boolean; camera?: boolean; sleepy?: number; hyper?: number; shy?: number; grumpy?: number; quietFrom?: number; quietTo?: number };
-export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'wallpaper'; placement: DeckPlacement; face?: string; opacity?: number } | { id: string; type: 'info'; placement: DeckPlacement; face?: string; opacity?: number; info?: InfoOptions } | { id: string; type: 'clipboard'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; scroll?: string } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
+export type DeckWidget = { id: string; type: 'clock'; placement: DeckPlacement; face?: string; color?: string; opacity?: number } | { id: string; type: 'now_playing'; placement: DeckPlacement } | { id: string; type: 'lyrics'; placement: DeckPlacement } | { id: string; type: 'wallpaper'; placement: DeckPlacement; face?: string; opacity?: number } | { id: string; type: 'info'; placement: DeckPlacement; face?: string; opacity?: number; info?: InfoOptions } | { id: string; type: 'clipboard'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; scroll?: string } | { id: string; type: 'pet'; placement: DeckPlacement; face?: string; color?: string; opacity?: number; pet?: PetOptions } | { id: string; type: 'pc_stats'; placement: DeckPlacement; face?: string; metric?: string; color?: string; gpu?: string; opacity?: number } | { id: string; type: 'slider'; placement: DeckPlacement; face?: string } | { id: string; type: 'plugin'; pluginId: string; widgetId: string; renderType: string; values: Record<string, string>; placement: DeckPlacement };
 export type DeckFolder = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[] };
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
@@ -59,6 +59,7 @@ type ConnectionContextValue = {
   sendButton: (buttonId: string, longPress?: boolean) => boolean;
   sendMediaCommand: (command: DeckMediaCommand) => boolean;
   sendSystemVolume: (volumePercent: number) => boolean;
+  sendBrightness: (level: number) => boolean;
   seekMedia: (positionMs: number) => boolean;
   selectProfile: (profileId: string) => boolean;
   selectPage: (pageId: string) => boolean;
@@ -221,6 +222,10 @@ function validDeckWidget(value: unknown): value is DeckWidget {
   if (widget.type === 'wallpaper') {
     const face = (widget as { face?: unknown }).face;
     return face === undefined || (typeof face === 'string' && /^[a-z]{1,24}$/.test(face));
+  }
+  if (widget.type === 'slider') {
+    const face = (widget as { face?: unknown }).face;
+    return face === undefined || face === 'volume' || face === 'brightness';
   }
   if (widget.type === 'now_playing' || widget.type === 'lyrics') return true;
   if (widget.type !== 'plugin' || !('pluginId' in widget) || !('widgetId' in widget) || !('renderType' in widget) || !('values' in widget)) return false;
@@ -820,6 +825,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
     return sent;
   }, [sendRequest, showPlayPausePressed]);
   const sendSystemVolume = useCallback((volumePercent: number) => sendRequest('set_system_volume', 'volumePercent', Math.round(Math.max(0, Math.min(100, volumePercent)))), [sendRequest]);
+  const sendBrightness = useCallback((level: number) => sendRequest('set_brightness', 'level', Math.round(Math.max(0, Math.min(100, level)))), [sendRequest]);
   const seekMedia = useCallback((positionMs: number) => sendRequest('seek_media', 'positionMs', Math.round(Math.max(0, positionMs))), [sendRequest]);
   const selectMediaPlayer = useCallback((playerId: string | null) => {
     const socket = socketRef.current;
@@ -918,7 +924,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   }), [status]);
 
   return (
-    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice, sendVoiceState }}>
+    <ConnectionContext.Provider value={{ connection, pairedDevices, status, protocolError, playbackState, mediaPlayers, selectMediaPlayer, deckConfig, independentNavigation, selectedProfileId, selectedPageId, actionError, connect, disconnect, removePairedDevice, sendButton, sendMediaCommand, sendSystemVolume, sendBrightness, seekMedia, selectProfile, selectPage, reportWidgetSurface, sendPointer, sendSignature, editButton, sendVoice, sendVoiceState }}>
       {children}
     </ConnectionContext.Provider>
   );

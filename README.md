@@ -26,10 +26,10 @@
 ## Why Open Dock
 
 - **Free Stream Deck.** Unlimited keys, pages and profiles on a phone you already own.
-- **Live widgets.** Clock faces, PC stats, now playing with synced lyrics, weather, news, stocks, sports scores, countdowns, timers, reminders, a daily quote, clipboard history, a desktop pet and your Wallpaper Engine library.
+- **Live widgets.** Clock faces, PC stats, now playing with synced lyrics, weather, news, stocks, sports scores, countdowns, timers, reminders, a daily quote, clipboard history, a desktop pet, volume and brightness dials, and your Wallpaper Engine library.
 - **Matches your PC.** Turn on *Match PC wallpaper* and both apps take the colour of your desktop wallpaper, with the wallpaper itself as the phone's background.
 - **Seven looks.** Classic, Studio, Atelier, Signal, Glass, Funk and Dock, each in light and dark. Change the phone's look from the PC too.
-- **More than buttons.** Touchpad with gestures, voice commands with a wake phrase, and the phone as a webcam that can track your face.
+- **More than buttons.** Touchpad with gestures, voice commands with a wake phrase, and the phone as a webcam that can track your face and blur the room behind you.
 - **OBS and AI control.** Record, stream and switch scenes in OBS, and let Claude press your keys.
 - **Portrait or landscape.** Lock the deck either way, from the phone or the PC.
 - **Private by design.** Runs on your local network. No cloud, no sign-up, no tracking.
@@ -111,7 +111,7 @@ Tap the mic and say a command, or turn on hands-free and say your wake phrase (w
 
 ### Camera
 
-Use the phone as a webcam: start it on the **Camera** tab, then open the Camera section in the PC app. Switch front/back, torch, stabilise and zoom from the phone. **Track face** keeps you framed and in focus (Android 11+), and the **Call**, **Stream** and **Low light** presets set everything in one tap.
+Use the phone as a webcam: start it on the **Camera** tab, then open the Camera section in the PC app. Switch front/back, torch, stabilise and zoom from the phone. **Track face** keeps you framed and in focus (Android 11+), **Blur background** softens the room behind you (on the phone, no PC work), and the **Call**, **Stream** and **Low light** presets set everything in one tap.
 
 ### OBS Studio
 

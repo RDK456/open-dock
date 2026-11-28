@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AppWindow, Bot, Clock, ClipboardList, File, FolderClosed, FolderOpen, Gauge, Globe, Image as ImageIcon, Info, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, Terminal, TextCursorInput } from 'lucide-react';
+import { AppWindow, Bot, Clock, ClipboardList, File, FolderClosed, FolderOpen, Gauge, Globe, Image as ImageIcon, Info, Keyboard, Layers, Layers2, ListOrdered, MicVocal, Music, Package, Play, Search, SlidersHorizontal, Terminal, TextCursorInput } from 'lucide-react';
 
 /** Info widgets the phone fills in on its own: face, name, what it shows. */
 export const INFO_ENTRIES: [string, string, string][] = [
@@ -13,7 +13,7 @@ export const INFO_ENTRIES: [string, string, string][] = [
   ['quote', 'Quote', 'A new quote each day'],
 ];
 
-export type WidgetChoice = { kind: 'clock' } | { kind: 'now_playing' } | { kind: 'lyrics' } | { kind: 'clipboard' } | { kind: 'wallpaper' } | { kind: 'info'; face: string } | { kind: 'pc_stats' } | { kind: 'pet' } | { kind: 'plugin'; pluginId: string; widgetId: string };
+export type WidgetChoice = { kind: 'clock' } | { kind: 'now_playing' } | { kind: 'lyrics' } | { kind: 'clipboard' } | { kind: 'wallpaper' } | { kind: 'info'; face: string } | { kind: 'slider'; face: string } | { kind: 'pc_stats' } | { kind: 'pet' } | { kind: 'plugin'; pluginId: string; widgetId: string };
 export type ButtonPreset = 'hotkey' | 'media' | 'launch_app' | 'launch_file' | 'launch_folder' | 'type_text' | 'open_url' | 'run_script' | 'sequence' | 'select_page' | 'select_profile';
 export type LibraryChoice = WidgetChoice | { kind: 'button'; preset: ButtonPreset } | { kind: 'plugin_action'; pluginId: string; actionId: string } | { kind: 'folder' };
 
@@ -59,6 +59,8 @@ export function DeckLibrary({ shelf = false, pluginActions, pluginWidgets, targe
     { key: 'clipboard', icon: <ClipboardList size={16} />, title: 'Clipboard', detail: 'What you copy on this PC, tap to copy again', choice: { kind: 'clipboard' } },
     { key: 'wallpaper', icon: <ImageIcon size={16} />, title: 'Wallpapers', detail: 'Pick the PC desktop wallpaper (Wallpaper Engine)', choice: { kind: 'wallpaper' } },
     ...INFO_ENTRIES.map(([face, title, detail]): Entry => ({ key: `info-${face}`, icon: <Info size={16} />, title, detail, choice: { kind: 'info', face } })),
+    { key: 'slider-volume', icon: <SlidersHorizontal size={16} />, title: 'Volume dial', detail: 'Drag to set this PC’s volume', choice: { kind: 'slider', face: 'volume' } },
+    { key: 'slider-brightness', icon: <SlidersHorizontal size={16} />, title: 'Brightness dial', detail: 'Drag to set this PC’s screen brightness (laptop screens)', choice: { kind: 'slider', face: 'brightness' } },
     { key: 'lyrics', icon: <MicVocal size={16} />, title: 'Lyrics', detail: 'Synced lyrics for what this PC is playing', choice: { kind: 'lyrics' } },
     ...pluginWidgets.map((item) => ({ key: `${item.pluginId}::${item.widgetId}`, icon: <Package size={16} />, title: item.label, detail: 'Plugin widget', choice: { kind: 'plugin', pluginId: item.pluginId, widgetId: item.widgetId } as LibraryChoice })),
   ];

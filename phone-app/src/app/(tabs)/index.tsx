@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ComponentPro
 import { useIsFocused, useRouter } from 'expo-router';
 import { Animated, BackHandler, Easing, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Volume, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
+import { AppWindow, ChevronLeft, ChevronRight, FolderClosed, Command, File, FolderOpen, Globe, Headphones, Keyboard, Layers2, ListOrdered, Maximize2, Mic, Minimize2, Monitor, Music, Package, Pencil, Check, Plus, TextCursorInput, PanelsTopLeft, Pause, Play, SkipBack, SkipForward, Sun, Volume, Volume1, Volume2, VolumeX, Wifi } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -274,6 +274,32 @@ function SystemVolumeSlider({ value, disabled, height, controlSize, labelSize, o
   </View>;
 }
 
+// A dial for the PC's volume or brightness. shortcut: the PC does not report brightness, so it starts at 50% until moved; add a read when asked.
+function SliderWidget({ face, connected, sendVolume, sendBrightness }: { face?: string; connected: boolean; sendVolume: (value: number) => boolean; sendBrightness: (value: number) => boolean }) {
+  const { colors } = useTheme();
+  const styles = useStyles(makeStyles);
+  const brightness = face === 'brightness';
+  const volume = useMediaState().volumePercent;
+  const [level, setLevel] = useState(50);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [scrub, setScrub] = useState<number | null>(null);
+  const lastSent = useRef(0);
+  const value = brightness ? level : volume;
+  const send = (next: number) => { if (brightness) setLevel(next); return (brightness ? sendBrightness : sendVolume)(next); };
+  const unit = Math.max(24, Math.min(size.height, size.width / 4) || 40);
+  const Icon = brightness ? Sun : Volume2;
+  return <View onLayout={(event) => setSize(event.nativeEvent.layout)} style={[styles.nowPlayingVolume, { flex: 1, paddingHorizontal: unit * 0.3, gap: unit * 0.25 }, !connected && styles.nowPlayingVolumeDisabled]}>
+    <Icon size={unit * 0.5} color={colors.blue} strokeWidth={1.8} />
+    <View style={styles.nowPlayingVolumeTrack}><ScrubBar value={(scrub ?? (value ?? 0) / 100)} disabled={!connected || value === undefined} height={unit} trackHeight={Math.max(5, unit * 0.12)} knobSize={Math.max(14, unit * 0.4)} alwaysShowKnob accessibilityLabel={brightness ? 'PC brightness' : 'PC volume'} accessibilityValue={{ min: 0, max: 100, now: Math.round((scrub ?? (value ?? 0) / 100) * 100) }} accessibilityStep={0.05} onScrub={(next) => {
+      setScrub(next);
+      // Volume follows the finger (every 100 ms); brightness runs a script on the PC, so only on release.
+      const now = Date.now();
+      if (!brightness && now - lastSent.current >= 100) { lastSent.current = now; send(Math.round(next * 100)); }
+    }} onCommit={(next) => { setScrub(null); return send(Math.round(next * 100)); }} /></View>
+    <Text allowFontScaling={false} style={[styles.nowPlayingVolumeLabel, { fontSize: unit * 0.32, minWidth: unit * 1.1 }]}>{value === undefined ? '—' : `${Math.round(scrub !== null ? scrub * 100 : value)}%`}</Text>
+  </View>;
+}
+
 // The PC sends the play position when it changes (play/pause, seek, track) and as a correction every
 // ~10 s; in between, this counts it forward locally, re-rendering only Now Playing once a second.
 function useLivePosition(media: SystemMediaState) {
@@ -424,7 +450,7 @@ export default function DeckScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const setTabBarHidden = useContext(TabBarHiddenContext);
-  const { connection, status, playbackState, actionError, deckConfig, independentNavigation, selectedProfileId, selectedPageId, sendButton, sendMediaCommand, sendSystemVolume, seekMedia, selectPage, selectProfile, reportWidgetSurface } = usePcConnection();
+  const { connection, status, playbackState, actionError, deckConfig, independentNavigation, selectedProfileId, selectedPageId, sendButton, sendMediaCommand, sendSystemVolume, sendBrightness, seekMedia, selectPage, selectProfile, reportWidgetSurface } = usePcConnection();
   const [feedback, setFeedback] = useState('');
   const [immersive, setImmersive] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -660,7 +686,7 @@ export default function DeckScreen() {
       if (item.type === 'widget') {
         const placement = item.widget.placement;
         if (placement.row !== row || placement.column !== column) return null;
-        return <View key={item.widget.id} {...(item.widget.type === 'pet' ? petTouches(item.widget.id) : {})} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement), widgetOpacityStyle(item.widget, colors.panel)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' || item.widget.type === 'pet' ? null : item.widget.type === 'clipboard' ? <ClipboardWidget connected={connected} focused={isFocused} face={item.widget.face} scroll={item.widget.scroll} color={item.widget.color} immersive={big} /> : item.widget.type === 'wallpaper' ? <WallpaperWidget connected={connected} focused={isFocused} face={item.widget.face} /> : item.widget.type === 'info' ? <InfoWidget face={item.widget.face} info={item.widget.info} focused={isFocused} /> : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
+        return <View key={item.widget.id} {...(item.widget.type === 'pet' ? petTouches(item.widget.id) : {})} style={[big ? styles.immersiveKey : styles.key, design.tiles ? { borderRadius: design.radius, borderWidth: 0, backgroundColor: colors.panel } : keySurface(0).style, styles.clockWidgetKey, frame(placement), widgetOpacityStyle(item.widget, colors.panel)]}>{item.widget.type === 'clock' || item.widget.type === 'pc_stats' || item.widget.type === 'pet' ? null : item.widget.type === 'clipboard' ? <ClipboardWidget connected={connected} focused={isFocused} face={item.widget.face} scroll={item.widget.scroll} color={item.widget.color} immersive={big} /> : item.widget.type === 'wallpaper' ? <WallpaperWidget connected={connected} focused={isFocused} face={item.widget.face} /> : item.widget.type === 'slider' ? <SliderWidget face={item.widget.face} connected={connected} sendVolume={sendSystemVolume} sendBrightness={sendBrightness} /> : item.widget.type === 'info' ? <InfoWidget face={item.widget.face} info={item.widget.info} focused={isFocused} /> : item.widget.type === 'now_playing' ? <LiveNowPlaying connected={connected} sendCommand={sendMediaCommand} sendVolume={sendSystemVolume} seekMedia={seekMedia} source={{ players: mediaSource.players, multiple: mediaSource.multiple, interactive: mediaSource.canSwitch, onPress: mediaSource.openSheet }} /> : item.widget.type === 'lyrics' ? <LiveLyrics connected={connected} focused={isFocused} seekMedia={seekMedia} /> : <PluginTextWidget widget={item.widget} immersive={big} />}</View>;
       }
       const button = item.button;
       const placement = buttonPlacement(columns, button, surface?.buttons.indexOf(button) ?? 0);

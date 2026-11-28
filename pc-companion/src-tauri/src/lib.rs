@@ -434,6 +434,8 @@ const CLIPBOARD_SCROLL: &[&str] = &["swipe", "snap", "auto"];
 const WALLPAPER_FACES: &[&str] = &["grid", "cards", "carousel"];
 /// Info widgets (read on the phone itself): which one this tile is.
 const INFO_FACES: &[&str] = &["weather", "news", "stocks", "sports", "countdown", "timer", "reminders", "quote"];
+/// What a slider widget controls.
+const SLIDER_FACES: &[&str] = &["volume", "brightness"];
 const INFO_LEAGUES: &[&str] = &["nba", "nfl", "epl", "laliga", "ucl", "mlb", "nhl"];
 const INFO_DONE: &[&str] = &["show", "bottom", "hide"];
 /// Each info face's designs (pc-companion/src/DeckLibrary.tsx and phone-app/src/info-widgets.tsx list the same).
@@ -467,6 +469,8 @@ enum DeckWidgetType {
     Wallpaper,
     /// Weather, news, stocks and other glanceable tiles the phone fills in on its own.
     Info,
+    /// A dial on the phone: the PC's volume or screen brightness.
+    Slider,
     Plugin,
 }
 
@@ -972,6 +976,7 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         DeckWidgetType::Clipboard => CLIPBOARD_FACES,
         DeckWidgetType::Wallpaper => WALLPAPER_FACES,
         DeckWidgetType::Info => INFO_FACES,
+        DeckWidgetType::Slider => SLIDER_FACES,
         _ if widget.face.is_some() || widget.color.is_some() => {
             return Err("Only clock, PC stats, pet, clipboard and wallpaper widgets have a style or colour".into());
         }
@@ -1041,6 +1046,7 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         | DeckWidgetType::Clipboard
         | DeckWidgetType::Wallpaper
         | DeckWidgetType::Info
+        | DeckWidgetType::Slider
             if widget.plugin_id.is_none()
                 && widget.widget_id.is_none()
                 && widget.render_type.is_none()
@@ -1082,7 +1088,8 @@ fn validate_deck_widget(widget: &DeckWidget) -> Result<(), String> {
         | DeckWidgetType::Pet
         | DeckWidgetType::Clipboard
         | DeckWidgetType::Wallpaper
-        | DeckWidgetType::Info => Err("Built-in widgets cannot contain plugin metadata".into()),
+        | DeckWidgetType::Info
+        | DeckWidgetType::Slider => Err("Built-in widgets cannot contain plugin metadata".into()),
     }
 }
 
@@ -2503,6 +2510,11 @@ enum ClientMessage {
         request_id: String,
         #[serde(rename = "volumePercent")]
         volume_percent: u8,
+    },
+    SetBrightness {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        level: u8,
     },
     SelectProfile {
         #[serde(rename = "requestId")]
@@ -4320,6 +4332,19 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
                     .await
                     .is_err()
                 {
+                    break;
+                }
+            }
+            ClientMessage::SetBrightness { request_id, level } if authenticated => {
+                let ok = valid_id(&request_id)
+                    && level <= 100
+                    && tokio::task::spawn_blocking(move || remote::set_brightness(level)).await.is_ok_and(|result| result.is_ok());
+                let reply = if ok {
+                    serde_json::json!({ "type": "action_result", "requestId": request_id, "ok": true })
+                } else {
+                    serde_json::json!({ "type": "action_result", "requestId": request_id, "ok": false, "reason": "control_failed" })
+                };
+                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
                     break;
                 }
             }

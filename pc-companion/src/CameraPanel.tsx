@@ -9,11 +9,11 @@ type Source = { id: string; name: string; transport: 'wifi' | 'usb'; connected: 
 type Caps = {
   zoomMin?: number; zoomMax?: number; evMin?: number; evMax?: number; evStep?: number; manual?: boolean;
   isoMin?: number; isoMax?: number; expMin?: number; expMax?: number; focusMax?: number; af?: boolean; apertures?: number[];
-  torch?: boolean; stab?: boolean; track?: boolean; wb?: string[]; portrait?: boolean; modes?: string[]; facings?: string[];
+  torch?: boolean; stab?: boolean; track?: boolean; blur?: boolean; wb?: string[]; portrait?: boolean; modes?: string[]; facings?: string[];
 };
 type State = {
   facing?: string; zoom?: number; mode?: string; af?: boolean; focus?: number; ev?: number; iso?: number; exp?: number; wb?: string;
-  aperture?: number; torch?: boolean; stab?: boolean; track?: boolean; res?: string; fps?: number; mbps?: number; live?: boolean;
+  aperture?: number; torch?: boolean; stab?: boolean; track?: boolean; blur?: boolean; res?: string; fps?: number; mbps?: number; live?: boolean;
   mirror?: boolean; rot180?: boolean; conn?: string; demand?: boolean;
 };
 type Feed = { id: string; name: string; connected: boolean; caps: Caps | null; state: State | null; active: boolean };
@@ -227,6 +227,7 @@ export function CameraPanel() {
                 {chip('Torch', state.torch, !!caps.torch, () => set('torch', !state.torch))}
                 {chip('Stabilise', state.stab, !!caps.stab, () => set('stab', !state.stab))}
                 {chip('Track face', state.track, !!caps.track, () => set('track', !state.track))}
+                {chip('Blur background', state.blur, !!caps.blur && state.mode !== 'portrait', () => set('blur', !state.blur))}
                 {chip('Mirror', state.mirror, true, () => set('mirror', !state.mirror))}
                 {chip('Rotate 180°', state.rot180, true, () => set('rot180', !state.rot180))}
               </div>

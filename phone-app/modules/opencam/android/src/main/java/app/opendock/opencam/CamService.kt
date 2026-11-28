@@ -20,6 +20,7 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.RectF
 import android.hardware.camera2.params.ExtensionSessionConfiguration
@@ -46,7 +47,9 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.util.Range
+import android.hardware.display.DisplayManager
 import android.util.Size
+import android.view.Display
 import android.view.Surface
 import org.json.JSONArray
 import org.json.JSONObject
@@ -133,6 +136,7 @@ class CamService : Service() {
     private var encoder: MediaCodec? = null
     private var encSurface: Surface? = null
     private var preview: Surface? = null
+    private var blur: Blur? = null
     private var demand = false
     private var notifText = ""
 
@@ -234,6 +238,7 @@ class CamService : Service() {
         when (k) {
             "facing" -> { closeCamera(); selectCamera(); reconcile() }
             "res", "fps", "mbps" -> reconcile(rebuild = true)
+            "blur" -> reconcile(rebuild = true)
             "mode" -> if (oldMode == "portrait" || state.optString("mode") == "portrait") reconcile(rebuild = true) else applyControls()
             "live" -> { live = state.optBoolean("live", true); requestKey() }
             "mirror", "rot180" -> {}
@@ -277,7 +282,7 @@ class CamService : Service() {
         fun def(k: String, v: Any) { if (!s.has(k)) s.put(k, v) }
         def("facing", "back"); def("zoom", 1.0); def("mode", "video"); def("af", true); def("focus", 0.0)
         def("ev", 0); def("wb", "auto"); def("torch", false); def("stab", false); def("res", "1920x1080")
-        def("fps", 30); def("mbps", 0); def("live", true); def("mirror", false); def("rot180", false); def("track", false)
+        def("fps", 30); def("mbps", 0); def("live", true); def("mirror", false); def("rot180", false); def("track", false); def("blur", false)
         if (c.length() == 0) return
         s.put("zoom", s.optDouble("zoom", 1.0).coerceIn(c.optDouble("zoomMin", 1.0), c.optDouble("zoomMax", 1.0)))
         s.put("ev", s.optInt("ev").coerceIn(c.optInt("evMin"), c.optInt("evMax")))
@@ -331,6 +336,7 @@ class CamService : Service() {
         val faceModes = c.get(CameraCharacteristics.STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES) ?: IntArray(0)
         j.put("track", Build.VERSION.SDK_INT >= 30 && faceModes.any { it != CameraMetadata.STATISTICS_FACE_DETECT_MODE_OFF })
         j.put("apertures", JSONArray((c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES) ?: FloatArray(0)).map { it.toDouble() }))
+        j.put("blur", true)
         j.put("torch", c.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true)
         val stabModes = c.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES) ?: IntArray(0)
         j.put("stab", CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON in stabModes)
@@ -435,6 +441,8 @@ class CamService : Service() {
         session = null
         extSession?.let { try { it.stopRepeating(); it.close() } catch (_: Exception) {} }
         extSession = null
+        blur?.release()
+        blur = null
         encoder?.let { try { it.stop() } catch (_: Exception) {}; it.release() }
         encoder = null
         encSurface?.release()
@@ -501,7 +509,9 @@ class CamService : Service() {
                         }
                     }))
             } else {
-                val outs = listOfNotNull(es, preview).map { OutputConfiguration(it) }
+                if (state.optBoolean("blur")) blur = Blur(w, h, es, preview, maskSize(w, h), maskRotation()).takeIf { it.ready || run { it.release(); false } }
+                val b = blur
+                val outs = (if (b != null) listOf(b.input, b.reader.surface) else listOfNotNull(es, preview)).map { OutputConfiguration(it) }
                 d.createCaptureSession(SessionConfiguration(SessionConfiguration.SESSION_REGULAR, outs, camExec,
                     object : CameraCaptureSession.StateCallback() {
                         override fun onConfigured(s: CameraCaptureSession) {
@@ -509,12 +519,30 @@ class CamService : Service() {
                             session = s
                             applyControls()
                         }
-                        override fun onConfigureFailed(s: CameraCaptureSession) { Log.e(TAG, "session config failed") }
+                        override fun onConfigureFailed(s: CameraCaptureSession) {
+                            Log.e(TAG, "session config failed")
+                            // Some phones can't add the blur's small frame stream; stream without blur then.
+                            if (gen == sessGen && blur != null) { state.put("blur", false); startSession(); publish() }
+                        }
                     }))
             }
         } catch (e: Exception) {
             Log.e(TAG, "session", e)
         }
+    }
+
+    /** The smallest 16:9 YUV size of at least 320 wide for the blur's person mask; frames are 16:9 too. */
+    private fun maskSize(w: Int, h: Int): Size {
+        val sizes = chars?.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)?.getOutputSizes(ImageFormat.YUV_420_888).orEmpty()
+        return sizes.filter { it.width >= 320 && it.width.toLong() * h == it.height.toLong() * w }.minByOrNull { it.width } ?: Size(1280, 720)
+    }
+
+    /** Clockwise turn that makes the camera's frame upright on screen right now, as ML Kit wants it. */
+    private fun maskRotation(): Int {
+        val sensor = chars?.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
+        val screen = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)?.rotation?.let { it * 90 } ?: 0
+        val front = chars?.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
+        return ((if (front) sensor + screen else sensor - screen) % 360 + 360) % 360
     }
 
     private fun applyControls() {
@@ -530,8 +558,8 @@ class CamService : Service() {
             } else {
                 val s = session ?: return
                 val b = d.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
-                b.addTarget(es)
-                preview?.let { b.addTarget(it) }
+                val bl = blur
+                if (bl != null) { b.addTarget(bl.input); b.addTarget(bl.reader.surface) } else { b.addTarget(es); preview?.let { b.addTarget(it) } }
                 fill(b)
                 s.setRepeatingRequest(b.build(), captureCb, cam)
             }

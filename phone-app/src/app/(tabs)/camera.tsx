@@ -100,6 +100,7 @@ export default function CameraScreen() {
                   <Chip label="Torch" on={state.torch} ok={!!caps.torch} onPress={() => set('torch', !state.torch)} />
                   <Chip label="Stabilise" on={state.stab} ok={!!caps.stab} onPress={() => set('stab', !state.stab)} />
                   <Chip label="Track face" on={state.track} ok={!!caps.track} onPress={() => set('track', !state.track)} />
+                  <Chip label="Blur background" on={state.blur} ok={!!caps.blur && state.mode !== 'portrait'} onPress={() => set('blur', !state.blur)} />
                 </View>
                 <View style={styles.row}>
                   <Chip label="Call preset" onPress={() => { set('mode', 'video'); set('res', '1280x720'); set('fps', 30); set('af', true); if (caps.track) set('track', true); }} />
