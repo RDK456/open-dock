@@ -30,6 +30,7 @@ export type DeckFolder = { id: string; name: string; rows: number; columns: numb
 export type DeckPage = { id: string; name: string; rows: number; columns: number; buttons: DeckButton[]; widgets: DeckWidget[]; folders: DeckFolder[] };
 export type DeckProfile = { id: string; name: string; pages: DeckPage[]; activePageId: string };
 export type DeckConfig = { schemaVersion: number; revision: number; profiles: DeckProfile[]; activeProfileId: string; matchPcWallpaper?: boolean; phoneLook?: Record<string, unknown> };
+export type LevelReply = { level: number | null; app?: string };
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type PlaybackState = 'playing' | 'paused' | 'stopped' | 'unavailable';
 export type SystemMediaState = { sourceAppId?: string; sourceName?: string; title?: string; artist?: string; album?: string; playbackState: PlaybackState; positionMs?: number; durationMs?: number; artworkDataUrl?: string; volumePercent?: number; muted?: boolean; canSeek?: boolean; playbackRate?: number;
@@ -61,8 +62,8 @@ type ConnectionContextValue = {
   sendSystemVolume: (volumePercent: number) => boolean;
   sendBrightness: (level: number) => boolean;
   sendAppVolume: (app: string, level: number) => boolean;
-  /** A dial's level on the PC now ("brightness" or "app:<name>"); null when the PC can't tell. */
-  requestLevel: (target: string) => Promise<number | null>;
+  /** A dial's level on the PC now ("brightness", "app:<name>" or "app-focused", which also names the app); null when the PC can't tell. */
+  requestLevel: (target: string) => Promise<LevelReply>;
   seekMedia: (positionMs: number) => boolean;
   selectProfile: (profileId: string) => boolean;
   selectPage: (pageId: string) => boolean;
@@ -501,7 +502,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
       socket.onmessage = async (event) => {
         if (socketRef.current !== socket || typeof event.data !== 'string') return;
         try {
-          const message = JSON.parse(event.data) as { type?: string; name?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown; game?: unknown; level?: unknown };
+          const message = JSON.parse(event.data) as { type?: string; name?: string; message?: string; state?: unknown; ok?: boolean; reason?: string; error?: unknown; requestId?: string; sourceId?: string; volumePercent?: unknown; done?: unknown; game?: unknown; level?: unknown; app?: unknown };
           countMessage(message.type ?? 'unknown');
           if (message.type === 'ready') {
             // The PC's own name for itself replaces whatever the pairing saved (often its IP address).
@@ -592,7 +593,7 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
           }
           if (message.type === 'level' && message.requestId) {
             const level = message.level;
-            levelRepliesRef.current.get(message.requestId)?.(typeof level === 'number' && Number.isInteger(level) && level >= 0 && level <= 100 ? level : null);
+            levelRepliesRef.current.get(message.requestId)?.({ level: typeof level === 'number' && Number.isInteger(level) && level >= 0 && level <= 100 ? level : null, app: typeof message.app === 'string' && message.app.length <= 64 ? message.app : undefined });
             levelRepliesRef.current.delete(message.requestId);
           }
           if (message.type === 'signature_result') {
@@ -837,15 +838,15 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   }, [sendRequest, showPlayPausePressed]);
   const sendSystemVolume = useCallback((volumePercent: number) => sendRequest('set_system_volume', 'volumePercent', Math.round(Math.max(0, Math.min(100, volumePercent)))), [sendRequest]);
   const sendAppVolume = useCallback((app: string, level: number) => sendRequest('set_app_volume', 'app', app, { level: Math.round(Math.max(0, Math.min(100, level))) }), [sendRequest]);
-  const levelRepliesRef = useRef(new Map<string, (level: number | null) => void>());
-  const requestLevel = useCallback((target: string) => new Promise<number | null>((resolve) => {
+  const levelRepliesRef = useRef(new Map<string, (reply: LevelReply) => void>());
+  const requestLevel = useCallback((target: string) => new Promise<LevelReply>((resolve) => {
     const socket = socketRef.current;
-    if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return resolve(null);
+    if (status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return resolve({ level: null });
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     levelRepliesRef.current.set(requestId, resolve);
     // Older PCs never answer.
-    setTimeout(() => { if (levelRepliesRef.current.delete(requestId)) resolve(null); }, 4000);
-    try { socket.send(JSON.stringify({ type: 'get_level', requestId, target })); } catch { levelRepliesRef.current.delete(requestId); resolve(null); }
+    setTimeout(() => { if (levelRepliesRef.current.delete(requestId)) resolve({ level: null }); }, 4000);
+    try { socket.send(JSON.stringify({ type: 'get_level', requestId, target })); } catch { levelRepliesRef.current.delete(requestId); resolve({ level: null }); }
   }), [status]);
   const sendBrightness = useCallback((level: number) => sendRequest('set_brightness', 'level', Math.round(Math.max(0, Math.min(100, level)))), [sendRequest]);
   const seekMedia = useCallback((positionMs: number) => sendRequest('seek_media', 'positionMs', Math.round(Math.max(0, positionMs))), [sendRequest]);

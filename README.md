@@ -95,7 +95,7 @@ Drag a **Volume dial**, **Brightness dial** or **App volume dial** onto the grid
 |---|---|
 | Volume | This PC's main volume. |
 | Brightness | The screen brightness: desktop monitors over DDC/CI, laptop screens through Windows. It starts at the screen's real level. |
-| App volume | One app in the Windows volume mixer (Spotify, a game, a browser). Pick the app from what's playing, or type its program name. |
+| App volume | The app you're using right now, from the Windows volume mixer. Or pick one app (Spotify, a game, a browser) from what's playing, or type its program name. |
 
 Pick a design (**Bar**, **Pill**, **Tower**, **Ring** or **Meter**) and a colour. A dial is greyed out while its app is quiet or the monitor can't be read.
 

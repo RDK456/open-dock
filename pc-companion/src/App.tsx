@@ -2252,7 +2252,7 @@ function DesktopDeckEditor({ config: savedConfig, deviceId, onSaved, playbackSta
   </div>;
 }
 
-/** Picks the app a volume dial controls, from the apps playing sound now (or typed, for one that's quiet). */
+/** Picks the app a volume dial controls: the one in focus (the default), one playing sound now, or one typed by name. */
 function AppVolumeSettings({ app, busy, onChange }: { app?: string; busy: boolean; onChange: (app: string) => void }) {
   const [apps, setApps] = useState<string[]>([]);
   const refresh = () => { void invoke<string[]>('audio_apps').then(setApps).catch(() => setApps([])); };
@@ -2260,12 +2260,12 @@ function AppVolumeSettings({ app, busy, onChange }: { app?: string; busy: boolea
   const choices = app && !apps.includes(app) ? [app, ...apps] : apps;
   return <PanelSection title="App">
     <label>Playing now<select value={app ?? ''} disabled={busy} onChange={(event) => onChange(event.target.value)}>
-      <option value="">Choose an app</option>
+      <option value="">The app in focus</option>
       {choices.map((name) => <option key={name} value={name}>{name}</option>)}
     </select></label>
     <label>Or type its program name<input value={app ?? ''} maxLength={64} disabled={busy} placeholder="spotify" onChange={(event) => onChange(event.target.value.toLowerCase().replace(/[^a-z0-9._ -]/g, ''))} /></label>
     <button type="button" className="secondary" disabled={busy} onClick={refresh}>Refresh list</button>
-    <p className="panel-note">Apps show up here while they play sound. The dial is greyed out on the phone while its app is quiet.</p>
+    <p className="panel-note">“The app in focus” follows the window you’re using; while that one makes no sound, the dial keeps the last focused app that did. Apps show up in the list while they play sound.</p>
   </PanelSection>;
 }
 

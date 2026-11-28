@@ -4364,8 +4364,14 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
             ClientMessage::SetAppVolume { request_id, app, level } if authenticated => {
                 let ok = valid_id(&request_id)
                     && level <= 100
-                    && app_volume::valid_name(&app)
-                    && tokio::task::spawn_blocking(move || app_volume::set(&app, level)).await.is_ok_and(|result| result.is_ok());
+                    && (app.is_empty() || app_volume::valid_name(&app))
+                    // No app means the one in focus.
+                    && tokio::task::spawn_blocking(move || {
+                        let app = if app.is_empty() { app_volume::focused().ok_or("nothing in focus")? } else { app };
+                        app_volume::set(&app, level)
+                    })
+                    .await
+                    .is_ok_and(|result| result.is_ok());
                 let reply = if ok {
                     serde_json::json!({ "type": "action_result", "requestId": request_id, "ok": true })
                 } else {
@@ -4377,15 +4383,19 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, over_usb: bo
             }
             ClientMessage::GetLevel { request_id, target } if authenticated && valid_id(&request_id) && target.len() <= 80 => {
                 let asked = target.clone();
-                let level = tokio::task::spawn_blocking(move || match asked.strip_prefix("app:") {
-                    Some(app) if app_volume::valid_name(app) => app_volume::level(app),
-                    None if asked == "brightness" => remote::brightness_level(),
-                    _ => None,
+                // "app-focused" follows the window in use and names it in the reply.
+                let (level, app) = tokio::task::spawn_blocking(move || match asked.strip_prefix("app:") {
+                    Some(app) if app_volume::valid_name(app) => (app_volume::level(app), None),
+                    None if asked == "brightness" => (remote::brightness_level(), None),
+                    None if asked == "app-focused" => match app_volume::focused() {
+                        Some(app) => (app_volume::level(&app), Some(app)),
+                        None => (None, None),
+                    },
+                    _ => (None, None),
                 })
                 .await
-                .ok()
-                .flatten();
-                let reply = serde_json::json!({ "type": "level", "requestId": request_id, "target": target, "level": level });
+                .unwrap_or_default();
+                let reply = serde_json::json!({ "type": "level", "requestId": request_id, "target": target, "level": level, "app": app });
                 if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
                     break;
                 }

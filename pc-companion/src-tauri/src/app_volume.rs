@@ -10,7 +10,7 @@ mod imp {
     use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED};
     use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
 
-    fn program(pid: u32) -> Option<String> {
+    pub fn program(pid: u32) -> Option<String> {
         // SAFETY: the handle is closed below; the buffer outlives the call and its length is passed with it.
         unsafe {
             let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
@@ -45,6 +45,15 @@ mod imp {
         }
     }
 
+    /// The program of the window you're using now.
+    pub fn focused() -> Option<String> {
+        use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+        let mut pid = 0;
+        // SAFETY: reads the foreground window's process id into a local.
+        unsafe { GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid)) };
+        (pid != 0).then(|| program(pid)).flatten()
+    }
+
     pub fn with_com<T>(work: impl FnOnce() -> T) -> T {
         // SAFETY: balanced with CoUninitialize when this call started COM on the thread.
         let here = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
@@ -54,6 +63,24 @@ mod imp {
         }
         value
     }
+}
+
+/// The app an app dial with no app of its own follows: the focused window's program, or, while that one
+/// makes no sound (an editor, the desktop), the last focused app that did.
+pub(super) fn focused() -> Option<String> {
+    #[cfg(windows)]
+    {
+        static LAST: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+        let mut last = LAST.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(now) = imp::focused() {
+            if imp::with_com(|| imp::sessions().iter().any(|(name, _)| *name == now)) {
+                *last = Some(now);
+            }
+        }
+        last.clone()
+    }
+    #[cfg(not(windows))]
+    None
 }
 
 /// Apps playing sound right now, by name, each once.
@@ -127,5 +154,7 @@ mod tests {
             println!("{app}: {:?}", super::level(&app));
         }
         println!("brightness {:?}", crate::remote::brightness_level());
+        #[cfg(windows)]
+        println!("focused window {:?}, dial follows {:?}", super::imp::focused(), super::focused());
     }
 }

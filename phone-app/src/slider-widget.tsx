@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PanResponder, Text, View, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { AppWindow, Sun, Volume2 } from 'lucide-react-native';
-import { useMediaState } from './connection';
+import { useMediaState, type LevelReply } from './connection';
 import { useTheme } from './theme';
 import { fade } from './wallpaper';
 
@@ -11,34 +11,39 @@ export const SLIDER_LOOKS = ['bar', 'pill', 'vertical', 'ring', 'notch'] as cons
 type Props = {
   face?: string; app?: string; look?: string; color?: string; connected: boolean;
   sendVolume: (value: number) => boolean; sendBrightness: (value: number) => boolean;
-  sendAppVolume: (app: string, value: number) => boolean; requestLevel: (target: string) => Promise<number | null>;
+  sendAppVolume: (app: string, value: number) => boolean; requestLevel: (target: string) => Promise<LevelReply>;
 };
 
 // A dial for the PC's volume, screen brightness or one app's volume, in one of five designs. Brightness and
 // app levels are read from the PC when the dial appears (apps again every 5 s, as they start and stop playing).
+// An app dial with no app of its own follows the app in focus on the PC, checked every 1.5 s.
 export function SliderWidget({ face, app, look = 'bar', color, connected, sendVolume, sendBrightness, sendAppVolume, requestLevel }: Props) {
   const { colors } = useTheme();
   const brightness = face === 'brightness';
   const perApp = face === 'app';
   const volume = useMediaState().volumePercent;
   const [level, setLevel] = useState<number | undefined>(undefined);
+  const [focusedApp, setFocusedApp] = useState<string | undefined>(undefined);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [scrub, setScrub] = useState<number | null>(null);
-  const target = brightness ? 'brightness' : perApp && app ? `app:${app}` : null;
+  const dragging = useRef(false);
+  const target = brightness ? 'brightness' : perApp ? app ? `app:${app}` : 'app-focused' : null;
   useEffect(() => {
     if (!connected || !target) return;
     let live = true;
-    const read = () => { void requestLevel(target).then((next) => { if (live) setLevel(next ?? undefined); }); };
+    // Not while a finger is on the dial, so a reply doesn't yank it back.
+    const read = () => { if (!dragging.current) void requestLevel(target).then((next) => { if (live) { setLevel(next.level ?? undefined); setFocusedApp(next.app); } }); };
     read();
-    const timer = perApp ? setInterval(read, 5000) : undefined;
+    const timer = perApp ? setInterval(read, app ? 5000 : 1500) : undefined;
     return () => { live = false; if (timer) clearInterval(timer); };
-  }, [connected, target, perApp, requestLevel]);
+  }, [connected, target, perApp, app, requestLevel]);
 
   const value = target ? level : volume;
   const disabled = !connected || value === undefined;
   const send = (next: number) => {
     if (target) setLevel(next);
-    return brightness ? sendBrightness(next) : perApp ? !!app && sendAppVolume(app, next) : sendVolume(next);
+    // An empty app tells the PC to use the app in focus.
+    return brightness ? sendBrightness(next) : perApp ? sendAppVolume(app ?? '', next) : sendVolume(next);
   };
   const vertical = look === 'vertical' || look === 'ring';
 
@@ -62,6 +67,7 @@ export function SliderWidget({ face, app, look = 'bar', color, connected, sendVo
       onMoveShouldSetPanResponder: () => !latest.current.disabled,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (event) => {
+        dragging.current = true;
         latest.current.start = (latest.current.value ?? 0) / 100;
         if (latest.current.look !== 'ring') setScrub(clamp(at(event, 0, 0)));
         else setScrub(latest.current.start);
@@ -77,11 +83,12 @@ export function SliderWidget({ face, app, look = 'bar', color, connected, sendVo
         }
       },
       onPanResponderRelease: (event, gesture) => {
+        dragging.current = false;
         const next = clamp(at(event, gesture.dx, gesture.dy));
         setScrub(null);
         latest.current.send(Math.round(next * 100));
       },
-      onPanResponderTerminate: () => setScrub(null),
+      onPanResponderTerminate: () => { dragging.current = false; setScrub(null); },
     });
   });
 
@@ -90,8 +97,8 @@ export function SliderWidget({ face, app, look = 'bar', color, connected, sendVo
   const accent = color ?? colors.blue;
   const unit = Math.max(22, Math.min(vertical ? size.width / 2 : size.height, (vertical ? size.height : size.width) / 4) || 40);
   const Icon = brightness ? Sun : perApp ? AppWindow : Volume2;
-  const name = perApp ? app ?? 'No app' : null;
-  const label = brightness ? 'PC brightness' : perApp ? `${app ?? 'App'} volume` : 'PC volume';
+  const name = perApp ? app ?? focusedApp ?? 'App in focus' : null;
+  const label = brightness ? 'PC brightness' : perApp ? `${name} volume` : 'PC volume';
   const icon = (tint: string) => <Icon size={unit * 0.5} color={tint} strokeWidth={1.8} />;
   const caption = (tint: string, scale = 1) => <View style={{ alignItems: vertical ? 'center' : 'flex-end' }}>
     <Text allowFontScaling={false} style={{ color: tint, fontSize: unit * 0.34 * scale, fontWeight: '600', fontVariant: ['tabular-nums'], includeFontPadding: false }}>{percent}</Text>
